@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Send, Loader2, Sparkles, User, Lock, Copy, Check, Linkedin, Code, Image as ImageIcon, Video, Calculator, BarChart3, Activity, Home, GraduationCap, Trophy, Mail, Briefcase, Phone, MapPin } from "lucide-react";
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -120,7 +120,7 @@ export default function App() {
       const toolContext = selectedTool ? `[TOOL: ${selectedTool.toUpperCase()}] ` : "";
       
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash",
         contents: updatedChats[chatIndex].messages.map(m => ({
           role: m.role,
           parts: [{ text: m.role === "user" ? toolContext + m.content : m.content }]
@@ -144,10 +144,7 @@ export default function App() {
           
           SPEED:
           - Provide the absolute best version immediately.`,
-          temperature: 0.4,
-          thinkingConfig: {
-            thinkingLevel: ThinkingLevel.LOW
-          }
+          temperature: 0.4
         }
       });
 
@@ -1042,20 +1039,6 @@ export default function App() {
             />
           </div>
         </div>
-      </div>
-    );
-  }
-
-  if (currentPage === "portfolio") {
-    return (
-      <div className="min-h-screen bg-white relative flex flex-col items-center justify-center p-6">
-        <button 
-          onClick={() => setCurrentPage("home")}
-          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black transition-colors text-xs font-medium"
-        >
-          ← Back
-        </button>
-        {/* Blank White Page */}
       </div>
     );
   }
