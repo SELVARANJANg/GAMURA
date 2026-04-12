@@ -208,11 +208,11 @@ export default function App() {
           ? { ...c, messages: [...c.messages, modelMessage] }
           : c
       ));
-    } catch (error) {
+    } catch (error: any) {
       console.error("GPG Error:", error);
       const errorMessage: Message = { 
         role: "model", 
-        content: "Error: Could not connect to the AI service. Please ensure your GEMINI_API_KEY is configured in the Secrets panel." 
+        content: `Error: ${error.message || "Could not connect to the AI service. Please ensure your GEMINI_API_KEY is configured in the Secrets panel."}`
       };
       setChats(prev => prev.map(c => 
         c.id === activeChatId 
