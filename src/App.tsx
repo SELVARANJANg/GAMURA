@@ -1,9 +1,16 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, Component } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Send, Loader2, Sparkles, User, Lock, Copy, Check, Linkedin, Code, Image as ImageIcon, Video, Calculator, BarChart3, Activity, Home, GraduationCap, Trophy, Mail, Briefcase, Phone, MapPin } from "lucide-react";
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Lazy initialization of Gemini AI
+const getAi = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+    throw new Error("GEMINI_API_KEY is missing. Please configure it in the Vercel environment variables.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 interface Message {
   role: "user" | "model";
@@ -15,6 +22,48 @@ interface Chat {
   title: string;
   messages: Message[];
   timestamp: number;
+}
+
+// Error Boundary Component
+class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
+  state: {hasError: boolean, error: Error | null} = { hasError: false, error: null };
+
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Uncaught error:", error, errorInfo);
+  }
+
+  render() {
+    const { hasError, error } = (this as any).state;
+    if (hasError) {
+      return (
+        <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-6">
+            <X className="text-red-600" size={32} />
+          </div>
+          <h1 className="text-xl font-bold text-zinc-900 mb-2">Something went wrong</h1>
+          <p className="text-zinc-500 text-sm max-w-xs mb-6">
+            {error?.message || "An unexpected error occurred."}
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-black text-white rounded-xl text-xs font-bold uppercase tracking-widest"
+          >
+            Reload Page
+          </button>
+        </div>
+      );
+    }
+
+    return (this as any).props.children;
+  }
 }
 
 export default function App() {
@@ -118,6 +167,7 @@ export default function App() {
 
     try {
       const toolContext = selectedTool ? `[TOOL: ${selectedTool.toUpperCase()}] ` : "";
+      const ai = getAi();
       
       const response = await ai.models.generateContent({
         model: "gemini-2.0-flash",
@@ -1217,7 +1267,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-white relative flex flex-col overflow-hidden">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-white relative flex flex-col overflow-hidden">
       {/* Sidebar Menu */}
       <AnimatePresence>
         {isMenuOpen && (
@@ -1348,7 +1399,7 @@ export default function App() {
           />
         </motion.div>
       </div>
-
     </div>
+    </ErrorBoundary>
   );
 }

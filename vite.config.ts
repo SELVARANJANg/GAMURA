@@ -12,10 +12,11 @@ export default defineConfig(({mode}) => {
   return {
     plugins: [react(), tailwindcss()],
     define: {
-      'process.env': {
-        GEMINI_API_KEY: env.GEMINI_API_KEY,
-        APP_URL: env.APP_URL,
-      },
+      'process.env': env,
+    },
+    build: {
+      chunkSizeWarningLimit: 2000,
+      outDir: 'dist',
     },
     resolve: {
       alias: {
