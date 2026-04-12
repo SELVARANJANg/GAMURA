@@ -9,11 +9,16 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  // Prioritize real process.env over loaded env from files
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY;
+  const APP_URL = process.env.APP_URL || env.APP_URL;
+
   return {
     plugins: [react(), tailwindcss()],
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.APP_URL': JSON.stringify(env.APP_URL),
+      'process.env.GEMINI_API_KEY': JSON.stringify(GEMINI_API_KEY),
+      'process.env.APP_URL': JSON.stringify(APP_URL),
+      'process.env.NODE_ENV': JSON.stringify(mode),
     },
     build: {
       chunkSizeWarningLimit: 2000,

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, Component } from "react";
+import React, { useState, useRef, useEffect, Component, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Send, Loader2, Sparkles, User, Lock, Copy, Check, Linkedin, Code, Image as ImageIcon, Video, Calculator, BarChart3, Activity, Home, GraduationCap, Trophy, Mail, Briefcase, Phone, MapPin } from "lucide-react";
 import { GoogleGenAI } from "@google/genai";
@@ -6,8 +6,8 @@ import { GoogleGenAI } from "@google/genai";
 // Lazy initialization of Gemini AI
 const getAi = () => {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-    throw new Error("GEMINI_API_KEY is missing. Please configure it in the Vercel environment variables.");
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey === "undefined") {
+    return null;
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -69,6 +69,9 @@ class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: bo
 export default function App() {
   const logoUrl = "https://lh3.googleusercontent.com/d/1gdDmsxtjEHxq4qvmshBQL3eX3c1cOSWY";
   const mainImageUrl = "https://lh3.googleusercontent.com/d/1Y8dAHnTiq1wiTv4QdLhAhOMmpMlBieMz";
+  const [logoError, setLogoError] = useState(false);
+  const [mainImageError, setMainImageError] = useState(false);
+  const [secondaryLogoError, setSecondaryLogoError] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<"home" | "gpg" | "login" | "history" | "signup" | "about" | "portfolio">("home");
 
@@ -96,21 +99,21 @@ export default function App() {
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [selectedAchievement, setSelectedAchievement] = useState<{title: string, img: string} | null>(null);
 
-  const copyToClipboard = (text: string, id: number) => {
+  const copyToClipboard = useCallback((text: string, id: number) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-  };
+  }, []);
 
-  const cleanPrompt = (text: string) => {
+  const cleanPrompt = useCallback((text: string) => {
     // Remove markdown code blocks if present
     return text.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
-  };
+  }, []);
 
-  const currentChat = chats.find(c => c.id === currentChatId) || null;
-  const gpgMessages = currentChat?.messages || [];
+  const currentChat = useMemo(() => chats.find(c => c.id === currentChatId) || null, [chats, currentChatId]);
+  const gpgMessages = useMemo(() => currentChat?.messages || [], [currentChat]);
 
-  const startNewChat = () => {
+  const startNewChat = useCallback(() => {
     const newChat: Chat = {
       id: Date.now().toString(),
       title: "New Chat",
@@ -121,7 +124,7 @@ export default function App() {
     setCurrentChatId(newChat.id);
     setCurrentPage("gpg");
     setIsMenuOpen(false);
-  };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -168,6 +171,10 @@ export default function App() {
     try {
       const toolContext = selectedTool ? `[TOOL: ${selectedTool.toUpperCase()}] ` : "";
       const ai = getAi();
+      
+      if (!ai) {
+        throw new Error("GEMINI_API_KEY is missing. Please configure it in the Secrets panel.");
+      }
       
       const response = await ai.models.generateContent({
         model: "gemini-2.0-flash",
@@ -283,6 +290,8 @@ export default function App() {
                           alt="Profile" 
                           className="w-full h-full object-cover transition-all duration-700"
                           referrerPolicy="no-referrer"
+                          loading="lazy"
+                          decoding="async"
                         />
                       </div>
                     </div>
@@ -344,7 +353,7 @@ export default function App() {
                           degree: "12th Grade (Higher Secondary)", 
                           school: "Bharathi Matriculation Higher Secondary School",
                           status: "Completed",
-                          details: "Specialized in Computer Science and Mathematics."
+                          details: "Specialized in Computer Application and Accounting."
                         }
                       ].map((edu, i) => (
                         <div key={i} className="group p-8 bg-zinc-50 rounded-[2rem] border border-zinc-100 hover:border-black transition-all duration-500 relative overflow-hidden">
@@ -543,6 +552,8 @@ export default function App() {
                           alt="Selvaranjan G" 
                           className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700"
                           referrerPolicy="no-referrer"
+                          loading="lazy"
+                          decoding="async"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-8">
                           <p className="text-white text-xs font-bold uppercase tracking-[0.3em]">Selvaranjan G</p>
@@ -585,6 +596,8 @@ export default function App() {
                     alt="Google Gemini Certificate" 
                     className="w-full h-auto rounded-2xl"
                     referrerPolicy="no-referrer"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
               </motion.div>
@@ -615,13 +628,23 @@ export default function App() {
                 >
                   <X size={20} />
                 </button>
-                <div className="p-2">
-                  <img 
-                    src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
-                    alt="GAMURA Project" 
-                    className="w-full h-auto rounded-2xl"
-                    referrerPolicy="no-referrer"
-                  />
+                <div className="p-2 bg-zinc-50 flex items-center justify-center min-h-[200px]">
+                  {secondaryLogoError ? (
+                    <div className="text-center p-12">
+                      <Briefcase className="text-zinc-300 mx-auto mb-4" size={48} />
+                      <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest">GAMURA Project</p>
+                    </div>
+                  ) : (
+                    <img 
+                      src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
+                      alt="GAMURA Project" 
+                      className="w-full h-auto rounded-2xl"
+                      referrerPolicy="no-referrer"
+                      loading="lazy"
+                      decoding="async"
+                      onError={() => setSecondaryLogoError(true)}
+                    />
+                  )}
                 </div>
               </motion.div>
             </motion.div>
@@ -657,6 +680,8 @@ export default function App() {
                     alt={selectedAchievement.title} 
                     className="w-full h-auto rounded-2xl"
                     referrerPolicy="no-referrer"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
               </motion.div>
@@ -732,13 +757,20 @@ export default function App() {
 
         <div className="w-full max-w-sm space-y-8">
           <div className="text-center space-y-4">
-            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 mx-auto">
-              <img 
-                src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
-                alt="GPG Logo" 
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
+            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 mx-auto bg-zinc-50 flex items-center justify-center">
+              {secondaryLogoError ? (
+                <Sparkles className="text-zinc-300" size={32} />
+              ) : (
+                <img 
+                  src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
+                  alt="GPG Logo" 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  decoding="async"
+                  onError={() => setSecondaryLogoError(true)}
+                />
+              )}
             </div>
             <div className="space-y-2">
               <h2 className="text-2xl font-bold tracking-tight text-zinc-900 uppercase">Create Account</h2>
@@ -946,13 +978,20 @@ export default function App() {
 
         <div className="w-full max-w-sm space-y-8">
           <div className="text-center space-y-4">
-            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 mx-auto">
-              <img 
-                src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
-                alt="GPG Logo" 
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
+            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 mx-auto bg-zinc-50 flex items-center justify-center">
+              {secondaryLogoError ? (
+                <Sparkles className="text-zinc-300" size={32} />
+              ) : (
+                <img 
+                  src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
+                  alt="GPG Logo" 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  decoding="async"
+                  onError={() => setSecondaryLogoError(true)}
+                />
+              )}
             </div>
             <div className="space-y-2">
               <h2 className="text-2xl font-bold tracking-tight text-zinc-900">GAMURA LOGIN</h2>
@@ -1079,14 +1118,20 @@ export default function App() {
             </div>
           </motion.div>
 
-          {/* About Section Image */}
-          <div className="w-full max-w-md mx-auto aspect-square rounded-3xl overflow-hidden shadow-2xl border border-zinc-100">
-            <img 
-              src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
-              alt="Gamura About" 
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
+          <div className="w-full max-w-md mx-auto aspect-square rounded-3xl overflow-hidden shadow-2xl border border-zinc-100 bg-zinc-50 flex items-center justify-center">
+            {secondaryLogoError ? (
+              <Sparkles className="text-zinc-200" size={64} />
+            ) : (
+              <img 
+                src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
+                alt="Gamura About" 
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+                loading="lazy"
+                decoding="async"
+                onError={() => setSecondaryLogoError(true)}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -1127,13 +1172,20 @@ export default function App() {
         >
           {gpgMessages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto">
-              <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100">
-                <img 
-                  src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
-                  alt="GPG Logo" 
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
+              <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 bg-zinc-50 flex items-center justify-center">
+                {secondaryLogoError ? (
+                  <Sparkles className="text-zinc-300" size={32} />
+                ) : (
+                  <img 
+                    src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
+                    alt="GPG Logo" 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                    decoding="async"
+                    onError={() => setSecondaryLogoError(true)}
+                  />
+                )}
               </div>
               <div className="space-y-2">
                 <h3 className="text-zinc-900 font-medium">Ready to generate?</h3>
@@ -1269,6 +1321,48 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-white relative flex flex-col overflow-hidden">
+        {/* API Key Warning Overlay */}
+        {!getAi() && currentPage === "gpg" && (
+          <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white border border-zinc-200 shadow-2xl rounded-[2.5rem] p-8 max-w-md w-full text-center space-y-6"
+            >
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
+                <Lock className="text-red-600" size={32} />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-zinc-900">Configuration Required</h2>
+                <p className="text-zinc-500 text-sm">
+                  To use the AI Prompt Generator, you need to add your Gemini API Key.
+                </p>
+              </div>
+              <div className="bg-zinc-50 rounded-2xl p-4 text-left space-y-3">
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-black text-white text-[10px] flex items-center justify-center shrink-0">1</div>
+                  <p className="text-[11px] text-zinc-600">Open <b>Settings</b> (gear icon) in the top right.</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-black text-white text-[10px] flex items-center justify-center shrink-0">2</div>
+                  <p className="text-[11px] text-zinc-600">Go to <b>Secrets</b> and add <b>GEMINI_API_KEY</b>.</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-black text-white text-[10px] flex items-center justify-center shrink-0">3</div>
+                  <p className="text-[11px] text-zinc-600">Paste your key from Google AI Studio.</p>
+                </div>
+              </div>
+              <a 
+                href="https://aistudio.google.com/app/apikey" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="block w-full py-3 bg-black text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all"
+              >
+                Get API Key
+              </a>
+            </motion.div>
+          </div>
+        )}
       {/* Sidebar Menu */}
       <AnimatePresence>
         {isMenuOpen && (
@@ -1362,14 +1456,24 @@ export default function App() {
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-zinc-100 shadow-sm focus:outline-none focus:ring-2 focus:ring-black/5"
+          className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-black/10 shadow-lg focus:outline-none focus:ring-2 focus:ring-black/5 bg-white flex items-center justify-center"
         >
-          <img
-            src={logoUrl}
-            alt="Gamura Logo"
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
+          {logoError ? (
+            <div className="flex flex-col items-center justify-center">
+              <Sparkles className="text-zinc-400" size={24} />
+              <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-tighter">GAMURA</span>
+            </div>
+          ) : (
+            <img
+              src={logoUrl}
+              alt="Gamura Logo"
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
+              onError={() => setLogoError(true)}
+            />
+          )}
         </motion.button>
       </div>
 
@@ -1391,12 +1495,22 @@ export default function App() {
           transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
           className="max-w-4xl w-full"
         >
-          <img
-            src={mainImageUrl}
-            alt="Gamura Main"
-            className="w-full h-auto object-contain drop-shadow-xl"
-            referrerPolicy="no-referrer"
-          />
+          {mainImageError ? (
+            <div className="text-center space-y-4">
+              <h1 className="text-6xl md:text-9xl font-black tracking-tighter text-zinc-900 uppercase">GAMURA</h1>
+              <p className="text-zinc-400 text-sm font-bold uppercase tracking-[0.5em]">Intelligence Redefined</p>
+            </div>
+          ) : (
+            <img
+              src={mainImageUrl}
+              alt="Gamura Main"
+              className="w-full h-auto object-contain drop-shadow-2xl"
+              referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
+              onError={() => setMainImageError(true)}
+            />
+          )}
         </motion.div>
       </div>
     </div>
