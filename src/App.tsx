@@ -98,6 +98,7 @@ export default function App() {
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [selectedAchievement, setSelectedAchievement] = useState<{title: string, img: string} | null>(null);
+  const [showProgressAlert, setShowProgressAlert] = useState(false);
 
   const copyToClipboard = useCallback((text: string, id: number) => {
     navigator.clipboard.writeText(text);
@@ -994,7 +995,7 @@ export default function App() {
               )}
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold tracking-tight text-zinc-900">GAMURA LOGIN</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900">GAMURA-SR LOGIN</h2>
               <p className="text-sm text-zinc-500">Sign in to save your chat history</p>
             </div>
           </div>
@@ -1298,21 +1299,43 @@ export default function App() {
                 type="text"
                 value={gpgInput}
                 onChange={(e) => setGpgInput(e.target.value)}
-                placeholder="Describe your vision..."
-                className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-4 pl-6 pr-14 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black focus:bg-white transition-all text-sm shadow-sm placeholder:text-zinc-400"
+                onMouseDown={() => {
+                  setShowProgressAlert(true);
+                  setTimeout(() => setShowProgressAlert(false), 3000);
+                }}
+                readOnly
+                placeholder="GPG is currently in progress..."
+                className="w-full bg-zinc-100 border border-zinc-200 rounded-2xl py-4 pl-6 pr-14 focus:outline-none text-sm shadow-sm placeholder:text-zinc-400 cursor-not-allowed opacity-60"
               />
               <button
                 type="submit"
-                disabled={!gpgInput.trim() || isGpgLoading}
-                className="absolute right-3 p-2.5 bg-black text-white rounded-xl hover:bg-zinc-800 disabled:opacity-20 disabled:hover:bg-black transition-all shadow-md active:scale-95"
+                disabled
+                className="absolute right-3 p-2.5 bg-zinc-300 text-white rounded-xl cursor-not-allowed transition-all shadow-md opacity-50"
               >
-                {isGpgLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                <Send size={18} />
               </button>
             </div>
             <p className="text-[9px] text-center text-zinc-300 mt-4 tracking-widest uppercase font-medium">
-              Gamura Intelligence • Powered by GAMURA
+              Gamura Intelligence • Powered by GAMURA-SR
             </p>
           </form>
+
+          {/* Progress Alert */}
+          <AnimatePresence>
+            {showProgressAlert && (
+              <motion.div
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-black text-white rounded-2xl shadow-2xl border border-white/10 flex items-center gap-3"
+              >
+                <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap">
+                  PROJECT GAMURA IS ON PROGRESS...
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     );
@@ -1415,7 +1438,7 @@ export default function App() {
                   }}
                   className="text-white text-sm font-semibold tracking-[0.2em] uppercase hover:text-zinc-400 transition-colors mb-4"
                 >
-                  GAMURA LOGIN
+                  GAMURA-SR LOGIN
                 </motion.button>
 
                 <motion.button
@@ -1497,7 +1520,7 @@ export default function App() {
         >
           {mainImageError ? (
             <div className="text-center space-y-4">
-              <h1 className="text-6xl md:text-9xl font-black tracking-tighter text-zinc-900 uppercase">GAMURA</h1>
+              <h1 className="text-6xl md:text-9xl font-black tracking-tighter text-zinc-900 uppercase">GAMURA-SR</h1>
               <p className="text-zinc-400 text-sm font-bold uppercase tracking-[0.5em]">Intelligence Redefined</p>
             </div>
           ) : (
