@@ -66,12 +66,55 @@ class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: bo
   }
 }
 
+// SafeImage Component for robust loading
+const SafeImage = ({ 
+  srcs, 
+  alt, 
+  className, 
+  fallbackIcon: FallbackIcon = ImageIcon,
+  fallbackText,
+  ...props 
+}: { 
+  srcs: string[], 
+  alt: string, 
+  className?: string, 
+  fallbackIcon?: any,
+  fallbackText?: string,
+  [key: string]: any 
+}) => {
+  const [idx, setIdx] = useState(0);
+  const isFailed = idx >= srcs.length;
+
+  if (isFailed) {
+    return (
+      <div className={`bg-zinc-100 flex flex-col items-center justify-center rounded-2xl p-4 ${className}`}>
+        <FallbackIcon className="text-zinc-300 mb-2" size={className?.includes('w-16') ? 24 : 48} />
+        {fallbackText && <p className="text-zinc-400 text-[8px] font-bold uppercase tracking-widest text-center">{fallbackText}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={srcs[idx]}
+      alt={alt}
+      className={className}
+      referrerPolicy="no-referrer"
+      loading="lazy"
+      decoding="async"
+      onError={() => setIdx(prev => prev + 1)}
+      {...props}
+    />
+  );
+};
+
 export default function App() {
-  const logoUrl = "https://lh3.googleusercontent.com/d/1gdDmsxtjEHxq4qvmshBQL3eX3c1cOSWY";
-  const mainImageUrl = "https://lh3.googleusercontent.com/d/1Y8dAHnTiq1wiTv4QdLhAhOMmpMlBieMz";
-  const [logoError, setLogoError] = useState(false);
-  const [mainImageError, setMainImageError] = useState(false);
-  const [secondaryLogoError, setSecondaryLogoError] = useState(false);
+  const logoSources = ["/logo.png", "https://lh3.googleusercontent.com/d/1gdDmsxtjEHxq4qvmshBQL3eX3c1cOSWY"];
+  const mainImgSources = ["/main.png", "https://lh3.googleusercontent.com/d/1Uo5baGqwR3v3qcG2XznFNGqhO47lAi4A"];
+  const secondaryLogoSources = ["/gpg-logo.png", "https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x"];
+  const profileImgSources = ["/profile.png", "https://lh3.googleusercontent.com/d/1X_b-gsSwt_-LDOt7t8IyFqop60mHBUCY", "https://lh3.googleusercontent.com/d/1zZfXn3YsmmOGXxzJ6zNKAmW6BFusX0NH"];
+  const certImgSources = ["/certificate.png", "https://lh3.googleusercontent.com/d/1o6tralnliWDBJcAR62QUlpFuDuOHQR1W"];
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<"home" | "gpg" | "login" | "history" | "signup" | "about" | "portfolio">("home");
 
@@ -286,13 +329,11 @@ export default function App() {
                   <div className="flex flex-col md:flex-row gap-12 items-center md:items-start">
                     <div className="relative group">
                       <div className="w-40 h-40 rounded-[2.5rem] overflow-hidden border-2 border-zinc-900 shadow-2xl transition-transform duration-500 group-hover:scale-105">
-                        <img 
-                          src="https://lh3.googleusercontent.com/d/1X_b-gsSwt_-LDOt7t8IyFqop60mHBUCY" 
+                        <SafeImage 
+                          srcs={profileImgSources} 
                           alt="Profile" 
                           className="w-full h-full object-cover transition-all duration-700"
-                          referrerPolicy="no-referrer"
-                          loading="lazy"
-                          decoding="async"
+                          fallbackIcon={User}
                         />
                       </div>
                     </div>
@@ -445,8 +486,13 @@ export default function App() {
                         onClick={() => setSelectedAchievement({ title: ach.title, img: ach.img })}
                       >
                         <div className="space-y-4">
-                          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 group-hover:bg-black transition-colors duration-500">
-                            <Trophy className="text-zinc-400 group-hover:text-white transition-colors duration-500" size={20} />
+                          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 group-hover:bg-black transition-colors duration-500 overflow-hidden">
+                            <SafeImage 
+                              srcs={[ach.img]} 
+                              alt={ach.title} 
+                              className="w-full h-full object-cover"
+                              fallbackIcon={Trophy}
+                            />
                           </div>
                           <h3 className="font-bold text-lg tracking-tight">{ach.title}</h3>
                         </div>
@@ -548,13 +594,11 @@ export default function App() {
 
                     <div className="w-full md:w-1/2">
                       <div className="aspect-[4/5] rounded-[3rem] overflow-hidden border-2 border-zinc-900 shadow-2xl relative group">
-                        <img 
-                          src="https://lh3.googleusercontent.com/d/1zZfXn3YsmmOGXxzJ6zNKAmW6BFusX0NH" 
+                        <SafeImage 
+                          srcs={profileImgSources} 
                           alt="Selvaranjan G" 
                           className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700"
-                          referrerPolicy="no-referrer"
-                          loading="lazy"
-                          decoding="async"
+                          fallbackIcon={User}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-8">
                           <p className="text-white text-xs font-bold uppercase tracking-[0.3em]">Selvaranjan G</p>
@@ -592,13 +636,12 @@ export default function App() {
                   <X size={20} />
                 </button>
                 <div className="p-2">
-                  <img 
-                    src="https://lh3.googleusercontent.com/d/1o6tralnliWDBJcAR62QUlpFuDuOHQR1W" 
+                  <SafeImage 
+                    srcs={certImgSources} 
                     alt="Google Gemini Certificate" 
                     className="w-full h-auto rounded-2xl"
-                    referrerPolicy="no-referrer"
-                    loading="lazy"
-                    decoding="async"
+                    fallbackIcon={Trophy}
+                    fallbackText="Certificate Not Found"
                   />
                 </div>
               </motion.div>
@@ -630,22 +673,13 @@ export default function App() {
                   <X size={20} />
                 </button>
                 <div className="p-2 bg-zinc-50 flex items-center justify-center min-h-[200px]">
-                  {secondaryLogoError ? (
-                    <div className="text-center p-12">
-                      <Briefcase className="text-zinc-300 mx-auto mb-4" size={48} />
-                      <p className="text-zinc-400 text-xs font-bold uppercase tracking-widest">GAMURA Project</p>
-                    </div>
-                  ) : (
-                    <img 
-                      src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
-                      alt="GAMURA Project" 
-                      className="w-full h-auto rounded-2xl"
-                      referrerPolicy="no-referrer"
-                      loading="lazy"
-                      decoding="async"
-                      onError={() => setSecondaryLogoError(true)}
-                    />
-                  )}
+                  <SafeImage 
+                    srcs={secondaryLogoSources} 
+                    alt="GAMURA Project" 
+                    className="w-full h-auto rounded-2xl"
+                    fallbackIcon={Briefcase}
+                    fallbackText="GAMURA Project"
+                  />
                 </div>
               </motion.div>
             </motion.div>
@@ -676,13 +710,12 @@ export default function App() {
                   <X size={20} />
                 </button>
                 <div className="p-2">
-                  <img 
-                    src={selectedAchievement.img} 
+                  <SafeImage 
+                    srcs={[selectedAchievement.img]} 
                     alt={selectedAchievement.title} 
                     className="w-full h-auto rounded-2xl"
-                    referrerPolicy="no-referrer"
-                    loading="lazy"
-                    decoding="async"
+                    fallbackIcon={Trophy}
+                    fallbackText="Achievement Image Not Found"
                   />
                 </div>
               </motion.div>
@@ -759,19 +792,12 @@ export default function App() {
         <div className="w-full max-w-sm space-y-8">
           <div className="text-center space-y-4">
             <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 mx-auto bg-zinc-50 flex items-center justify-center">
-              {secondaryLogoError ? (
-                <Sparkles className="text-zinc-300" size={32} />
-              ) : (
-                <img 
-                  src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
-                  alt="GPG Logo" 
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                  decoding="async"
-                  onError={() => setSecondaryLogoError(true)}
-                />
-              )}
+              <SafeImage 
+                srcs={secondaryLogoSources} 
+                alt="GPG Logo" 
+                className="w-full h-full object-cover"
+                fallbackIcon={Sparkles}
+              />
             </div>
             <div className="space-y-2">
               <h2 className="text-2xl font-bold tracking-tight text-zinc-900 uppercase">Create Account</h2>
@@ -980,22 +1006,15 @@ export default function App() {
         <div className="w-full max-w-sm space-y-8">
           <div className="text-center space-y-4">
             <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 mx-auto bg-zinc-50 flex items-center justify-center">
-              {secondaryLogoError ? (
-                <Sparkles className="text-zinc-300" size={32} />
-              ) : (
-                <img 
-                  src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
-                  alt="GPG Logo" 
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                  decoding="async"
-                  onError={() => setSecondaryLogoError(true)}
-                />
-              )}
+              <SafeImage 
+                srcs={secondaryLogoSources} 
+                alt="GPG Logo" 
+                className="w-full h-full object-cover"
+                fallbackIcon={Sparkles}
+              />
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold tracking-tight text-zinc-900">GAMURA-SR LOGIN</h2>
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900">GAMURA LOGIN</h2>
               <p className="text-sm text-zinc-500">Sign in to save your chat history</p>
             </div>
           </div>
@@ -1120,19 +1139,12 @@ export default function App() {
           </motion.div>
 
           <div className="w-full max-w-md mx-auto aspect-square rounded-3xl overflow-hidden shadow-2xl border border-zinc-100 bg-zinc-50 flex items-center justify-center">
-            {secondaryLogoError ? (
-              <Sparkles className="text-zinc-200" size={64} />
-            ) : (
-              <img 
-                src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
-                alt="Gamura About" 
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-                loading="lazy"
-                decoding="async"
-                onError={() => setSecondaryLogoError(true)}
-              />
-            )}
+            <SafeImage 
+              srcs={secondaryLogoSources} 
+              alt="Gamura About" 
+              className="w-full h-full object-cover"
+              fallbackIcon={Sparkles}
+            />
           </div>
         </div>
       </div>
@@ -1174,19 +1186,12 @@ export default function App() {
           {gpgMessages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto">
               <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 bg-zinc-50 flex items-center justify-center">
-                {secondaryLogoError ? (
-                  <Sparkles className="text-zinc-300" size={32} />
-                ) : (
-                  <img 
-                    src="https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x" 
-                    alt="GPG Logo" 
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                    loading="lazy"
-                    decoding="async"
-                    onError={() => setSecondaryLogoError(true)}
-                  />
-                )}
+                <SafeImage 
+                  srcs={secondaryLogoSources} 
+                  alt="GPG Logo" 
+                  className="w-full h-full object-cover"
+                  fallbackIcon={Sparkles}
+                />
               </div>
               <div className="space-y-2">
                 <h3 className="text-zinc-900 font-medium">Ready to generate?</h3>
@@ -1316,7 +1321,7 @@ export default function App() {
               </button>
             </div>
             <p className="text-[9px] text-center text-zinc-300 mt-4 tracking-widest uppercase font-medium">
-              Gamura Intelligence • Powered by GAMURA-SR
+              Gamura Intelligence • Powered by GAMURA
             </p>
           </form>
 
@@ -1438,7 +1443,7 @@ export default function App() {
                   }}
                   className="text-white text-sm font-semibold tracking-[0.2em] uppercase hover:text-zinc-400 transition-colors mb-4"
                 >
-                  GAMURA-SR LOGIN
+                  GAMURA LOGIN
                 </motion.button>
 
                 <motion.button
@@ -1481,22 +1486,13 @@ export default function App() {
           transition={{ duration: 0.5, ease: "easeOut" }}
           className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-black/10 shadow-lg focus:outline-none focus:ring-2 focus:ring-black/5 bg-white flex items-center justify-center"
         >
-          {logoError ? (
-            <div className="flex flex-col items-center justify-center">
-              <Sparkles className="text-zinc-400" size={24} />
-              <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-tighter">GAMURA</span>
-            </div>
-          ) : (
-            <img
-              src={logoUrl}
-              alt="Gamura Logo"
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-              loading="lazy"
-              decoding="async"
-              onError={() => setLogoError(true)}
-            />
-          )}
+          <SafeImage 
+            srcs={logoSources} 
+            alt="Gamura Logo" 
+            className="w-full h-full object-cover"
+            fallbackIcon={Sparkles}
+            fallbackText="GAMURA"
+          />
         </motion.button>
       </div>
 
@@ -1510,30 +1506,20 @@ export default function App() {
         </button>
       </div>
 
-      {/* Center Image */}
-      <div className="flex-1 flex items-center justify-center p-8">
+          <div className="flex-1 flex items-center justify-center p-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
           className="max-w-4xl w-full"
         >
-          {mainImageError ? (
-            <div className="text-center space-y-4">
-              <h1 className="text-6xl md:text-9xl font-black tracking-tighter text-zinc-900 uppercase">GAMURA-SR</h1>
-              <p className="text-zinc-400 text-sm font-bold uppercase tracking-[0.5em]">Intelligence Redefined</p>
-            </div>
-          ) : (
-            <img
-              src={mainImageUrl}
-              alt="Gamura Main"
-              className="w-full h-auto object-contain drop-shadow-2xl"
-              referrerPolicy="no-referrer"
-              loading="lazy"
-              decoding="async"
-              onError={() => setMainImageError(true)}
-            />
-          )}
+          <SafeImage 
+            srcs={mainImgSources} 
+            alt="Gamura Main" 
+            className="w-full h-auto object-contain drop-shadow-2xl"
+            fallbackIcon={Sparkles}
+            fallbackText="Intelligence Redefined"
+          />
         </motion.div>
       </div>
     </div>
