@@ -339,7 +339,7 @@ export default function App() {
                     </div>
                     <div className="space-y-6 flex-1 text-center md:text-left">
                       <div className="space-y-2">
-                        <h1 className="text-4xl md:text-5xl font-serif font-medium tracking-tight text-zinc-900">Portfolio</h1>
+                        <h1 className="text-4xl md:text-5xl font-serif font-medium tracking-tight text-zinc-900">Selvaranjan G</h1>
                         <p className="text-zinc-400 text-[10px] font-black uppercase tracking-[0.3em]">Aspiring Developer & AI Enthusiast</p>
                       </div>
                       <p className="text-zinc-500 max-w-md leading-relaxed mx-auto md:mx-0">
@@ -386,7 +386,7 @@ export default function App() {
                         { 
                           year: "2026 - Present", 
                           degree: "Bachelor of Computer Applications (BCA)", 
-                          school: "First Year Student",
+                          school: "DDGD VAISHNAV COLLEGE",
                           status: "In Progress",
                           details: "Focusing on core computing principles, programming, and database management."
                         },
@@ -553,7 +553,7 @@ export default function App() {
                       
                       <div className="space-y-4">
                         <a 
-                          href="mailto:selvaranjang@gmail.com"
+                          href="mailto:selva6ranjan@gmail.com"
                           className="flex items-center gap-4 p-6 bg-zinc-50 rounded-2xl border border-zinc-100 group hover:border-black transition-colors"
                         >
                           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-zinc-100">
@@ -561,7 +561,7 @@ export default function App() {
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Email</p>
-                            <p className="text-sm font-medium">selvaranjang@gmail.com</p>
+                            <p className="text-sm font-medium">selva6ranjan@gmail.com</p>
                           </div>
                         </a>
 
