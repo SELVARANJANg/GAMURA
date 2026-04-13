@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, Component, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Send, Loader2, Sparkles, User, Lock, Copy, Check, Linkedin, Code, Image as ImageIcon, Video, Calculator, BarChart3, Activity, Home, GraduationCap, Trophy, Mail, Briefcase, Phone, MapPin } from "lucide-react";
+import { X, Send, Loader2, Sparkles, User, Lock, Copy, Check, Linkedin, Code, Image as ImageIcon, Video, Calculator, BarChart3, Activity, Home, GraduationCap, Trophy, Mail, Briefcase, Phone, MapPin, ArrowRight } from "lucide-react";
 import { GoogleGenAI } from "@google/genai";
 
 // Lazy initialization of Gemini AI
@@ -287,34 +287,34 @@ export default function App() {
     return (
       <div className="min-h-screen bg-white flex flex-col">
         {/* Portfolio Header */}
-        <div className="border-b border-zinc-100 px-6 py-4 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-20">
+        <div className="border-b border-zinc-100 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-20 overflow-x-auto no-scrollbar">
           <button 
             onClick={() => setCurrentPage("home")}
-            className="text-zinc-400 hover:text-black transition-colors text-xs font-bold uppercase tracking-widest"
+            className="text-zinc-400 hover:text-black transition-colors text-[10px] font-bold uppercase tracking-widest whitespace-nowrap mr-4"
           >
             ← Exit
           </button>
-          <div className="flex gap-6">
+          <div className="flex gap-2 md:gap-6">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setPortfolioTab(tab.id as any)}
-                className={`text-[10px] font-black uppercase tracking-widest transition-all px-4 py-2 rounded-full flex items-center gap-2 ${
+                className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all px-3 md:px-4 py-1.5 md:py-2 rounded-full flex items-center gap-2 whitespace-nowrap ${
                   portfolioTab === tab.id 
                     ? "bg-black text-white shadow-lg shadow-black/20" 
                     : "text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100"
                 }`}
               >
                 {tab.icon}
-                <span className="hidden md:inline">{tab.label}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
               </button>
             ))}
           </div>
-          <div className="w-10"></div> {/* Spacer */}
+          <div className="w-4 md:w-10 shrink-0"></div> {/* Spacer */}
         </div>
 
         {/* Portfolio Content */}
-        <div className="flex-1 max-w-4xl mx-auto w-full p-8 md:p-16">
+        <div className="flex-1 max-w-5xl mx-auto w-full p-6 md:p-16">
           <AnimatePresence mode="wait">
             <motion.div
               key={portfolioTab}
@@ -326,9 +326,9 @@ export default function App() {
             >
               {portfolioTab === "home" && (
                 <div className="space-y-16">
-                  <div className="flex flex-col md:flex-row gap-12 items-center md:items-start">
+                  <div className="flex flex-col md:flex-row gap-8 md:gap-12 items-center md:items-start">
                     <div className="relative group">
-                      <div className="w-40 h-40 rounded-[2.5rem] overflow-hidden border-2 border-zinc-900 shadow-2xl transition-transform duration-500 group-hover:scale-105">
+                      <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2rem] md:rounded-[2.5rem] overflow-hidden border-2 border-zinc-900 shadow-2xl transition-transform duration-500 group-hover:scale-105">
                         <SafeImage 
                           srcs={profileImgSources} 
                           alt="Profile" 
@@ -337,20 +337,20 @@ export default function App() {
                         />
                       </div>
                     </div>
-                    <div className="space-y-6 flex-1 text-center md:text-left">
+                    <div className="space-y-4 md:space-y-6 flex-1 text-center md:text-left">
                       <div className="space-y-2">
-                        <h1 className="text-4xl md:text-5xl font-serif font-medium tracking-tight text-zinc-900">Selvaranjan G</h1>
-                        <p className="text-zinc-400 text-[10px] font-black uppercase tracking-[0.3em]">Aspiring Developer & AI Enthusiast</p>
+                        <h1 className="text-3xl md:text-5xl font-serif font-medium tracking-tight text-zinc-900">Selvaranjan G</h1>
+                        <p className="text-zinc-400 text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em]">Aspiring Developer & AI Enthusiast</p>
                       </div>
-                      <p className="text-zinc-500 max-w-md leading-relaxed mx-auto md:mx-0">
+                      <p className="text-zinc-500 text-sm md:text-base max-w-md leading-relaxed mx-auto md:mx-0">
                         Welcome to my professional space. I am a dedicated student and aspiring developer, currently building the future through code and AI.
                       </p>
                       <button 
                         onClick={() => setPortfolioTab("contact")}
-                        className="inline-flex items-center gap-3 px-8 py-4 bg-black text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all hover:shadow-xl hover:-translate-y-1 active:translate-y-0"
+                        className="inline-flex items-center gap-3 px-6 md:px-8 py-3 md:py-4 bg-black text-white rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all hover:shadow-xl hover:-translate-y-1 active:translate-y-0"
                       >
-                        Contact Me
-                        <Mail size={14} />
+                        Get In Touch
+                        <ArrowRight size={14} />
                       </button>
                     </div>
                   </div>
@@ -1101,16 +1101,16 @@ export default function App() {
 
   if (currentPage === "about") {
     return (
-      <div className="min-h-screen bg-white relative flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-white relative flex flex-col items-center justify-center p-4 md:p-6">
         <button 
           onClick={() => setCurrentPage("home")}
-          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black transition-colors text-xs font-medium"
+          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black transition-colors text-[10px] md:text-xs font-medium"
         >
           ← Back
         </button>
-        <div className="w-full max-w-2xl space-y-8">
+        <div className="w-full max-w-2xl space-y-6 md:space-y-8">
           <div className="text-center space-y-4">
-            <h2 className="text-3xl font-bold tracking-tight text-zinc-900 uppercase tracking-[0.2em]">
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-900 uppercase tracking-[0.2em]">
               About <span className="text-red-600">GA</span><span className="text-blue-600">M</span><span className="text-green-600">UR</span><span className="text-yellow-500">A</span>
             </h2>
             <div className="h-px w-20 bg-zinc-200 mx-auto"></div>
@@ -1119,18 +1119,18 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-black text-white p-8 rounded-3xl shadow-2xl text-center space-y-4"
+            className="bg-black text-white p-6 md:p-8 rounded-3xl shadow-2xl text-center space-y-4"
           >
-            <p className="text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">Legacy</p>
-            <h3 className="text-xl md:text-2xl font-light tracking-tight">
+            <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">Legacy</p>
+            <h3 className="text-lg md:text-2xl font-light tracking-tight leading-tight">
               FOUNDER OF <span className="font-bold">GAMURA</span> IS <span className="text-zinc-400">SELVARANJAN GANTHI</span>
             </h3>
-            <div className="pt-4">
+            <div className="pt-2 md:pt-4">
               <a 
                 href="https://www.linkedin.com/in/selvaranjang" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-zinc-400 hover:text-white transition-colors border border-zinc-800 px-4 py-2 rounded-full"
+                className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400 hover:text-white transition-colors border border-zinc-800 px-4 py-2 rounded-full"
               >
                 <Linkedin size={14} />
                 Connect on LinkedIn
@@ -1138,7 +1138,7 @@ export default function App() {
             </div>
           </motion.div>
 
-          <div className="w-full max-w-md mx-auto aspect-square rounded-3xl overflow-hidden shadow-2xl border border-zinc-100 bg-zinc-50 flex items-center justify-center">
+          <div className="w-full max-w-[280px] md:max-w-md mx-auto aspect-square rounded-3xl overflow-hidden shadow-2xl border border-zinc-100 bg-zinc-50 flex items-center justify-center">
             <SafeImage 
               srcs={secondaryLogoSources} 
               alt="Gamura About" 
@@ -1155,8 +1155,8 @@ export default function App() {
     return (
       <div className="min-h-screen bg-white relative flex flex-col h-screen overflow-hidden">
         {/* Header */}
-        <div className="pt-4 pb-2 w-full flex justify-center px-16 border-b border-zinc-50 bg-white/80 backdrop-blur-md z-10 relative">
-          <span className="text-[10px] md:text-xs font-medium tracking-[0.2em] uppercase">
+        <div className="pt-4 pb-2 w-full flex justify-center px-4 md:px-16 border-b border-zinc-50 bg-white/80 backdrop-blur-md z-10 relative">
+          <span className="text-[9px] md:text-xs font-medium tracking-[0.2em] uppercase">
             <span className="text-red-600">GA</span>
             <span className="text-blue-600">M</span>
             <span className="text-green-600">UR</span>
@@ -1165,7 +1165,7 @@ export default function App() {
           </span>
           <button 
             onClick={startNewChat}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-black border border-black px-3 py-1 rounded-full hover:bg-black hover:text-white transition-all uppercase tracking-tighter"
+            className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 text-[8px] md:text-[10px] font-bold text-black border border-black px-2 md:px-3 py-1 rounded-full hover:bg-black hover:text-white transition-all uppercase tracking-tighter"
           >
             New Chat
           </button>
@@ -1173,7 +1173,7 @@ export default function App() {
         
         <button 
           onClick={() => setCurrentPage("home")}
-          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black transition-colors text-xs font-medium z-20"
+          className="absolute top-4 left-2 md:left-4 p-2 text-zinc-400 hover:text-black transition-colors text-[10px] md:text-xs font-medium z-20"
         >
           ← Back
         </button>
@@ -1208,16 +1208,16 @@ export default function App() {
                 key={i}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} px-2 md:px-0`}
               >
                 <div
-                  className={`max-w-[85%] md:max-w-[70%] p-4 rounded-2xl relative group ${
+                  className={`max-w-[90%] md:max-w-[70%] p-3 md:p-4 rounded-2xl relative group ${
                     m.role === "user"
                       ? "bg-black text-white rounded-tr-none shadow-lg shadow-black/5"
                       : "bg-zinc-50 text-zinc-800 rounded-tl-none border border-zinc-100"
                   }`}
                 >
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap selection:bg-blue-200 selection:text-blue-900 pr-6">
+                  <p className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap selection:bg-blue-200 selection:text-blue-900 pr-6">
                     {m.role === "model" ? cleanPrompt(m.content) : m.content}
                   </p>
                   
@@ -1252,13 +1252,13 @@ export default function App() {
         </div>
 
         {/* Search Bar (Prompt Input) at the Bottom */}
-        <div className="p-4 md:p-8 bg-gradient-to-t from-white via-white to-transparent">
-          <div className="max-w-3xl mx-auto mb-4 flex flex-col items-center">
+        <div className="p-3 md:p-8 bg-gradient-to-t from-white via-white to-transparent">
+          <div className="max-w-3xl mx-auto mb-2 md:mb-4 flex flex-col items-center">
             <button
               onClick={() => setShowTools(!showTools)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all border border-zinc-100 hover:border-zinc-300 mb-4 bg-white shadow-sm"
+              className="flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest transition-all border border-zinc-100 hover:border-zinc-300 mb-2 md:mb-4 bg-white shadow-sm"
             >
-              <Sparkles size={14} className={showTools ? "text-yellow-500" : "text-zinc-400"} />
+              <Sparkles size={12} className={showTools ? "text-yellow-500" : "text-zinc-400"} />
               {showTools ? "Hide Tools" : "Show Tools"}
             </button>
 
@@ -1476,7 +1476,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Top Left Logo (Clickable) */}
-      <div className="p-4 absolute top-0 left-0 z-10">
+      <div className="p-3 md:p-4 absolute top-0 left-0 z-10">
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -1484,7 +1484,7 @@ export default function App() {
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-black/10 shadow-lg focus:outline-none focus:ring-2 focus:ring-black/5 bg-white flex items-center justify-center"
+          className="w-12 h-12 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-black/10 shadow-lg focus:outline-none focus:ring-2 focus:ring-black/5 bg-white flex items-center justify-center"
         >
           <SafeImage 
             srcs={logoSources} 
@@ -1497,10 +1497,10 @@ export default function App() {
       </div>
 
       {/* Top Right Portfolio Button */}
-      <div className="p-4 absolute top-0 right-0 z-10">
+      <div className="p-3 md:p-4 absolute top-0 right-0 z-10">
         <button
           onClick={() => setCurrentPage("portfolio")}
-          className="bg-black text-white px-6 py-2.5 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] shadow-lg hover:bg-zinc-800 transition-all border border-black"
+          className="bg-black text-white px-4 md:px-6 py-2 md:py-2.5 rounded-full text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] shadow-lg hover:bg-zinc-800 transition-all border border-black"
         >
           Portfolio
         </button>
