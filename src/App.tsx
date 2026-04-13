@@ -116,7 +116,7 @@ export default function App() {
   const certImgSources = ["/certificate.png", "https://lh3.googleusercontent.com/d/1o6tralnliWDBJcAR62QUlpFuDuOHQR1W"];
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState<"home" | "gpg" | "login" | "history" | "signup" | "about" | "portfolio">("home");
+  const [currentPage, setCurrentPage] = useState<"home" | "gpg" | "login" | "history" | "signup" | "about" | "portfolio" | "gg">("home");
 
   // Login/Signup State
   const [username, setUsername] = useState("");
@@ -1099,6 +1099,29 @@ export default function App() {
     );
   }
 
+  if (currentPage === "gg") {
+    return (
+      <div className="min-h-screen bg-white relative flex flex-col items-center justify-center p-4 md:p-6">
+        <button 
+          onClick={() => setCurrentPage("home")}
+          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black transition-colors text-[10px] md:text-xs font-medium"
+        >
+          ← Back
+        </button>
+        <div className="text-center space-y-4">
+          <h1 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
+            <span className="text-red-600">GA</span>
+            <span className="text-blue-600">M</span>
+            <span className="text-green-600">UR</span>
+            <span className="text-yellow-500">A</span>
+            <span className="text-zinc-900 ml-3">GAMES</span>
+          </h1>
+          <p className="text-zinc-400 text-[10px] font-black uppercase tracking-[0.5em]">Coming Soon</p>
+        </div>
+      </div>
+    );
+  }
+
   if (currentPage === "about") {
     return (
       <div className="min-h-screen bg-white relative flex flex-col items-center justify-center p-4 md:p-6">
@@ -1465,9 +1488,21 @@ export default function App() {
                     setCurrentPage("about");
                     setIsMenuOpen(false);
                   }}
-                  className="text-white text-sm font-semibold tracking-[0.2em] uppercase hover:text-zinc-400 transition-colors"
+                  className="text-white text-sm font-semibold tracking-[0.2em] uppercase hover:text-zinc-400 transition-colors mb-4"
                 >
                   ABOUT
+                </motion.button>
+
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    setCurrentPage("gg");
+                    setIsMenuOpen(false);
+                  }}
+                  className="text-white text-sm font-semibold tracking-[0.2em] uppercase hover:text-zinc-400 transition-colors"
+                >
+                  GG
                 </motion.button>
               </div>
             </motion.div>
