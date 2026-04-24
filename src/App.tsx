@@ -114,6 +114,7 @@ export default function App() {
   const secondaryLogoSources = ["/gpg-logo.png", "https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x"];
   const profileImgSources = ["/profile.png", "https://lh3.googleusercontent.com/d/1X_b-gsSwt_-LDOt7t8IyFqop60mHBUCY", "https://lh3.googleusercontent.com/d/1zZfXn3YsmmOGXxzJ6zNKAmW6BFusX0NH"];
   const certImgSources = ["/certificate.png", "https://lh3.googleusercontent.com/d/1o6tralnliWDBJcAR62QUlpFuDuOHQR1W"];
+  const ggImgSources = ["/gg.png", "https://lh3.googleusercontent.com/d/1e-46lRbggMtRxalG_QwF0zCRd0E7A0jK"];
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState<"home" | "gpg" | "login" | "history" | "signup" | "about" | "portfolio" | "gg">("home");
@@ -1108,15 +1109,30 @@ export default function App() {
         >
           ← Back
         </button>
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
-            <span className="text-red-600">GA</span>
-            <span className="text-blue-600">M</span>
-            <span className="text-green-600">UR</span>
-            <span className="text-yellow-500">A</span>
-            <span className="text-zinc-900 ml-3">GAMES</span>
-          </h1>
-          <p className="text-zinc-400 text-[10px] font-black uppercase tracking-[0.5em]">Coming Soon</p>
+        <div className="text-center space-y-8 max-w-4xl w-full">
+          <a 
+            href="https://gamuragalaxy.vercel.app/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="block w-full max-w-[250px] mx-auto aspect-video rounded-3xl overflow-hidden shadow-2xl border border-zinc-100 bg-zinc-50 flex items-center justify-center hover:scale-105 transition-transform duration-500 cursor-pointer"
+          >
+            <SafeImage 
+              srcs={ggImgSources} 
+              alt="Gamura Games" 
+              className="w-full h-full object-cover"
+              fallbackIcon={Sparkles}
+            />
+          </a>
+          <div className="space-y-4">
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
+              <span className="text-red-600">GA</span>
+              <span className="text-blue-600">M</span>
+              <span className="text-green-600">UR</span>
+              <span className="text-yellow-500">A</span>
+              <span className="text-zinc-900 ml-3">GAMES</span>
+            </h1>
+            <p className="text-zinc-400 text-[10px] font-black uppercase tracking-[0.5em]">Coming Soon</p>
+          </div>
         </div>
       </div>
     );
