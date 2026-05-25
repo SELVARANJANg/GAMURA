@@ -1,0 +1,217 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitives & Global Helpers
+    function isSignedIn() { return request.auth != null; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    // Auth token verification
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email_verified == true && request.auth.token.email in ['gamuragalaxy@gmail.com', 'selvaranjancg@gmail.com'])
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    // Entity Validations (Pillar 2: Validation Blueprints)
+    function isValidUser(data) {
+      return data.uid is string && (data.uid == request.auth.uid)
+        && (data.nickname is string)
+        && (data.createdAt is timestamp || data.createdAt is number);
+    }
+
+    function isValidSharedProject(data) {
+      return data.userId is string && (data.userId == request.auth.uid)
+        && (data.userName is string)
+        && (data.title is string)
+        && (data.timestamp is timestamp || data.timestamp is number);
+    }
+
+    function isValidChat(data, userId) {
+      return data.userId is string && (data.userId == userId)
+        && (data.title is string)
+        && (data.messages is list)
+        && (data.timestamp is number || data.timestamp is timestamp);
+    }
+
+    function isValidActivity(data) {
+      return data.userId is string && (data.userId == request.auth.uid)
+        && (data.title is string);
+    }
+
+    function isValidNeuralProfile(data) {
+      return data.uid is string && (data.uid == request.auth.uid)
+        && (data.nickname is string);
+    }
+
+    function isValidNeuralChat(data) {
+      return data.members is list && (request.auth.uid in data.members)
+        && (data.timestamp is timestamp || data.timestamp is number || data.timestamp == request.time);
+    }
+
+    function isValidNeuralMessage(data) {
+      return (data.senderId == request.auth.uid || data.senderId == 'ai_system')
+        && (data.text is string)
+        && (data.timestamp is timestamp || data.timestamp is number || data.timestamp == request.time);
+    }
+
+    function isValidGamuraDeveloper(data) {
+      return data.username is string && data.username.size() > 0 && data.username.size() <= 128
+        && (!('email' in data) || data.email is string)
+        && (!('blocks' in data) || data.blocks is list)
+        && (!('published' in data) || data.published is bool)
+        && (!('plan' in data) || data.plan is string)
+        && (!('clicks' in data) || data.clicks is number)
+        && (!('views' in data) || data.views is number)
+        && (!('visitors' in data) || data.visitors is number)
+        && (!('engagements' in data) || data.engagements is number)
+        && (!('updatedAt' in data) || data.updatedAt is timestamp || data.updatedAt is number || data.updatedAt == request.time);
+    }
+
+    // Phase 4: Match Blocks
+    match /users/{userId} {
+      // Identity Integrity (Pillar 3 & 4)
+      allow read: if isSignedIn(); // Allow reading other users for Recent Users list
+      allow list: if isSignedIn(); // Allow listing users for Recent Users list
+      
+      allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId && isValidUser(incoming());
+
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin()) && isValidUser(incoming());
+      
+      allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin() || (resource != null && resource.data.uid == request.auth.uid));
+
+      // Sub-collection: Chats (Pillar 1: Master Gate)
+      match /chats/{chatId} {
+        allow read, list: if isSignedIn() && request.auth.uid == userId;
+        
+        allow create: if isSignedIn() && isValidId(chatId) && request.auth.uid == userId
+          && isValidChat(incoming(), userId)
+          && incoming().keys().size() <= 6; // userId, title, messages, timestamp, id?
+
+        allow update: if isSignedIn() && request.auth.uid == userId
+          && isValidChat(incoming(), userId)
+          && (
+            // Action: Edit Chat or Append Messages
+            (incoming().diff(existing()).affectedKeys().hasOnly(['title', 'messages', 'timestamp']))
+          );
+        
+        allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      }
+
+      // Sub-collection: Notifications (Pillar 1: Master Gate)
+      match /notifications/{notifId} {
+        allow read, list: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn() && request.auth.uid == userId;
+        allow update: if isSignedIn() && request.auth.uid == userId;
+        allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      }
+    }
+
+    // Test connection match
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // System Stats (Global counter)
+    match /system/stats {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /system_configs/{configId} {
+      allow read: if isSignedIn() || true; // Allow read even if not signed in for global config if needed, or stick to isSignedIn()
+      allow write: if isSignedIn();
+    }
+
+    // Bubu Progress
+    match /system/bubu_progress {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // User Connections
+    match /user_connections/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Activities
+    match /activities/{activityId} {
+      allow read, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(activityId) && isValidActivity(incoming());
+    }
+
+    // Username reservation
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if isSignedIn() && !exists(/databases/$(database)/documents/usernames/$(username)) && incoming().uid == request.auth.uid;
+      allow delete: if isSignedIn() && (resource != null && (resource.data.uid == request.auth.uid || isAdmin()));
+    }
+
+    // Shared Projects
+    match /shared_projects/{projectId} {
+      allow read, list: if true; // Publicly viewable
+      allow create: if isSignedIn() && isValidId(projectId) && request.auth.uid == projectId
+        && isValidSharedProject(incoming());
+      allow update: if isSignedIn() && request.auth.uid == projectId
+        && isValidSharedProject(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'link', 'image', 'timestamp', 'userName', 'userId']);
+      allow delete: if isSignedIn() && (request.auth.uid == projectId || isAdmin());
+    }
+
+    // Neural Link
+    match /neural_profiles/{nickname} {
+      allow read, list: if true;
+      allow create: if isSignedIn() && isValidNeuralProfile(incoming()) && incoming().nickname == nickname;
+      allow update: if isSignedIn() && existing().uid == request.auth.uid && isValidNeuralProfile(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['avatarUrl', 'uid', 'nickname']);
+      allow delete: if isSignedIn() && (resource != null && (resource.data.uid == request.auth.uid || isAdmin()));
+    }
+
+    match /neural_requests/{requestId} {
+      allow read, list: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == incoming().senderUid;
+      allow update: if isSignedIn() && (request.auth.uid == resource.data.receiverUid || request.auth.uid == resource.data.senderUid);
+      allow delete: if isSignedIn() && (request.auth.uid == resource.data.senderUid || request.auth.uid == resource.data.receiverUid || isAdmin());
+    }
+
+    match /neural_connections/{connectionId} {
+      allow read, list: if isSignedIn();
+      allow create: if isSignedIn() && (request.auth.uid in incoming().uids);
+      allow delete: if isSignedIn() && ((request.auth.uid in resource.data.uids) || isAdmin());
+    }
+
+    match /neural_chats/{chatId} {
+      allow read, list: if isSignedIn();
+      allow create, update, delete: if isSignedIn();
+
+      match /messages/{msgId} {
+        allow read, list, write: if isSignedIn();
+      }
+    }
+
+    // Features
+    match /features/{featureId} {
+      allow read, list: if true;
+      allow write: if isSignedIn(); // Allow seeding/managing features
+    }
+
+    // Gamura Developers Hub Match Block
+    match /gamura_developers/{username} {
+      allow read, list: if true;
+      allow create, update: if isValidId(username) && isValidGamuraDeveloper(incoming());
+      allow delete: if isAdmin();
+    }
+  }
+}

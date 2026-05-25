@@ -1,16 +1,59 @@
 import React, { useState, useRef, useEffect, Component, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Send, Loader2, Sparkles, User, Lock, Copy, Check, Linkedin, Code, Image as ImageIcon, Video, Calculator, BarChart3, Activity, Home, GraduationCap, Trophy, Mail, Briefcase, Phone, MapPin, ArrowRight } from "lucide-react";
+import { X, Send, Loader2, Sparkles, User, Lock, Copy, Check, Linkedin, Code, Image as ImageIcon, Video, Calculator, BarChart3, Activity, Home, GraduationCap, Trophy, Mail, Briefcase, Phone, MapPin, ArrowRight, ArrowLeft, Moon, Sun, MessageSquarePlus, LogIn, LogOut, History, Info, Gamepad2, Trash2, Monitor, Users, LayoutGrid, MessageSquare, Settings, Menu, Search, Bell, ChevronLeft, ChevronDown, ChevronUp, Calendar, Plus, RotateCw, RefreshCw, ShieldCheck, ExternalLink, FileText, Star, Shield, Zap, Github, Layers, Share2, Cpu, Link, Link2, Bot, Terminal, Database, ArrowUpRight, Globe, MessageCircle, MoreHorizontal, Network, Radio, PieChart as PieChartIcon } from "lucide-react";
 import { GoogleGenAI } from "@google/genai";
+import axios from "axios";
+import { auth, db, firebaseConfig } from "./firebase";
+import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut as firebaseSignOut, deleteUser, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
+import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, updateDoc, serverTimestamp, query, where, getDocs, limit, increment, orderBy } from "firebase/firestore";
+import { handleFirestoreError, OperationType } from "./firebaseErrorHandler";
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  PieChart, Pie, Cell, AreaChart, Area
+} from 'recharts';
+import { GamuraOverview } from "./components/GamuraOverview";
+import { SafeImage } from "./components/SafeImage";
+import { PortfolioBuilderView, generatePortfolioHTML, DEFAULT_PORTFOLIO, THEMES } from "./components/PortfolioBuilderView";
+import { Octokit } from "octokit";
+import SelvaranjanGamura from "./components/SelvaranjanGamura";
+
+const GAMURA_G_LOGO = "https://lh3.googleusercontent.com/d/1QJprWSIgOa32ADyWHBikyBibzN80Vetv";
+
+const loaderImgSources = ["https://lh3.googleusercontent.com/d/1lUg4cyZcP17Av5MC-ij8JJM0HGmmUJu-"];
+const logoSources = ["https://lh3.googleusercontent.com/d/1gdDmsxtjEHxq4qvmshBQL3eX3c1cOSWY"];
+const mainImgSources = ["https://lh3.googleusercontent.com/d/1ii0yByxrUOAdqWUigeD63TbT3cvYJWsX"];
+const secondaryLogoSources = ["https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x"];
+const profileImgSources = ["https://lh3.googleusercontent.com/d/1X_b-gsSwt_-LDOt7t8IyFqop60mHBUCY", "https://lh3.googleusercontent.com/d/1zZfXn3YsmmOGXxzJ6zNKAmW6BFusX0NH"];
+const certImgSources = ["https://lh3.googleusercontent.com/d/1o6tralnliWDBJcAR62QUlpFuDuOHQR1W"];
+const ggImgSources = ["https://lh3.googleusercontent.com/d/1e-46lRbggMtRxalG_QwF0zCRd0E7A0jK"];
+const roundImgSources = ["https://lh3.googleusercontent.com/d/1QJprWSIgOa32ADyWHBikyBibzN80Vetv"];
+const rightRoundImgSources = ["https://lh3.googleusercontent.com/d/1yUWJgx-rYDX78t5Mb-BgZs2TVvhWe2Ct"];
 
 // Lazy initialization of Gemini AI
 const getAi = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey === "undefined") {
+  const apiKey = (process.env.GAMURA_API_KEY && process.env.GAMURA_API_KEY.length > 20) 
+                ? process.env.GAMURA_API_KEY 
+                : (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 20) ? process.env.GEMINI_API_KEY : null;
+  
+  if (!apiKey || apiKey.includes('MY_GEMINI_API_KEY')) {
     return null;
   }
   return new GoogleGenAI({ apiKey });
 };
+
+// Dark Mode Toggle Component
+const DarkModeToggle = ({ isDarkMode, setIsDarkMode }: { isDarkMode: boolean, setIsDarkMode: (val: boolean) => void }) => {
+  return (
+    <button
+      onClick={() => setIsDarkMode(!isDarkMode)}
+      className="fixed bottom-4 right-4 md:bottom-8 md:right-8 p-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 rounded-full shadow-lg hover:scale-105 transition-transform z-50 border border-zinc-200 dark:border-zinc-700"
+      aria-label="Toggle Dark Mode"
+    >
+      {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+    </button>
+  );
+};
+
 
 interface Message {
   role: "user" | "model";
@@ -22,6 +65,7 @@ interface Chat {
   title: string;
   messages: Message[];
   timestamp: number;
+  userId?: string;
 }
 
 // Error Boundary Component
@@ -44,17 +88,17 @@ class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: bo
     const { hasError, error } = (this as any).state;
     if (hasError) {
       return (
-        <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
+        <div className="min-h-screen bg-white dark:bg-zinc-950 flex flex-col items-center justify-center p-6 text-center">
           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-6">
             <X className="text-red-600" size={32} />
           </div>
-          <h1 className="text-xl font-bold text-zinc-900 mb-2">Something went wrong</h1>
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-2">Something went wrong</h1>
           <p className="text-zinc-500 text-sm max-w-xs mb-6">
             {error?.message || "An unexpected error occurred."}
           </p>
           <button 
             onClick={() => window.location.reload()}
-            className="px-6 py-2 bg-black text-white rounded-xl text-xs font-bold uppercase tracking-widest"
+            className="px-6 py-2 bg-black text-white dark:bg-white dark:text-black rounded-xl text-xs font-bold uppercase tracking-widest"
           >
             Reload Page
           </button>
@@ -66,74 +110,5745 @@ class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: bo
   }
 }
 
-// SafeImage Component for robust loading
-const SafeImage = ({ 
-  srcs, 
-  alt, 
-  className, 
-  fallbackIcon: FallbackIcon = ImageIcon,
-  fallbackText,
-  ...props 
-}: { 
-  srcs: string[], 
-  alt: string, 
-  className?: string, 
-  fallbackIcon?: any,
-  fallbackText?: string,
-  [key: string]: any 
-}) => {
-  const [idx, setIdx] = useState(0);
-  const isFailed = idx >= srcs.length;
+const GamuraLoader = ({ onFinish }: { onFinish: () => void }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [progress, setProgress] = useState(1);
+  const [isFading, setIsFading] = useState(false);
 
-  if (isFailed) {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let W: number, H: number, particles: any[] = [];
+    const COLORS = ['rgba(99,57,220,', 'rgba(6,182,212,', 'rgba(168,85,247,'];
+
+    const resize = () => {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    const mkP = () => ({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 2.5 + 0.5,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      c: COLORS[Math.floor(Math.random() * COLORS.length)],
+      a: Math.random() * 0.35 + 0.1,
+      life: Math.random() * 200 + 100,
+      age: 0
+    });
+
+    for (let i = 0; i < 80; i++) particles.push(mkP());
+
+    let animationId: number;
+    const animP = () => {
+      ctx.clearRect(0, 0, W, H);
+      particles.forEach((p, i) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.age++;
+        const al = p.a * (1 - p.age / p.life);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = p.c + al + ')';
+        ctx.fill();
+        if (p.age >= p.life) particles[i] = mkP();
+      });
+      animationId = requestAnimationFrame(animP);
+    };
+    animP();
+
+    const timer = setInterval(() => {
+      setProgress(prev => {
+        const next = Math.min(100, prev + (99 / (6000 / 50)));
+        if (next >= 100) {
+          clearInterval(timer);
+          setTimeout(() => {
+            setIsFading(true);
+            setTimeout(onFinish, 400);
+          }, 100);
+        }
+        return next;
+      });
+    }, 50);
+
+    return () => {
+      window.removeEventListener('resize', resize);
+      cancelAnimationFrame(animationId);
+      clearInterval(timer);
+    };
+  }, [onFinish]);
+
+  return (
+    <div className={`fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center overflow-hidden font-sans transition-opacity duration-600 ${isFading ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" />
+      <div className="relative z-10 flex flex-col items-center gap-10">
+        <div className="logo-wrap-loader">
+          <div className="ring-outer"></div>
+          <div className="ring-inner"></div>
+          <svg className="svg-ring" viewBox="0 0 240 240">
+            <defs>
+              <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#6339dc" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.9" />
+              </linearGradient>
+            </defs>
+            <circle cx="120" cy="120" r="112" fill="none" stroke="url(#arcGrad)" strokeWidth="3" strokeDasharray="350 352" strokeLinecap="round" />
+          </svg>
+          <div className="orbit-loader">
+            <div className="orbit-dot-loader orbit-dot-1-loader"></div>
+            <div className="orbit-dot-loader orbit-dot-2-loader"></div>
+          </div>
+          <div className="orbit-2-loader">
+            <div className="orbit-dot-loader orbit-dot-3-loader"></div>
+          </div>
+          <div className="halo-loader"></div>
+          <SafeImage srcs={loaderImgSources} alt="Gamura" className="logo-img-loader rounded-full border-4 border-white/10 shadow-2xl" />
+        </div>
+        <div className="flex flex-col items-center gap-1">
+          <div className="percent-num-loader">{Math.round(progress)}%</div>
+          <div className="text-[11px] tracking-[4px] uppercase text-zinc-400 font-semibold">Loading</div>
+        </div>
+        <div className="w-[320px]">
+          <div className="w-full h-1.5 bg-zinc-100/50 rounded-full overflow-visible relative">
+            <div className="track-fill-loader h-full" style={{ width: `${progress}%` }}></div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <div className="dot-bounce-loader" style={{ animationDelay: '0s' }}></div>
+          <div className="dot-bounce-loader" style={{ animationDelay: '0.2s' }}></div>
+          <div className="dot-bounce-loader" style={{ animationDelay: '0.4s' }}></div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AuraLoader = ({ onFinish }: { onFinish: () => void }) => {
+  const starsRef = useRef<HTMLDivElement>(null);
+  const burstRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (starsRef.current) {
+      for (let i = 0; i < 150; i++) {
+        const star = document.createElement('div');
+        star.style.position = 'absolute';
+        star.style.width = '1px';
+        star.style.height = '1px';
+        star.style.background = '#fff';
+        star.style.left = Math.random() * 100 + '%';
+        star.style.top = Math.random() * 100 + '%';
+        star.style.opacity = Math.random().toString();
+        starsRef.current.appendChild(star);
+      }
+    }
+    if (burstRef.current) {
+      for (let i = 0; i < 40; i++) {
+        const p = document.createElement('div');
+        p.className = 'bp';
+        const x = (Math.random() - 0.5) * 300 + 'px';
+        const y = (Math.random() - 0.5) * 300 + 'px';
+        p.style.setProperty('--x', x);
+        p.style.setProperty('--y', y);
+        p.style.setProperty('--d', (Math.random() * 2 + 1) + 's');
+        p.style.setProperty('--s', (Math.random() * 2) + 's');
+        burstRef.current.appendChild(p);
+      }
+    }
+    const timer = setTimeout(onFinish, 3000);
+    return () => clearTimeout(timer);
+  }, [onFinish]);
+
+  return (
+    <div className="fixed inset-0 z-[10000] bg-black overflow-hidden flex items-center justify-center font-sans select-none">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@900&display=swap');
+        
+        .aura-loader-scene { position: relative; z-index: 10; display: flex; align-items: center; justify-content: center; }
+        
+        .aura-loader-halo {
+          position: absolute;
+          width: 380px; height: 380px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(138,43,226,0.45) 0%, rgba(100,20,200,0.2) 40%, transparent 70%);
+          filter: blur(30px);
+          animation: auraHaloPulse 3s ease-in-out infinite;
+        }
+        @keyframes auraHaloPulse {
+          0%, 100% { transform: scale(1); opacity: 0.7; }
+          50% { transform: scale(1.25); opacity: 1; }
+        }
+        
+        .aura-ring1 {
+          position: absolute;
+          width: 340px; height: 340px;
+          border-radius: 50%;
+          border: 1.5px solid rgba(160,80,255,0.4);
+          border-top-color: #bf80ff;
+          border-right-color: rgba(160,80,255,0.1);
+          animation: auraSpin1 3s linear infinite;
+          box-shadow: 0 0 12px rgba(160,80,255,0.3), inset 0 0 12px rgba(160,80,255,0.1);
+        }
+        @keyframes auraSpin1 { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        .aura-ring1::before {
+          content: ""; position: absolute; top: -4px; left: 50%; transform: translateX(-50%);
+          width: 8px; height: 8px; border-radius: 50%;
+          background: #bf80ff;
+          box-shadow: 0 0 10px #bf80ff, 0 0 20px rgba(160,80,255,0.8);
+        }
+        
+        .aura-ring2 {
+          position: absolute;
+          width: 280px; height: 280px;
+          border-radius: 50%;
+          border: 1px solid rgba(180,100,255,0.25);
+          border-bottom-color: #d4aaff;
+          border-left-color: rgba(160,80,255,0.05);
+          animation: auraSpin2 5s linear infinite;
+        }
+        @keyframes auraSpin2 { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+        .aura-ring2::before {
+          content: ""; position: absolute; bottom: -3px; left: 50%; transform: translateX(-50%);
+          width: 6px; height: 6px; border-radius: 50%;
+          background: #d4aaff;
+          box-shadow: 0 0 8px #d4aaff, 0 0 16px rgba(200,150,255,0.6);
+        }
+        
+        .aura-ring3 {
+          position: absolute;
+          width: 220px; height: 220px;
+          border-radius: 50%;
+          border: 1px dashed rgba(140,60,255,0.15);
+          animation: auraSpin1 12s linear infinite reverse;
+        }
+        
+        .aura-logo {
+          position: relative; z-index: 5;
+          width: 190px; height: auto;
+          filter: drop-shadow(0 0 18px rgba(160,80,255,0.9)) drop-shadow(0 0 40px rgba(120,40,220,0.6));
+          animation: auraLogoFloat 4s ease-in-out infinite, auraLogoIn 1.4s cubic-bezier(0.34,1.56,0.64,1) forwards;
+          opacity: 0;
+        }
+        @keyframes auraLogoFloat {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-14px); }
+        }
+        @keyframes auraLogoIn {
+          0% { opacity: 0; transform: scale(0.2) rotate(-25deg) translateY(0); }
+          65% { opacity: 1; transform: scale(1.12) rotate(4deg); }
+          100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+        
+        .aura-burst { position: absolute; inset: 0; pointer-events: none; }
+        .bp {
+          position: absolute; top: 50%; left: 50%;
+          width: 2px; height: 2px; border-radius: 50%; background: #cc88ff;
+          animation: auraBpFly var(--d) ease-out var(--s) infinite; opacity: 0;
+        }
+        @keyframes auraBpFly {
+          0% { transform: translate(-50%, -50%); opacity: 1; }
+          100% { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))); opacity: 0; width: 1px; height: 1px; }
+        }
+        
+        .aura-hud-corner { position: fixed; width: 50px; height: 50px; z-index: 20; opacity: 0; animation: auraHudIn 0.5s ease 1.8s forwards; }
+        @keyframes auraHudIn { to { opacity: 0.6; } }
+        .hud-tl { top: 18px; left: 18px; border-top: 2px solid #9040e0; border-left: 2px solid #9040e0; }
+        .hud-tr { top: 18px; right: 18px; border-top: 2px solid #9040e0; border-right: 2px solid #9040e0; }
+        .hud-bl { bottom: 18px; left: 18px; border-bottom: 2px solid #9040e0; border-left: 2px solid #9040e0; }
+        .hud-br { bottom: 18px; right: 18px; border-bottom: 2px solid #9040e0; border-right: 2px solid #9040e0; }
+        
+        .aura-scan {
+          position: fixed; left: 0; right: 0; height: 1px;
+          background: linear-gradient(90deg, transparent 0%, rgba(160,80,255,0.8) 50%, transparent 100%);
+          animation: auraScanMove 4s linear infinite; z-index: 30; pointer-events: none;
+        }
+        @keyframes auraScanMove { 0% { top: -1px; opacity: 1; } 100% { top: 100%; opacity: 0; } }
+        
+        .aura-vig { position: fixed; inset: 0; background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.85) 100%); z-index: 9; pointer-events: none; }
+      `}</style>
+      <div className="aura-scan"></div>
+      <div className="aura-vig"></div>
+      <div className="aura-hud-corner hud-tl"></div>
+      <div className="aura-hud-corner hud-tr"></div>
+      <div className="aura-hud-corner hud-bl"></div>
+      <div className="aura-hud-corner hud-br"></div>
+      <div className="fixed inset-0 z-0" ref={starsRef}></div>
+
+      <div className="aura-loader-scene">
+        <div className="aura-loader-halo"></div>
+        <div className="aura-ring1"></div>
+        <div className="aura-ring2"></div>
+        <div className="aura-ring3"></div>
+        <div className="aura-burst" ref={burstRef}></div>
+        <img 
+          className="aura-logo" 
+          src={GAMURA_G_LOGO} 
+        />
+      </div>
+    </div>
+  );
+};
+
+const NeuralLinkView = ({ onBack, user, userInfo, showToast, addActivity }: { onBack: () => void, user: any, userInfo: any, showToast: any, addActivity: any }) => {
+  const [nickname, setNickname] = useState("");
+  const [myNeuralProfile, setMyNeuralProfile] = useState<any>(null);
+  const [searchNickname, setSearchNickname] = useState("");
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [sentRequests, setSentRequests] = useState<any[]>([]);
+  const [connections, setConnections] = useState<any[]>([]);
+  const [activeChat, setActiveChat] = useState<any>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [newMsg, setNewMsg] = useState("");
+  const [chats, setChats] = useState<any[]>([]);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [groupNameInput, setGroupNameInput] = useState("");
+  const [showAddMemberDropdown, setShowAddMemberDropdown] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<'users' | 'requests' | 'active'>('users');
+  const [refreshBit, setRefreshBit] = useState(0);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Force refresh every 30 seconds to update expired messages dynamically
+    const interval = setInterval(() => setRefreshBit(b => b + 1), 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Heartbeat pulse to user's registered profile to indicate active state
+  useEffect(() => {
+    if (!user || !myNeuralProfile?.nickname) return;
+    const updatePulse = async () => {
+      try {
+        await updateDoc(doc(db, "neural_profiles", myNeuralProfile.nickname), {
+          lastPulse: serverTimestamp()
+        });
+      } catch (e) {
+        console.warn("Pulse update failed:", e);
+      }
+    };
+    updatePulse(); // Immediately run
+    const interval = setInterval(updatePulse, 10000); // Pulse every 10 seconds
+    return () => clearInterval(interval);
+  }, [user, myNeuralProfile?.nickname]);
+
+  const getOnlineStatus = (profile: any) => {
+    if (!profile || !profile.lastPulse) return 'Offline';
+    try {
+      let pulseMs = 0;
+      if (typeof profile.lastPulse.toDate === 'function') {
+        pulseMs = profile.lastPulse.toDate().getTime();
+      } else if (profile.lastPulse.seconds) {
+        pulseMs = profile.lastPulse.seconds * 1000;
+      } else {
+        pulseMs = new Date(profile.lastPulse).getTime();
+      }
+      const diffSeconds = (Date.now() - pulseMs) / 1000;
+      if (diffSeconds < 25) return 'Active';
+      if (diffSeconds < 80) return 'Standby';
+      return 'Offline';
+    } catch {
+      return 'Offline';
+    }
+  };
+
+  const getStatusColorClass = (status: 'Active' | 'Standby' | 'Offline') => {
+    if (status === 'Active') return 'bg-emerald-500 ring-2 ring-white shadow-[0_0_8px_rgba(16,185,129,0.5)]';
+    if (status === 'Standby') return 'bg-amber-500 ring-2 ring-white shadow-[0_0_8px_rgba(245,158,11,0.4)]';
+    return 'bg-slate-300 ring-2 ring-white';
+  };
+
+  // Sync Neutral Profile
+  useEffect(() => {
+    if (!user) return;
+    const qProfile = query(collection(db, "neural_profiles"), where("uid", "==", user.uid));
+    const unsubProfile = onSnapshot(qProfile, (snap) => {
+      if (!snap.empty) {
+        setMyNeuralProfile(snap.docs[0].data());
+      }
+    }, (err) => handleFirestoreError(err, OperationType.LIST, "neural_profiles"));
+
+    // Sync All Users (for standard micro-search directory)
+    const unsubUsers = onSnapshot(query(collection(db, "neural_profiles"), limit(100)), (snap) => {
+      setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter((u: any) => u.uid !== user.uid));
+    });
+
+    // Sync Incoming Connection Requests
+    const qReq = query(collection(db, "neural_requests"), where("receiverUid", "==", user.uid));
+    const unsubReq = onSnapshot(qReq, (snap) => {
+      setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter((r: any) => r.status === 'pending'));
+    });
+
+    // Sync Sent Connection Requests
+    const qSent = query(collection(db, "neural_requests"), where("senderUid", "==", user.uid));
+    const unsubSent = onSnapshot(qSent, (snap) => {
+      setSentRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as any)).filter((r: any) => r.status === 'pending'));
+    });
+
+    // Sync Active Multiple Connections
+    const qConn = query(collection(db, "neural_connections"), where("uids", "array-contains", user.uid));
+    const unsubConn = onSnapshot(qConn, (snap) => {
+      setConnections(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => {
+      unsubProfile();
+      unsubUsers();
+      unsubReq();
+      unsubSent();
+      unsubConn();
+    };
+  }, [user]);
+
+  // Sync Active Chat Channels
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, "neural_chats"), where("members", "array-contains", user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      // Filter out 'ai' type chat hubs to remove BuBuBai AI completely
+      const allChats = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      setChats(allChats.filter((c: any) => c.type !== 'ai'));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, "neural_chats"));
+    return unsub;
+  }, [user]);
+
+  // Sync Messages with 24-Hour Auto-Expiry Logic (client-side dynamic window)
+  useEffect(() => {
+    if (!activeChat) {
+      setMessages([]);
+      return;
+    }
+    const q = query(collection(db, `neural_chats/${activeChat.id}/messages`), orderBy("timestamp", "asc"), limit(60));
+    const unsub = onSnapshot(q, (snap) => {
+      const now = Date.now();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      
+      const msgs = snap.docs.map(d => {
+        const data = d.data();
+        const ts = data.timestamp?.toMillis ? data.timestamp.toMillis() : (data.timestamp || now);
+        return { id: d.id, ...data, ts };
+      });
+
+      // Filter local state messages to those strictly created within last 24 hours
+      const filtered = msgs.filter(m => (Date.now() - m.ts) < twentyFourHours);
+      setMessages(filtered);
+    }, (err) => handleFirestoreError(err, OperationType.LIST, `neural_chats/${activeChat.id}/messages`));
+    return unsub;
+  }, [activeChat, refreshBit]);
+
+  const sendRequest = async (target: any) => {
+    try {
+      const requestId = [user.uid, target.uid].sort().join("_");
+      await setDoc(doc(db, "neural_requests", requestId), {
+        senderUid: user.uid,
+        senderNickname: myNeuralProfile.nickname,
+        receiverUid: target.uid,
+        receiverNickname: target.nickname,
+        status: 'pending',
+        timestamp: serverTimestamp()
+      });
+      showToast("📡", "Connection Request Sent", `Invited ${target.nickname} to connect in the Gamura Universe.`);
+      addActivity(`Sent connection invitation to ${target.nickname}`, "👥");
+    } catch (e: any) {
+      showToast("❌", "Request Failed", e.message);
+    }
+  };
+
+  const cancelRequest = async (req: any) => {
+    try {
+      await deleteDoc(doc(db, "neural_requests", req.id));
+      showToast("📡", "Request Recalled", "Connection invitation withdrawn.");
+    } catch (e: any) {
+      showToast("❌", "Action Failed", e.message);
+    }
+  };
+
+  const acceptRequest = async (req: any) => {
+    try {
+      const connectionId = [req.senderUid, user.uid].sort().join("_");
+      await setDoc(doc(db, "neural_connections", connectionId), {
+        uids: [req.senderUid, user.uid],
+        nicknames: { [req.senderUid]: req.senderNickname, [user.uid]: myNeuralProfile.nickname },
+        timestamp: serverTimestamp()
+      });
+      await updateDoc(doc(db, "neural_requests", req.id), { status: 'accepted' });
+      showToast("🔗", "Connection Accepted", `You are now connected with ${req.senderNickname}!`);
+      addActivity(`Connected with multiple-user profile ${req.senderNickname}`, "🔗");
+    } catch (e: any) {
+      showToast("❌", "Action Failed", e.message);
+    }
+  };
+
+  const rejectRequest = async (req: any) => {
+    try {
+      await deleteDoc(doc(db, "neural_requests", req.id));
+      showToast("⚡", "Request Declined", "Connection invitation declined.");
+    } catch (e: any) {
+      showToast("❌", "Action Failed", e.message);
+    }
+  };
+
+  const copyLink = (nickname: string) => {
+    const link = `gamura://connect/${nickname}`;
+    navigator.clipboard.writeText(link);
+    showToast("📋", "Uplink Saved", `Shared identity: ${link}`);
+  };
+
+  const handleRegister = async () => {
+    if (nickname.length < 3) {
+      showToast("⚠️", "Invalid ID", "Nickname must be at least 3 characters.");
+      return;
+    }
+    setIsRegistering(true);
+    try {
+      const lowerNick = nickname.toLowerCase().replace(/[^a-z0-9_]/g, "");
+      const docRef = doc(db, "neural_profiles", lowerNick);
+      const existing = await getDoc(docRef);
+      if (existing.exists()) {
+        showToast("❌", "ID Already Taken", "This nickname is already registered in the neutral universe.");
+        setIsRegistering(false);
+        return;
+      }
+      await setDoc(docRef, { 
+        uid: user.uid, 
+        nickname: lowerNick, 
+        avatarUrl: userInfo?.avatarUrl || "" 
+      });
+      showToast("🧠", "Neutral ID Registered", `You are now active as @${lowerNick}!`);
+      addActivity(`Registered Neutral Link nick: ${lowerNick}`, "🧠");
+    } catch (e: any) {
+      showToast("❌", "Registration Error", e.message);
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  const startChat = async (target: any) => {
+    const existing = chats.find(c => c.type === 'direct' && c.members.includes(target.uid));
+    if (existing) {
+      setActiveChat(existing);
+      return;
+    }
+
+    try {
+      const chatId = [user.uid, target.uid].sort().join("_");
+      const chatRef = doc(db, "neural_chats", chatId);
+      const chatData = {
+        members: [user.uid, target.uid],
+        nicknames: { [user.uid]: myNeuralProfile?.nickname || "User", [target.uid]: target.nickname || "Collaborator" },
+        type: 'direct',
+        createdBy: user.uid,
+        timestamp: serverTimestamp()
+      };
+      await setDoc(chatRef, chatData);
+      setActiveChat({ id: chatId, ...chatData });
+      showToast("💬", "Direct Chat Established", `Send direct messages safely to @${target.nickname}.`);
+    } catch (e: any) {
+      showToast("❌", "Chat Initiation Error", e.message);
+    }
+  };
+
+  const createGroupChatObj = async () => {
+    if (!groupNameInput.trim()) {
+      showToast("⚠️", "Write Group Name", "Specify a name for the group chat.");
+      return;
+    }
+    try {
+      const chatId = `group_${Date.now()}`;
+      const chatData = {
+        members: [user.uid],
+        nicknames: { [user.uid]: myNeuralProfile?.nickname || "Creator" },
+        name: groupNameInput.trim(),
+        type: 'group',
+        createdBy: user.uid,
+        timestamp: serverTimestamp()
+      };
+      await setDoc(doc(db, "neural_chats", chatId), chatData);
+      showToast("🧑‍🤝‍🧑", "Group Live", `Group room "${groupNameInput.trim()}" created successfully!`);
+      setGroupNameInput("");
+      setIsCreatingGroup(false);
+    } catch (e: any) {
+      showToast("❌", "Group Creation Failed", e.message);
+    }
+  };
+
+  const deleteOrLeaveGroup = async (chat: any) => {
+    try {
+      if (chat.createdBy === user.uid) {
+        await deleteDoc(doc(db, "neural_chats", chat.id));
+        showToast("🗑️", "Group Dismantled", `Group "${chat.name}" was dismantled successfully.`);
+        if (activeChat?.id === chat.id) setActiveChat(null);
+      } else {
+        const updatedMembers = chat.members.filter((uid: string) => uid !== user.uid);
+        const updatedNicknames = { ...chat.nicknames };
+        delete updatedNicknames[user.uid];
+        await updateDoc(doc(db, "neural_chats", chat.id), {
+          members: updatedMembers,
+          nicknames: updatedNicknames
+        });
+        showToast("🚪", "Left Group", `You left the group "${chat.name}".`);
+        if (activeChat?.id === chat.id) setActiveChat(null);
+      }
+    } catch (e: any) {
+      showToast("❌", "Action Failed", e.message);
+    }
+  };
+
+  const removeConnection = async (targetUid: string, targetNickname: string) => {
+    try {
+      const connectionId = [targetUid, user.uid].sort().join("_");
+      await deleteDoc(doc(db, "neural_connections", connectionId));
+
+      const requestId = [targetUid, user.uid].sort().join("_");
+      await deleteDoc(doc(db, "neural_requests", requestId));
+
+      const directChatId = [user.uid, targetUid].sort().join("_");
+      await deleteDoc(doc(db, "neural_chats", directChatId));
+
+      showToast("🔌", "Link Severed", `Handshake connection with @${targetNickname} was dissolved.`);
+      addActivity(`Severed connection with @${targetNickname}`, "🔌");
+
+      if (activeChat?.id === directChatId) {
+        setActiveChat(null);
+      }
+    } catch (e: any) {
+      showToast("❌", "Sever failed", e.message);
+    }
+  };
+
+  const addMemberToGroup = async (targetUser: any) => {
+    if (!activeChat || activeChat.type !== 'group') return;
+    if (activeChat.members.length >= 24) {
+      showToast("⚠️", "Group limits reached", "Only a maximum of 24 members is allowed in a single group.");
+      return;
+    }
+    try {
+      const updatedMembers = [...activeChat.members, targetUser.uid];
+      const updatedNicknames = {
+        ...activeChat.nicknames,
+        [targetUser.uid]: targetUser.nickname || "Collaborator"
+      };
+      await updateDoc(doc(db, "neural_chats", activeChat.id), {
+        members: updatedMembers,
+        nicknames: updatedNicknames
+      });
+      setActiveChat((prev: any) => {
+        if (prev && prev.id === activeChat.id) {
+          return { ...prev, members: updatedMembers, nicknames: updatedNicknames };
+        }
+        return prev;
+      });
+      showToast("➕", "Member Joint", `@${targetUser.nickname} invited into ${activeChat.name || "group"}.`);
+    } catch (e: any) {
+      showToast("❌", "Could not add user", e.message);
+    }
+  };
+
+  const sendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMsg.trim() || !activeChat) return;
+    const msg = newMsg.trim();
+    setNewMsg("");
+
+    try {
+      await setDoc(doc(collection(db, `neural_chats/${activeChat.id}/messages`)), {
+        senderId: user.uid,
+        senderName: myNeuralProfile.nickname,
+        text: msg,
+        timestamp: serverTimestamp()
+      });
+    } catch (e: any) {
+      showToast("❌", "Send Failed", e.message);
+    }
+  };
+
+  const getRemainingTimeStr = (ts: number) => {
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    const diff = twentyFourHours - (Date.now() - ts);
+    if (diff <= 0) return "Expired soon";
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${mins}m left`;
+  };
+
+  // Profile setup page for Neutral Link
+  if (!myNeuralProfile) {
     return (
-      <div className={`bg-zinc-100 flex flex-col items-center justify-center rounded-2xl p-4 ${className}`}>
-        <FallbackIcon className="text-zinc-300 mb-2" size={className?.includes('w-16') ? 24 : 48} />
-        {fallbackText && <p className="text-zinc-400 text-[8px] font-bold uppercase tracking-widest text-center">{fallbackText}</p>}
+      <div className="w-full h-full min-h-[580px] bg-white border border-slate-200/80 rounded-[2rem] flex flex-col p-8 md:p-12 relative overflow-hidden animate-in fade-in duration-300 shadow-xl text-slate-800">
+        <button onClick={onBack} className="absolute top-8 left-8 p-2.5 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-all cursor-pointer"><ArrowLeft size={16} /></button>
+        <div className="flex-1 flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-6">
+          <div className="w-16 h-16 bg-sky-50 rounded-2xl flex items-center justify-center border border-sky-100 shadow-sm">
+            <Link size={26} className="text-sky-500" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight mb-2">Activate Your Neutral Link ID</h2>
+            <p className="text-slate-500 text-xs font-medium leading-relaxed uppercase tracking-wider">Establish your corporate-ready communication frequency on the Gamura premium network.</p>
+          </div>
+          
+          <div className="w-full max-w-sm p-4 bg-slate-50 rounded-2xl text-left border border-slate-100 text-[11px] text-slate-500 leading-relaxed space-y-2">
+            <p className="font-bold text-slate-800 uppercase tracking-widest text-[9px]">About Neutral Link</p>
+            <p>Neutral Link is a collaboration hub where users in the Gamura Universe can request connections, accept connections, and work together on projects like LinkedIn.</p>
+          </div>
+
+          <div className="w-full space-y-3">
+            <label className="block text-[10px] font-bold text-slate-500 uppercase text-left tracking-wider pl-1">Choose Nickname / Nick ID</label>
+            <input 
+              type="text" 
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+              placeholder="e.g. creative_pixel (lowercase, alphanumeric)"
+              className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-sky-500 focus:bg-white focus:ring-4 focus:ring-sky-500/10 transition-all"
+            />
+            <button 
+              onClick={handleRegister}
+              disabled={isRegistering || nickname.length < 3}
+              className="w-full py-3.5 bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-xs rounded-xl uppercase tracking-[0.15em] shadow-lg shadow-sky-500/10 active:scale-[0.98] transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {isRegistering ? "Registering Signature..." : "Activate Connection ID"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Filter registered users based on search
+  const filteredUsers = allUsers.filter(u => 
+    u.nickname && u.nickname.toLowerCase().includes(searchNickname.toLowerCase())
+  );
+
+  const connectedButNotInGroup = allUsers.filter(u => {
+    const isConnected = connections.some(c => c.uids.includes(u.uid));
+    const isAlreadyInGroup = activeChat?.members?.includes(u.uid);
+    return isConnected && !isAlreadyInGroup;
+  });
+
+  return (
+    <div className="w-full h-full min-h-[620px] bg-white border border-slate-200/80 rounded-[2.5rem] flex flex-col relative overflow-hidden animate-in fade-in duration-300 shadow-xl text-slate-800">
+      
+      {/* HEADER BAR */}
+      <div className="px-8 py-5 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-slate-50/50">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-sky-500 text-white flex items-center justify-center font-black text-base shadow-md shadow-sky-500/15">
+            {myNeuralProfile.nickname.substring(0, 1).toUpperCase()}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-slate-900 font-extrabold text-sm tracking-tight">@{myNeuralProfile.nickname}</h2>
+              <span className="px-2 py-0.5 rounded bg-sky-100 text-sky-600 text-[8px] font-extrabold uppercase tracking-widest">GETA RELEASE</span>
+            </div>
+            <p className="text-[10px] text-slate-500 font-bold tracking-tight">Active Mutual Workspace ID: {user.uid.substring(0, 8).toUpperCase()}</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <button 
+            onClick={() => setActiveTab('users')} 
+            className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'users' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+          >
+            Discover Users
+          </button>
+          <button 
+            onClick={() => setActiveTab('requests')} 
+            className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider relative transition-all cursor-pointer ${activeTab === 'requests' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+          >
+            Pending Requests
+            {requests.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-sky-500 text-white rounded-full w-4 h-4 text-[8px] font-extrabold flex items-center justify-center animate-bounce">
+                {requests.length}
+              </span>
+            )}
+          </button>
+          <button 
+            onClick={onBack} 
+            className="p-2 ml-auto text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+            title="Exit Workspace"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* CORE COLUMNS CONTAINER */}
+      <div className="flex-1 flex flex-col lg:flex-row divide-y lg:divide-y-0 lg:divide-x divide-slate-100 min-h-[500px]">
+        
+        {/* SIDEBAR: ACTIVE INTERACTION FEEDS */}
+        <div className="w-full lg:w-72 flex flex-col shrink-0 bg-slate-50/20 max-h-[500px] lg:max-h-none overflow-y-auto">
+          
+          {/* Active Chats Header */}
+          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+            <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Interactive Channels</span>
+            <button 
+              onClick={() => setIsCreatingGroup(!isCreatingGroup)} 
+              className="text-xs font-black text-sky-600 hover:text-sky-700 hover:bg-sky-50 px-2 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              + Create Group
+            </button>
+          </div>
+
+          {/* New Group Inline Creation Input */}
+          {isCreatingGroup && (
+            <div className="p-4 bg-sky-50/40 border-b border-slate-100 animate-slide-down space-y-2">
+              <span className="text-[9px] font-extrabold text-slate-500 uppercase tracking-wide block">Create Premium Chat Chamber</span>
+              <div className="flex gap-1">
+                <input 
+                  type="text" 
+                  value={groupNameInput}
+                  onChange={(e) => setGroupNameInput(e.target.value)}
+                  placeholder="Group Title (e.g. Design Team)"
+                  className="flex-1 bg-white border border-slate-200 outline-none px-2.5 py-1.5 text-xs text-slate-800 rounded-lg focus:border-sky-500 font-medium"
+                />
+                <button 
+                  onClick={createGroupChatObj} 
+                  className="bg-sky-500 hover:bg-sky-600 px-3.5 text-white font-extrabold text-[10px] rounded-lg tracking-wider cursor-pointer"
+                >
+                  Create
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Active Chats List */}
+          <div className="flex-1 p-3 space-y-1">
+            {chats.map(chat => {
+              const isActive = activeChat?.id === chat.id;
+              const title = chat.type === 'group' ? chat.name : (Object.values(chat.nicknames || {}).find(n => n !== myNeuralProfile?.nickname) as string || 'Direct Chat');
+              
+              return (
+                <div 
+                  key={chat.id}
+                  onClick={() => setActiveChat(chat)}
+                  className={`group w-full flex items-center justify-between p-3 rounded-xl transition-all cursor-pointer border ${
+                    isActive 
+                      ? 'bg-sky-50 border-sky-100 text-sky-500' 
+                      : 'hover:bg-slate-50 border-transparent text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
+                      isActive ? 'bg-sky-500/10 border-sky-300' : 'bg-slate-100 border-slate-200'
+                    }`}>
+                      {chat.type === 'group' ? (
+                        <Users size={12} className={isActive ? 'text-sky-500' : 'text-slate-500'} />
+                      ) : (
+                        <MessageSquare size={12} className={isActive ? 'text-sky-500' : 'text-slate-500'} />
+                      )}
+                    </div>
+                    <span className="text-[11px] font-bold tracking-tight truncate">{title}</span>
+                  </div>
+
+                  {/* Leave or Delete inline controls */}
+                  {chat.type === 'group' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteOrLeaveGroup(chat);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50/50 rounded-lg transition-all cursor-pointer shrink-0"
+                      title={chat.createdBy === user.uid ? "Dismantle Group" : "Leave Group"}
+                    >
+                      {chat.createdBy === user.uid ? <Trash2 size={11} /> : <LogOut size={11} />}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            
+            {chats.length === 0 && (
+              <div className="flex flex-col items-center justify-center text-center py-12 px-4 space-y-1.5 text-slate-400">
+                <p className="text-[10px] font-black uppercase tracking-wider">No connections started</p>
+                <p className="text-[9px] leading-relaxed">Search users under the main tab and invite them to spark a secure workspace interaction channel.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* MAIN PANEL CONTENT */}
+        <div className="flex-1 flex flex-col bg-white">
+          
+          {/* USER DIRECTORY TAB */}
+          {activeTab === 'users' && !activeChat && (
+            <div className="flex-1 p-6 md:p-8 flex flex-col space-y-6">
+
+              {/* Discovery search filters */}
+              <div className="flex gap-2 bg-slate-50 p-1.5 border border-slate-100 rounded-xl max-w-md">
+                <input 
+                  type="text" 
+                  value={searchNickname} 
+                  onChange={e => setSearchNickname(e.target.value)}
+                  placeholder="Search user nickname ID..."
+                  className="flex-1 bg-transparent border-none outline-none text-xs text-slate-800 px-3 font-semibold"
+                />
+                <button className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-[10px] rounded-lg uppercase tracking-wider cursor-pointer">
+                  Filter
+                </button>
+              </div>
+
+              {/* Users grid list */}
+              <div className="flex-1 flex flex-col">
+                <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase mb-3 block pl-1">GAMURA NETWORK DIRECTORY ({filteredUsers.length})</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {filteredUsers.map(u => {
+                    const isConnected = connections.some(c => c.uids.includes(u.uid));
+                    const hasIncoming = requests.some(r => r.senderUid === u.uid);
+                    const hasOutgoing = sentRequests.some(r => r.receiverUid === u.uid);
+
+                    return (
+                      <div key={u.uid} className="relative p-5 rounded-2xl border border-slate-100 bg-white/90 hover:bg-white shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)] hover:shadow-[0_10px_20px_-10px_rgba(0,0,0,0.08)] transition-all duration-300 flex flex-col justify-between space-y-5 group">
+                        
+                        {/* Upper Section */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3.5">
+                            {/* Profile Accent Initial */}
+                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-slate-50 to-slate-100 border border-slate-250 shadow-inner flex items-center justify-center font-extrabold text-slate-700 text-base">
+                              {u.nickname.substring(0, 1).toUpperCase()}
+                            </div>
+                            
+                            {/* User details */}
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-black text-slate-900 tracking-tight flex items-center gap-1.5 truncate">
+                                @{u.nickname}
+                                {isConnected && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Connected" />
+                                )}
+                              </span>
+                              <span className="text-[10px] font-mono font-medium text-slate-400 mt-0.5 truncate uppercase tracking-widest">
+                                ID: {u.uid.substring(0, 8)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Share / Copy identifier hook */}
+                          <button 
+                            onClick={() => copyLink(u.nickname)} 
+                            className="p-2 text-slate-400 hover:text-sky-500 hover:bg-slate-50 rounded-xl transition-all duration-200 cursor-pointer text-xs"
+                            title="Copy connect link"
+                          >
+                            <Link size={12} />
+                          </button>
+                        </div>
+
+                        {/* Mid Meta details */}
+                        <div className="bg-slate-50/70 rounded-xl p-2.5 text-[9px] font-medium text-slate-500 border border-slate-100/60 flex items-center justify-between">
+                          <span>Connection:</span>
+                          <span className={`font-bold uppercase tracking-wider ${
+                            isConnected ? 'text-emerald-600' : hasIncoming ? 'text-amber-600' : hasOutgoing ? 'text-blue-500' : 'text-slate-400'
+                          }`}>
+                            {isConnected ? 'Linked' : hasIncoming ? 'Incoming Invite' : hasOutgoing ? 'Handshake Sent' : 'Available'}
+                          </span>
+                        </div>
+
+                        {/* Action buttons with high corporate finish */}
+                        <div className="pt-1">
+                          {isConnected ? (
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => startChat(u)} 
+                                className="flex-1 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-[10.5px] font-black uppercase tracking-wider transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer hover:shadow-md hover:shadow-sky-500/10 active:scale-[0.99]"
+                              >
+                                <MessageSquare size={12} className="stroke-[2.5]" /> Direct Workspace
+                              </button>
+                              <button 
+                                onClick={() => removeConnection(u.uid, u.nickname)}
+                                className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-200 hover:border-red-150 rounded-xl transition-all duration-250 cursor-pointer text-xs flex items-center justify-center"
+                                title="Disconnect / Dissolve Connection"
+                              >
+                                <Trash2 size={13} className="stroke-[2]" />
+                              </button>
+                            </div>
+                          ) : hasIncoming ? (
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => acceptRequest(requests.find(r => r.senderUid === u.uid))}
+                                className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[10.5px] font-extrabold uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-[0.99]"
+                              >
+                                Accept
+                              </button>
+                              <button 
+                                onClick={() => rejectRequest(requests.find(r => r.senderUid === u.uid))}
+                                className="flex-1 py-2.5 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 border border-slate-200/50 rounded-xl text-[10.5px] font-extrabold uppercase tracking-wider transition-all cursor-pointer active:scale-[0.99]"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          ) : hasOutgoing ? (
+                            <button 
+                              onClick={() => cancelRequest(sentRequests.find(r => r.receiverUid === u.uid))}
+                              className="w-full py-2.5 bg-amber-50 hover:bg-red-50 text-amber-700 hover:text-red-600 border border-amber-200 hover:border-red-100 rounded-xl text-[10.5px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-[0.99]"
+                            >
+                              Cancel Invitation
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => sendRequest(u)} 
+                              className="w-full py-2.5 bg-sky-50/50 hover:bg-sky-500 text-sky-600 hover:text-white border border-sky-100 hover:border-sky-500 rounded-xl text-[10.5px] font-extrabold uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:shadow-sm active:scale-[0.99]"
+                            >
+                              <Plus size={12} className="stroke-[2.5]" /> Request Handshake
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {filteredUsers.length === 0 && (
+                    <div className="col-span-full py-16 text-center space-y-3.5 max-w-md mx-auto bg-slate-50/50 border border-slate-105 p-8 rounded-[2rem]">
+                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center border border-slate-100 shadow-sm mx-auto">
+                        <Users size={18} className="text-slate-400" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">
+                          {searchNickname ? "No one found in this name" : "Awaiting Planet Members"}
+                        </h4>
+                        <p className="text-[11px] text-slate-400 leading-normal font-bold uppercase">
+                          {searchNickname 
+                            ? "Please verify spelling or connection signature and query again." 
+                            : "Share your Gamura namespace with colleagues to activate direct communication keys."}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* REQUESTS LIST TAB */}
+          {activeTab === 'requests' && !activeChat && (
+            <div className="flex-1 p-6 md:p-8 space-y-6">
+              
+              {/* Incoming section */}
+              <div>
+                <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase block mb-3 pl-1">Incoming Invitations ({requests.length})</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {requests.map(req => (
+                    <div key={req.id} className="p-4 rounded-2xl border border-slate-100 bg-white shadow-sm flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center font-bold text-slate-800 uppercase">
+                          {req.senderNickname.substring(0, 1)}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold text-slate-950">@{req.senderNickname}</span>
+                          <span className="text-[9px] font-bold text-slate-400">Requesting connection link</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button 
+                          onClick={() => acceptRequest(req)} 
+                          className="px-3.5 py-1.5 bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-[10px] rounded-lg tracking-wider cursor-pointer"
+                        >
+                          Accept
+                        </button>
+                        <button 
+                          onClick={() => rejectRequest(req)} 
+                          className="px-3.5 py-1.5 bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-500 font-extrabold text-[10px] rounded-lg tracking-wider cursor-pointer"
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {requests.length === 0 && (
+                    <div className="py-8 text-center border-2 border-dashed border-slate-100 bg-slate-50/20 rounded-2xl text-slate-400 text-[11px] font-bold uppercase col-span-full">
+                      No incoming invitations pending
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sent section */}
+              <div className="pt-6 border-t border-slate-100">
+                <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase block mb-3 pl-1">Outgoing Invitations Sent</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {sentRequests.map(req => (
+                    <div key={req.id} className="p-4 rounded-2xl border border-slate-100 bg-white shadow-sm flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center font-bold text-slate-400 uppercase">
+                          {req.receiverNickname ? req.receiverNickname.substring(0, 1) : "I"}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold text-slate-950">@{req.receiverNickname || "User Link"}</span>
+                          <span className="text-[9px] font-bold text-slate-400">Waiting for response...</span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => cancelRequest(req)} 
+                        className="px-3 py-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ))}
+                  {sentRequests.length === 0 && (
+                    <div className="py-8 text-center border-2 border-dashed border-slate-100 bg-slate-50/20 rounded-2xl text-slate-400 text-[11px] font-bold uppercase col-span-full">
+                      No outgoing connection invitations sent
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ACTIVE CHAT WORKSPACE AREA */}
+          {activeChat && (
+            <div className="flex-1 flex flex-col h-full bg-slate-50/30">
+              
+              {/* Chat Title bar */}
+              <div className="p-4 px-6 border-b border-slate-100 flex items-center justify-between bg-white relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200/50 flex items-center justify-center text-sky-500 font-extrabold text-[12px]">
+                    {activeChat.type === 'group' ? "G" : "D"}
+                  </div>
+                  <div className="flex flex-col">
+                    <h3 className="text-xs font-black text-slate-900 tracking-tight uppercase">
+                      {activeChat.type === 'group' ? activeChat.name : (Object.values(activeChat.nicknames || {}).find(n => n !== myNeuralProfile.nickname) as string || 'Private Conversation')}
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                        Highly Secure Ephemeral Segment // Messages Auto-deleted in 24 Hours
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  {activeChat.type === 'group' && (
+                    <button 
+                      onClick={() => setShowAddMemberDropdown(!showAddMemberDropdown)}
+                      className={`p-1 px-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                        showAddMemberDropdown ? 'bg-sky-500 text-white shadow-sm' : 'text-sky-600 hover:text-sky-700 hover:bg-sky-50'
+                      }`}
+                    >
+                      <Plus size={11} className="stroke-[2.5]" />
+                      <span className="text-[10px] uppercase tracking-wider font-extrabold">Members ({activeChat.members?.length || 1}/24)</span>
+                    </button>
+                  )}
+
+                  {activeChat.type === 'group' && (
+                    <button 
+                      onClick={() => deleteOrLeaveGroup(activeChat)} 
+                      className="p-1 px-2 text-xs font-bold text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                      title={activeChat.createdBy === user.uid ? "Delete Group" : "Leave Group"}
+                    >
+                      {activeChat.createdBy === user.uid ? <Trash2 size={11} /> : <LogOut size={11} />}
+                      <span className="hidden sm:inline uppercase text-[9.5px] font-extrabold">{activeChat.createdBy === user.uid ? "Delete" : "Leave"}</span>
+                    </button>
+                  )}
+
+                  <button 
+                    onClick={() => {
+                      setActiveChat(null);
+                      setShowAddMemberDropdown(false);
+                    }} 
+                    className="p-1 px-3 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
+                  >
+                    Close Chat
+                  </button>
+                </div>
+              </div>
+
+              {/* Members Inviter Panel (rendered right below title bar inside workspace) */}
+              {activeChat.type === 'group' && showAddMemberDropdown && (
+                <div className="bg-slate-50 border-b border-slate-100 p-4 space-y-4 animate-in fade-in duration-200 relative z-20">
+                  {/* Current Active Group Members list with online status badges */}
+                  <div className="space-y-2 pb-3 border-b border-slate-200/60">
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider block">Group Members & Status ({activeChat.members?.length || 1})</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {activeChat.members?.map((mUid: string) => {
+                        const mProfile = mUid === user.uid 
+                          ? { ...myNeuralProfile, uid: user.uid } 
+                          : allUsers.find((u: any) => u.uid === mUid);
+                        const nicknameLabel = mProfile ? `@${mProfile.nickname}` : (activeChat.nicknames?.[mUid] ? `@${activeChat.nicknames[mUid]}` : 'Anonymous');
+                        const status = getOnlineStatus(mProfile);
+                        return (
+                          <div key={mUid} className="flex items-center justify-between p-2 bg-white border border-slate-150 rounded-xl shadow-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {/* Avatar with status badge */}
+                              <div className="relative shrink-0">
+                                <div className="w-7 h-7 rounded-lg bg-sky-50 border border-sky-100 flex items-center justify-center font-black text-sky-600 text-[10px] uppercase">
+                                  {nicknameLabel.substring(1, 2).toUpperCase()}
+                                </div>
+                                <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ${getStatusColorClass(status)}`} />
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-[10.5px] font-bold text-slate-800 truncate">
+                                  {nicknameLabel}
+                                  {mUid === user.uid && <span className="text-[8px] font-sans text-sky-500 font-extrabold uppercase ml-1">(You)</span>}
+                                </span>
+                                <span className={`text-[8px] font-mono tracking-wider font-extrabold uppercase ${
+                                  status === 'Active' ? 'text-emerald-500 animate-pulse' : status === 'Standby' ? 'text-amber-500' : 'text-slate-400'
+                                }`}>
+                                  {status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Eligible Connected Workspace Profiles ({connectedButNotInGroup.length})</span>
+                    <button 
+                      onClick={() => setShowAddMemberDropdown(false)} 
+                      className="text-[9px] font-black text-rose-500 uppercase hover:underline cursor-pointer"
+                    >
+                      Close Panel
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {connectedButNotInGroup.map(u => (
+                      <div key={u.uid} className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-xl hover:border-sky-300 transition-all">
+                        <span className="text-[11px] font-bold text-slate-800">@{u.nickname}</span>
+                        <button 
+                          onClick={() => addMemberToGroup(u)}
+                          className="px-2.5 py-1 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-[9px] font-black uppercase tracking-wider cursor-pointer transition-all active:scale-95"
+                        >
+                          Invite +
+                        </button>
+                      </div>
+                    ))}
+                    {connectedButNotInGroup.length === 0 && (
+                      <div className="col-span-full py-2 text-center bg-white/70 rounded-xl border border-dashed border-slate-200">
+                        <span className="text-[10px] text-slate-400 font-extrabold block uppercase tracking-wider py-1.5 px-3">
+                          No other connections to invite. Only mutual friends can be added to standard groups.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Split Chat Hub + Members list panel */}
+              <div className="flex-1 flex overflow-hidden">
+                {/* Scrollable messages on left */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col bg-slate-50/50">
+                  <div className="p-4 bg-white border border-slate-100 rounded-2xl text-center shadow-sm max-w-md mx-auto space-y-1">
+                    <p className="text-[10px] font-black text-sky-500 uppercase tracking-widest flex items-center justify-center gap-1">
+                      🔒 Protected Uplink
+                    </p>
+                    <p className="text-[10px] text-slate-400 leading-normal font-bold">
+                      To maintain extreme privacy and clean storage space, all conversation history inside this Neutral Link chat room automatically dissolves exactly 24 hours after being sent.
+                    </p>
+                  </div>
+
+                  {messages.map((m, i) => {
+                    const isMe = m.senderId === user.uid;
+                    const timeStr = getRemainingTimeStr(m.ts);
+                    
+                    return (
+                      <div key={i} className={`flex flex-col max-w-[75%] space-y-1.5 ${isMe ? 'self-end' : 'self-start'}`}>
+                        <span className={`text-[9px] font-black tracking-wider text-slate-400 px-1 uppercase ${isMe ? 'text-right' : 'text-left'}`}>
+                          {m.senderName}
+                        </span>
+                        <div className={`px-6 py-4.5 md:px-7 md:py-5 rounded-3xl shadow-[0_3px_12px_-5px_rgba(0,0,0,0.06)] text-xs md:text-[13.5px] font-medium leading-relaxed ${
+                          isMe 
+                            ? 'bg-sky-500 text-white rounded-tr-none' 
+                            : 'bg-white border border-slate-150 text-slate-800 rounded-tl-none'
+                        }`}>
+                          <p className="whitespace-pre-wrap tracking-wide">{m.text}</p>
+                          <div className="flex items-center justify-between gap-6 pt-3 mt-3 border-t border-black/5 text-[9px] opacity-60">
+                            <span className="font-mono uppercase tracking-wider font-semibold">Expires in</span>
+                            <span className="font-extrabold uppercase font-mono tracking-wider">{timeStr}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Right-hand Sidebar for Group Members */}
+                {activeChat.type === 'group' && (
+                  <div className="w-56 border-l border-slate-150 bg-white p-4.5 hidden lg:flex flex-col space-y-4 shrink-0 overflow-y-auto">
+                    <div>
+                      <h4 className="text-[10px] font-extrabold text-slate-450 uppercase tracking-widest mb-1">
+                        Active Roster ({activeChat.members?.length || 1})
+                      </h4>
+                      <p className="text-[8.5px] text-slate-400 font-bold leading-normal uppercase">
+                        Colleagues connected inside this safe segment.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      {activeChat.members?.map((mUid: string) => {
+                        const mProfile = mUid === user.uid 
+                          ? { ...myNeuralProfile, uid: user.uid } 
+                          : allUsers.find((u: any) => u.uid === mUid);
+                        const nicknameLabel = mProfile ? `@${mProfile.nickname}` : (activeChat.nicknames?.[mUid] ? `@${activeChat.nicknames[mUid]}` : 'Anonymous');
+                        const status = getOnlineStatus(mProfile);
+                        return (
+                          <div key={mUid} className="flex items-center gap-2.5">
+                            {/* Avatar with status badge */}
+                            <div className="relative shrink-0">
+                              <div className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-100 flex items-center justify-center font-black text-sky-600 text-xs shadow-xs uppercase">
+                                {nicknameLabel.substring(1, 2).toUpperCase()}
+                              </div>
+                              <span className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full ${getStatusColorClass(status)}`} />
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[11px] font-black text-slate-900 truncate leading-tight">
+                                {nicknameLabel}
+                                {mUid === user.uid && <span className="text-[8.5px] font-sans text-sky-500 font-bold ml-0.5">(You)</span>}
+                              </span>
+                              <span className={`text-[8.5px] font-mono tracking-wider font-extrabold uppercase ${
+                                status === 'Active' ? 'text-emerald-500 animate-pulse' : status === 'Standby' ? 'text-amber-500' : 'text-slate-400'
+                              }`}>
+                                {status}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Send message form */}
+              <form onSubmit={sendMessage} className="p-4 px-6 border-t border-slate-100 bg-white">
+                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200/60 rounded-xl p-1.5 max-w-full focus-within:ring-4 focus-within:ring-sky-500/5 focus-within:border-sky-500 focus-within:bg-white transition-all">
+                  <input 
+                    type="text" 
+                    value={newMsg}
+                    onChange={(e) => setNewMsg(e.target.value)}
+                    placeholder="Type a safe message..."
+                    className="flex-1 bg-transparent border-none outline-none text-xs text-slate-800 px-3 font-semibold h-9"
+                  />
+                  <button className="h-9 px-4 rounded-lg bg-sky-500 text-white text-[11px] font-extrabold uppercase tracking-wider hover:bg-sky-600 transition-all cursor-pointer">
+                    Send Msg
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* DEFAULT WELCOME SCREEN WHENEVER NO ACTIVE CHAT AND UNDER DISCOVERY */}
+          {!activeChat && activeTab === 'users' && !searchNickname && filteredUsers.length > 0 && (
+            <div className="p-6 md:p-8 bg-slate-50/40 border-t border-slate-100 text-center space-y-4">
+              <div className="w-12 h-12 bg-white rounded-full border border-slate-100 flex items-center justify-center mx-auto shadow-sm">
+                <Users size={16} className="text-slate-400" />
+              </div>
+              <div className="max-w-md mx-auto space-y-1.5">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Connect with multiple users like LinkedIn</h4>
+                <p className="text-[11px] text-slate-400 font-bold leading-normal uppercase">
+                  Establish mutual handshakes across the decentralized landscape. Request links, review received authorizations under Pending Tab, and join collaborative Group rooms.
+                </p>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+const GalaxyCoreView = () => {
+  const [stats, setStats] = useState({ cpu: 42, mem: 2.1, network: 85, latency: 12 });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStats({
+        cpu: 35 + Math.floor(Math.random() * 25),
+        mem: 2.0 + (Math.random() * 0.4),
+        network: 80 + Math.floor(Math.random() * 15),
+        latency: 8 + Math.floor(Math.random() * 8)
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-black/40 border border-white/5 rounded-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-700 relative overflow-hidden p-8 shadow-2xl">
+      <div className="ud-welcome-bg" />
+      <div className="ud-welcome-grid absolute inset-0 opacity-10" />
+      
+      <div className="relative z-10 flex flex-col items-center">
+        <div className="relative mb-10 group">
+          <div className="absolute inset-0 bg-cyan-500/20 blur-[100px] rounded-full group-hover:bg-cyan-500/30 transition-all duration-700" />
+          <div className="w-32 h-32 rounded-3xl bg-zinc-900 border border-white/10 flex items-center justify-center relative z-10 shadow-2xl group-hover:scale-105 transition-transform duration-700">
+            <Cpu size={64} className="text-cyan-400 animate-[pulse_4s_infinite]" />
+            <div className="absolute inset-0 border-2 border-dashed border-cyan-500/20 rounded-3xl animate-[spin_15s_linear_infinite]" />
+          </div>
+        </div>
+
+        <h2 className="text-3xl font-black text-white uppercase tracking-[0.4em] mb-4">Galaxy Core</h2>
+        
+        <div className="flex items-center gap-2 px-6 py-2 bg-emerald-500/5 border border-emerald-500/20 rounded-full mb-12">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]" />
+          <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">Quantum Supremacy Stable</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full max-w-4xl">
+          {[
+            { label: "Neural CPU", val: `${stats.cpu}%`, sub: "ACTIVE", icon: <Cpu size={14}/> },
+            { label: "Sync Memory", val: `${stats.mem.toFixed(1)} GB`, sub: "VIRTUALIZED", icon: <Database size={14}/> },
+            { label: "Mesh Bandwidth", val: `${stats.network} TB/s`, sub: "UPLINK", icon: <Globe size={14}/> },
+            { label: "Core Latency", val: `${stats.latency} MS`, sub: "REAL-TIME", icon: <Activity size={14}/> }
+          ].map((s, i) => (
+            <div key={i} className="p-6 rounded-2xl bg-zinc-900/60 border border-white/5 flex flex-col items-center text-center group hover:bg-white/[0.04] hover:border-cyan-500/30 transition-all">
+              <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-600 mb-4 group-hover:text-cyan-400 transition-colors">
+                {s.icon}
+              </div>
+              <div className="text-2xl font-black text-white mb-1 tracking-tight">{s.val}</div>
+              <div className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">{s.label}</div>
+              <div className="text-[7px] font-black text-cyan-500/60 uppercase tracking-widest mt-2">{s.sub}</div>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-12 text-[10px] text-zinc-600 font-bold uppercase tracking-[0.2em] max-w-sm text-center leading-relaxed">
+          Gamura Universe centralized node management. All neural frequencies are synchronized across the distributed mesh.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const hexToRgb = (hex: string) => {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '59, 130, 246';
+};
+
+const AuraSettingsView = ({ onBack, showToast }: { onBack: () => void, showToast: any }) => {
+  return (
+    <div className="h-full min-h-[500px] bg-[#050810] flex flex-col items-center justify-center relative font-sans overflow-hidden animate-in fade-in duration-700 p-8">
+      {/* Visual background gradient pulse */}
+      <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-sky-950/20 opacity-90 z-0" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-30 z-0 animate-pulse" />
+
+      <div className="relative z-10 w-full max-w-md text-center space-y-6">
+        <div className="inline-flex p-3 bg-white/5 border border-white/10 rounded-2xl animate-pulse animate-duration-1000">
+          <Settings className="w-8 h-8 text-sky-400" />
+        </div>
+        
+        <div className="space-y-2">
+          <h2 className="text-2xl font-black text-white tracking-[0.25em] uppercase font-sans">
+            Aura <span className="text-sky-400 bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">Settings</span>
+          </h2>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+            Module Segment Buffer // v1.1.0
+          </p>
+        </div>
+
+        <div className="py-12 border-y border-white/10 relative overflow-hidden group">
+          <p className="text-center text-4xl font-black text-white/10 select-none absolute inset-0 flex items-center justify-center font-sans tracking-widest scale-125 opacity-20 uppercase">
+            GAMURA BUFFER
+          </p>
+          <div className="relative z-10 font-mono text-cyan-400 font-extrabold text-lg tracking-[0.3em] uppercase animate-pulse">
+            COMING SOON
+          </div>
+        </div>
+
+        <p className="text-slate-400 text-xs font-medium leading-relaxed max-w-sm mx-auto">
+          Neural mesh calibrations, thematic frequency shifters, and immersive background shader settings are being reconstructed for custom-optimized rendering.
+        </p>
+
+        <button 
+          onClick={onBack}
+          className="mx-auto flex items-center justify-center gap-2 text-white bg-slate-900 hover:bg-slate-800 border border-white/10 hover:border-sky-500/50 rounded-xl px-5 py-3 text-xs font-black uppercase tracking-widest transition-all shadow-md hover:shadow-sky-500/10 hover:scale-105 active:scale-95 cursor-pointer font-sans"
+        >
+          <ArrowLeft size={14} className="stroke-[2.5]" />
+          Return to Console
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const Deprecated_AuraSettingsView = ({ onBack, showToast }: { onBack: () => void, showToast: any }) => {
+  const [settings, setSettings] = useState<any>(null);
+  const [localSettings, setLocalSettings] = useState<any>(null);
+  const [activeCount, setActiveCount] = useState(8);
+
+  const [selectedPreset, setSelectedPreset] = useState<string>("starlight");
+  const [primaryColor, setPrimaryColor] = useState<string>("#3b82f6");
+  const [secondaryColor, setSecondaryColor] = useState<string>("#10b981");
+  const [accentColor, setAccentColor] = useState<string>("#cbd5e1");
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "system_configs", "aura_global"), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setSettings(data);
+        if (!localSettings) setLocalSettings(data);
+        if (data.themePreset) setSelectedPreset(data.themePreset);
+        if (data.customPrimary) setPrimaryColor(data.customPrimary);
+        if (data.customSecondary) setSecondaryColor(data.customSecondary);
+        if (data.customAccent) setAccentColor(data.customAccent);
+      } else {
+        const defaults = {
+          nexus: { active: true, speed: 85, depth: 3, protocol: "WebSocket RT" },
+          velo: { active: true, speed: 92, cache: "L2", turbo: true },
+          aura: { active: true, glow: 70, density: 55, theme: "Cinematic Dark" },
+          zync: { active: true, freq: 60, conflict: "Auto-Resolve", live: true },
+          oryn: { active: true, sens: 75, algorithm: "A* Dynamic", predictive: true },
+          fluxe: { active: true, rate: 68, turb: 22, pattern: "Sine Wave" },
+          kova: { active: true, shield: 90, layer: "Quantum Layer", auto: true },
+          lumis: { active: true, luminance: 78, adaptive: true, spectrum: "Full Spectrum" },
+          universe: { 
+            active: true, fps: 60, renderMode: "GPU Accelerated", 
+            cdn: "HIGH", preload: true, animationQuality: "High", 
+            shader: true, volume: 60, spatial: true, memory: 512, 
+            gc: "Balanced", auth: "Token-Based", lock: true 
+          },
+          themePreset: "starlight",
+          customPrimary: "#3b82f6",
+          customSecondary: "#10b981",
+          customAccent: "#cbd5e1"
+        };
+        setSettings(defaults);
+        setLocalSettings(defaults);
+        setDoc(doc(db, "system_configs", "aura_global"), defaults);
+      }
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (localSettings) {
+      let count = 0;
+      const keys = ['nexus', 'velo', 'aura', 'zync', 'oryn', 'fluxe', 'kova', 'lumis'];
+      keys.forEach(k => { if (localSettings[k]?.active) count++; });
+      setActiveCount(count);
+    }
+  }, [localSettings]);
+
+  const handleSave = async () => {
+    try {
+      const dataToSave = {
+        ...localSettings,
+        themePreset: selectedPreset,
+        customPrimary: primaryColor,
+        customSecondary: secondaryColor,
+        customAccent: accentColor
+      };
+      await setDoc(doc(db, "system_configs", "aura_global"), dataToSave);
+      showToast('✓', 'Systems Synced', 'All neural configurations and theme modifications have been broadcast to the mesh.');
+    } catch (e: any) {
+      showToast("❌", "Sync Failed", e.message);
+    }
+  };
+
+  const handleReset = () => {
+    const defaults = {
+      nexus: { active: true, speed: 85, depth: 3, protocol: "WebSocket RT" },
+      velo: { active: true, speed: 92, cache: "L2", turbo: true },
+      aura: { active: true, glow: 70, density: 55, theme: "Cinematic Dark" },
+      zync: { active: true, freq: 60, conflict: "Auto-Resolve", live: true },
+      oryn: { active: true, sens: 75, algorithm: "A* Dynamic", predictive: true },
+      fluxe: { active: true, rate: 68, turb: 22, pattern: "Sine Wave" },
+      kova: { active: true, shield: 90, layer: "Quantum Layer", auto: true },
+      lumis: { active: true, luminance: 78, adaptive: true, spectrum: "Full Spectrum" },
+      universe: { 
+        active: true, fps: 60, renderMode: "GPU Accelerated", 
+        cdn: "HIGH", preload: true, animationQuality: "High", 
+        shader: true, volume: 60, spatial: true, memory: 512, 
+        gc: "Balanced", auth: "Token-Based", lock: true 
+      },
+      themePreset: "starlight",
+      customPrimary: "#3b82f6",
+      customSecondary: "#10b981",
+      customAccent: "#cbd5e1"
+    };
+    setLocalSettings(defaults);
+    setSelectedPreset("starlight");
+    setPrimaryColor("#3b82f6");
+    setSecondaryColor("#10b981");
+    setAccentColor("#cbd5e1");
+    showToast('↺', 'Reset Complete', 'Default system and theme values have been restored.');
+  };
+
+  if (!localSettings) return <div className="h-full flex items-center justify-center text-cyan-500 font-black animate-pulse uppercase tracking-[0.3em] font-sharetech">Initializing Neutral mesh...</div>;
+
+  return (
+    <div className="h-full bg-[#050810] flex flex-col relative font-rajdhani overflow-hidden animate-in fade-in duration-700">
+      <style>{`
+        :root {
+          --aura-primary: ${primaryColor};
+          --aura-secondary: ${secondaryColor};
+          --aura-accent: ${accentColor};
+          --aura-primary-rgb: ${hexToRgb(primaryColor)};
+          --aura-secondary-rgb: ${hexToRgb(secondaryColor)};
+          --aura-accent-rgb: ${hexToRgb(accentColor)};
+        }
+
+        /* Live overrides of standard static classes throughout the Aura setting page and dashboard view */
+        .text-blue-500 { color: var(--aura-primary) !important; }
+        .text-blue-400 { color: var(--aura-primary) !important; }
+        .bg-blue-500\/5 { background-color: rgba(var(--aura-primary-rgb), 0.05) !important; }
+        .bg-blue-500\/10 { background-color: rgba(var(--aura-primary-rgb), 0.1) !important; }
+        .bg-blue-500\/15 { background-color: rgba(var(--aura-primary-rgb), 0.15) !important; }
+        .border-blue-500\/10 { border-color: rgba(var(--aura-primary-rgb), 0.1) !important; }
+        .border-blue-500\/20 { border-color: rgba(var(--aura-primary-rgb), 0.2) !important; }
+        .hover\:border-blue-500\/30:hover { border-color: rgba(var(--aura-primary-rgb), 0.3) !important; }
+        .shadow-blue-500\/40 { box-shadow: 0 4px 14px 0 rgba(var(--aura-primary-rgb), 0.4) !important; }
+        .shadow-blue-500\/30 { box-shadow: 0 4px 14px 0 rgba(var(--aura-primary-rgb), 0.3) !important; }
+        .shadow-blue-500\/20 { box-shadow: 0 4px 14px 0 rgba(var(--aura-primary-rgb), 0.2) !important; }
+        .bg-gradient-to-br.from-blue-500.to-cyan-400 {
+          background-image: linear-gradient(135deg, var(--aura-primary), var(--aura-accent)) !important;
+        }
+
+        .text-green-500 { color: var(--aura-secondary) !important; }
+        .text-green-400 { color: var(--aura-secondary) !important; }
+        .bg-green-500\/5 { background-color: rgba(var(--aura-secondary-rgb), 0.05) !important; }
+        .bg-green-500\/10 { background-color: rgba(var(--aura-secondary-rgb), 0.1) !important; }
+        .bg-green-500\/15 { background-color: rgba(var(--aura-secondary-rgb), 0.15) !important; }
+        .border-green-500\/10 { border-color: rgba(var(--aura-secondary-rgb), 0.1) !important; }
+        .border-green-500\/20 { border-color: rgba(var(--aura-secondary-rgb), 0.2) !important; }
+        .hover\:border-green-500\/30:hover { border-color: rgba(var(--aura-secondary-rgb), 0.3) !important; }
+
+        .text-yellow-500 { color: var(--aura-accent) !important; }
+        .text-yellow-400 { color: var(--aura-accent) !important; }
+        .bg-yellow-500\/5 { background-color: rgba(var(--aura-accent-rgb), 0.05) !important; }
+        .bg-yellow-500\/10 { background-color: rgba(var(--aura-accent-rgb), 0.1) !important; }
+        .bg-yellow-500\/15 { background-color: rgba(var(--aura-accent-rgb), 0.15) !important; }
+        .border-yellow-500\/10 { border-color: rgba(var(--aura-accent-rgb), 0.1) !important; }
+        .border-yellow-500\/20 { border-color: rgba(var(--aura-accent-rgb), 0.2) !important; }
+        .hover\:border-yellow-500\/30:hover { border-color: rgba(var(--aura-accent-rgb), 0.3) !important; }
+
+        .text-red-500 { color: var(--aura-accent) !important; }
+        .text-red-400 { color: var(--aura-accent) !important; }
+        .bg-red-500\/5 { background-color: rgba(var(--aura-accent-rgb), 0.05) !important; }
+        .bg-red-500\/10 { background-color: rgba(var(--aura-accent-rgb), 0.1) !important; }
+        .bg-red-500\/15 { background-color: rgba(var(--aura-accent-rgb), 0.15) !important; }
+        .border-red-500\/10 { border-color: rgba(var(--aura-accent-rgb), 0.1) !important; }
+        .border-red-500\/20 { border-color: rgba(var(--aura-accent-rgb), 0.2) !important; }
+        .hover\:border-red-500\/30:hover { border-color: rgba(var(--aura-accent-rgb), 0.3) !important; }
+
+        @keyframes gridPulse {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 0.8; }
+        }
+        @keyframes scanLine {
+          0% { transform: translateY(-100%); opacity: 1; }
+          100% { transform: translateY(100vh); opacity: 0; }
+        }
+        @keyframes gearSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes dotPulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        .aura-bg::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(var(--aura-primary-rgb),0.04) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(var(--aura-primary-rgb),0.04) 1px, transparent 1px) !important;
+          background-size: 40px 40px;
+          z-index: 0;
+          animation: gridPulse 8s ease-in-out infinite;
+        }
+        .aura-scan::after {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 2px;
+          background: linear-gradient(90deg, transparent, var(--aura-primary), transparent) !important;
+          z-index: 50;
+          animation: scanLine 4s linear infinite;
+        }
+        .custom-range::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          width: 14px; height: 14px;
+          border-radius: 50%;
+          cursor: pointer;
+          box-shadow: 0 0 10px currentColor;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+      `}</style>
+
+      <div className="aura-bg aura-scan absolute inset-0 pointer-events-none" />
+
+      {/* WRAPPER */}
+      <div className="relative z-10 flex flex-col h-full max-w-[1100px] mx-auto w-full px-4 overflow-hidden">
+        
+        {/* HEADER */}
+        <div className="flex items-center justify-between py-4 border-b border-white/5 mb-4">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={onBack}
+              className="flex items-center gap-1.5 text-zinc-500 hover:text-blue-500 font-sharetech text-[9px] tracking-[0.2em] uppercase px-3 py-1.5 border border-white/10 rounded hover:border-blue-500 transition-all shadow hover:shadow-blue-500/10"
+            >
+              <ArrowLeft size={12} /> GAMURA
+            </button>
+            <div className="flex items-center gap-3">
+              <Settings className="w-6 h-6 text-blue-500 animate-[gearSpin_12s_linear_infinite]" />
+              <div>
+                <h2 className="font-orbitron text-base font-black text-white tracking-[0.2em] uppercase">
+                  AURA <span className="text-blue-500">SETTINGS</span>
+                </h2>
+              </div>
+              <div className="font-sharetech text-[9px] text-green-500 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded tracking-[0.1em]">
+                v2.4.1
+              </div>
+            </div>
+          </div>
+          <button 
+            onClick={handleSave}
+            className="font-orbitron text-[9px] font-black text-black bg-gradient-to-br from-blue-500 to-cyan-400 px-4 py-2 rounded tracking-[0.2em] uppercase hover:scale-105 active:scale-95 transition-all shadow-md shadow-blue-500/30"
+          >
+            SAVE ALL
+          </button>
+        </div>
+
+        {/* STATUS BAR */}
+        <div className="flex items-center gap-4 p-2 bg-blue-500/5 border border-white/5 rounded-lg mb-4 font-sharetech text-[9px] tracking-wider">
+          <div className="flex items-center gap-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-[dotPulse_2s_infinite] shadow-[0_0_8px_#22c55e]" />
+            <span className="text-zinc-500 uppercase">SYSTEM <span className="text-green-500">ONLINE</span></span>
+          </div>
+          <span className="text-zinc-800">|</span>
+          <span className="text-zinc-500 uppercase">GAMURA CORE <span className="text-green-500">ACTIVE</span></span>
+          <span className="text-zinc-800">|</span>
+          <span className="text-zinc-500 uppercase">FEATURES <span className="text-green-500">{activeCount}/8</span> OPTIMIZED</span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto scrollbar-hide pb-16 space-y-4 font-sans">
+          
+          {/* THEME SPECTRAL DESIGN */}
+          <section className="border border-white/5 bg-white/[0.01] rounded-xl p-4 backdrop-blur-sm">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-px flex-1 bg-white/10" />
+              <div className="text-blue-500 font-sharetech text-[9px] tracking-[0.3em] uppercase border border-blue-500/20 bg-blue-500/5 px-3 py-0.5 rounded">
+                THEME SPECTRAL DESIGN
+              </div>
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
+
+            {/* Presets List */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+              {[
+                {
+                  id: "cyberpunk",
+                  name: "Cyberpunk Neon",
+                  primary: "#ff007f",
+                  secondary: "#00f0ff",
+                  accent: "#9d4edd",
+                  desc: "High-voltage pink, cyan, and purple matrix."
+                },
+                {
+                  id: "starlight",
+                  name: "Starlight Drift",
+                  primary: "#3b82f6",
+                  secondary: "#10b981",
+                  accent: "#cbd5e1",
+                  desc: "Deep space telemetry blueprint slate."
+                },
+                {
+                  id: "void",
+                  name: "Cosmic Void",
+                  primary: "#8b5cf6",
+                  secondary: "#ea580c",
+                  accent: "#0d9488",
+                  desc: "Matter-antimatter debris orange and violet."
+                }
+              ].map((preset) => {
+                const isActive = selectedPreset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() => {
+                      setSelectedPreset(preset.id);
+                      setPrimaryColor(preset.primary);
+                      setSecondaryColor(preset.secondary);
+                      setAccentColor(preset.accent);
+                      showToast('🔮', 'Theme Loaded', `Loaded preset ${preset.name} into the buffer.`);
+                    }}
+                    className={`text-left p-2.5 rounded-lg border transition-all duration-300 relative overflow-hidden flex flex-col justify-between h-20 cursor-pointer ${
+                      isActive 
+                        ? 'bg-blue-500/10 border-blue-500/40 shadow-[0_0_12px_rgba(var(--aura-primary-rgb),0.15)]' 
+                        : 'bg-black/30 border-white/5 hover:border-white/10'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-sharetech text-[10px] tracking-wider text-white uppercase font-black">{preset.name}</span>
+                        {isActive && (
+                          <span className="text-[7.5px] font-mono border border-blue-500/30 text-blue-400 bg-blue-500/15 px-1 py-0.5 rounded uppercase leading-none">ACTIVE</span>
+                        )}
+                      </div>
+                      <p className="text-[8px] text-zinc-500 uppercase mt-0.5 leading-tight truncate">{preset.desc}</p>
+                    </div>
+
+                    {/* Miniature preview swatches */}
+                    <div className="flex gap-2">
+                      <div className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: preset.primary }} />
+                        <span className="text-[7.5px] font-mono text-zinc-500 uppercase">{preset.primary}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: preset.secondary }} />
+                        <span className="text-[7.5px] font-mono text-zinc-500 uppercase">{preset.secondary}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full border border-white/10 shrink-0" style={{ backgroundColor: preset.accent }} />
+                        <span className="text-[7.5px] font-mono text-zinc-500 uppercase">{preset.accent}</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Color Pickers Panel */}
+            <div className="p-2.5 bg-black/40 border border-white/5 rounded-lg">
+              <div className="flex justify-between items-center mb-2.5">
+                <span className="font-sharetech text-[10px] text-white uppercase tracking-wider">SPECTRAL COMPONENT MODULATORS</span>
+                {selectedPreset === "custom" ? (
+                  <span className="text-[7.5px] font-mono border border-yellow-500/30 text-yellow-400 bg-yellow-500/10 px-1.5 py-0.5 rounded uppercase font-black">CUSTOM</span>
+                ) : (
+                  <button 
+                    onClick={() => setSelectedPreset("custom")}
+                    className="text-[7.5px] font-mono transition-colors border border-white/10 hover:border-white/20 text-zinc-400 px-1.5 py-0.5 rounded uppercase font-black cursor-pointer leading-none"
+                  >
+                    Unlock Matrix Config
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* 1. PRIMARY */}
+                <div className="p-2 bg-black/40 border border-white/5 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-7 h-7 border border-white/20 rounded-md overflow-hidden shrink-0 shadow cursor-pointer">
+                      <input 
+                        type="color" 
+                        value={primaryColor} 
+                        onChange={(e) => {
+                          setPrimaryColor(e.target.value);
+                          setSelectedPreset("custom");
+                        }}
+                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                      />
+                      <div className="absolute inset-0 z-0" style={{ backgroundColor: primaryColor }} />
+                    </div>
+                    <div>
+                      <div className="text-[8px] text-zinc-500 uppercase tracking-widest font-sharetech">PRIMARY</div>
+                      <div className="font-mono text-white text-[9px] uppercase mt-0.5">{primaryColor}</div>
+                    </div>
+                  </div>
+                  <input 
+                    type="text" 
+                    maxLength={7}
+                    value={primaryColor} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val.startsWith('#') && val.length <= 7) {
+                        setPrimaryColor(val);
+                        setSelectedPreset("custom");
+                      } else if (!val.startsWith('#') && val.length <= 6) {
+                        setPrimaryColor('#' + val);
+                        setSelectedPreset("custom");
+                      }
+                    }}
+                    className="w-14 bg-black/60 border border-white/10 text-center text-[9px] p-0.5 font-mono uppercase text-white rounded focus:border-blue-500"
+                  />
+                </div>
+
+                {/* 2. SECONDARY */}
+                <div className="p-2 bg-black/40 border border-white/5 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-7 h-7 border border-white/20 rounded-md overflow-hidden shrink-0 shadow cursor-pointer">
+                      <input 
+                        type="color" 
+                        value={secondaryColor} 
+                        onChange={(e) => {
+                          setSecondaryColor(e.target.value);
+                          setSelectedPreset("custom");
+                        }}
+                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                      />
+                      <div className="absolute inset-0 z-0" style={{ backgroundColor: secondaryColor }} />
+                    </div>
+                    <div>
+                      <div className="text-[8px] text-zinc-500 uppercase tracking-widest font-sharetech">SECONDARY</div>
+                      <div className="font-mono text-white text-[9px] uppercase mt-0.5">{secondaryColor}</div>
+                    </div>
+                  </div>
+                  <input 
+                    type="text" 
+                    maxLength={7}
+                    value={secondaryColor} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val.startsWith('#') && val.length <= 7) {
+                        setSecondaryColor(val);
+                        setSelectedPreset("custom");
+                      } else if (!val.startsWith('#') && val.length <= 6) {
+                        setSecondaryColor('#' + val);
+                        setSelectedPreset("custom");
+                      }
+                    }}
+                    className="w-14 bg-black/60 border border-white/10 text-center text-[9px] p-0.5 font-mono uppercase text-white rounded focus:border-blue-500"
+                  />
+                </div>
+
+                {/* 3. ACCENT */}
+                <div className="p-2 bg-black/40 border border-white/5 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="relative w-7 h-7 border border-white/20 rounded-md overflow-hidden shrink-0 shadow cursor-pointer">
+                      <input 
+                        type="color" 
+                        value={accentColor} 
+                        onChange={(e) => {
+                          setAccentColor(e.target.value);
+                          setSelectedPreset("custom");
+                        }}
+                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer z-10"
+                      />
+                      <div className="absolute inset-0 z-0" style={{ backgroundColor: accentColor }} />
+                    </div>
+                    <div>
+                      <div className="text-[8px] text-zinc-500 uppercase tracking-widest font-sharetech">ACCENT</div>
+                      <div className="font-mono text-white text-[9px] uppercase mt-0.5">{accentColor}</div>
+                    </div>
+                  </div>
+                  <input 
+                    type="text" 
+                    maxLength={7}
+                    value={accentColor} 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val.startsWith('#') && val.length <= 7) {
+                        setAccentColor(val);
+                        setSelectedPreset("custom");
+                      } else if (!val.startsWith('#') && val.length <= 6) {
+                        setAccentColor('#' + val);
+                        setSelectedPreset("custom");
+                      }
+                    }}
+                    className="w-14 bg-black/60 border border-white/10 text-center text-[9px] p-0.5 font-mono uppercase text-white rounded focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* FEATURES SECTION */}
+          <section>
+            <div className="flex items-center gap-4 mb-6">
+              <div className="h-px flex-1 bg-white/10" />
+              <div className="text-blue-500 font-sharetech text-[11px] tracking-[0.3em] uppercase border border-blue-500/20 bg-blue-500/5 px-4 py-1 rounded">
+                8 FEATURE OPTIMIZATION
+              </div>
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* 1. NEXUS */}
+              <AuraFeatureCard 
+                title="NEXUS" 
+                sub="Connection Core" 
+                icon="🔗" 
+                color="red" 
+                active={localSettings.nexus.active}
+                onToggle={(val) => setLocalSettings({ ...localSettings, nexus: { ...localSettings.nexus, active: val } })}
+              >
+                <AuraSliderRow 
+                  label="Connection Speed" 
+                  val={localSettings.nexus.speed} 
+                  color="red" 
+                  suffix="%" 
+                  onChange={(v) => setLocalSettings({ ...localSettings, nexus: { ...localSettings.nexus, speed: v } })} 
+                />
+                <AuraSliderRow 
+                  label="Link Depth" 
+                  val={localSettings.nexus.depth} 
+                  color="red" 
+                  min={1} max={10} 
+                  onChange={(v) => setLocalSettings({ ...localSettings, nexus: { ...localSettings.nexus, depth: v } })} 
+                />
+                <div className="mt-4">
+                  <div className="text-[10px] text-zinc-500 uppercase font-sharetech mb-2">Protocol</div>
+                  <select 
+                    value={localSettings.nexus.protocol}
+                    onChange={(e) => setLocalSettings({ ...localSettings, nexus: { ...localSettings.nexus, protocol: e.target.value } })}
+                    className="w-full bg-black/80 border border-white/10 rounded p-2 text-white text-xs font-rajdhani focus:border-red-500 transition-colors"
+                  >
+                    <option>WebSocket RT</option>
+                    <option>P2P Mesh</option>
+                    <option>Relay Bridge</option>
+                  </select>
+                </div>
+              </AuraFeatureCard>
+
+              {/* 2. VELO */}
+              <AuraFeatureCard 
+                title="VELO" 
+                sub="Velocity Engine" 
+                icon="⚡" 
+                color="blue" 
+                active={localSettings.velo.active}
+                onToggle={(val) => setLocalSettings({ ...localSettings, velo: { ...localSettings.velo, active: val } })}
+              >
+                <AuraSliderRow 
+                  label="Render Speed" 
+                  val={localSettings.velo.speed} 
+                  color="blue" 
+                  suffix="%" 
+                  onChange={(v) => setLocalSettings({ ...localSettings, velo: { ...localSettings.velo, speed: v } })} 
+                />
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-zinc-500 text-xs tracking-wider uppercase font-rajdhani">Cache Level</span>
+                  <div className="flex gap-1">
+                    {["L1", "L2", "L3", "L4"].map(lvl => (
+                      <button 
+                        key={lvl}
+                        onClick={() => setLocalSettings({ ...localSettings, velo: { ...localSettings.velo, cache: lvl } })}
+                        className={`w-8 h-8 rounded flex items-center justify-center font-sharetech text-[10px] border transition-all ${localSettings.velo.cache === lvl ? 'bg-blue-500 border-blue-500 text-black shadow-lg shadow-blue-500/20' : 'bg-white/5 border-white/10 text-zinc-500 hover:text-white'}`}
+                      >
+                        {lvl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-zinc-500 text-xs tracking-wider uppercase font-rajdhani">Turbo Boost</span>
+                  <AuraToggle active={localSettings.velo.turbo} color="blue" onToggle={(val) => setLocalSettings({ ...localSettings, velo: { ...localSettings.velo, turbo: val } })} />
+                </div>
+              </AuraFeatureCard>
+
+              {/* 3. AURA */}
+              <AuraFeatureCard 
+                title="AURA" 
+                sub="Visual Identity" 
+                icon="✨" 
+                color="yellow" 
+                active={localSettings.aura.active}
+                onToggle={(val) => setLocalSettings({ ...localSettings, aura: { ...localSettings.aura, active: val } })}
+              >
+                <AuraSliderRow 
+                  label="Glow Intensity" 
+                  val={localSettings.aura.glow} 
+                  color="yellow" 
+                  suffix="%" 
+                  onChange={(v) => setLocalSettings({ ...localSettings, aura: { ...localSettings.aura, glow: v } })} 
+                />
+                <AuraSliderRow 
+                  label="Particle Density" 
+                  val={localSettings.aura.density} 
+                  color="yellow" 
+                  suffix="%" 
+                  onChange={(v) => setLocalSettings({ ...localSettings, aura: { ...localSettings.aura, density: v } })} 
+                />
+                <div className="mt-4">
+                  <div className="text-[10px] text-zinc-500 uppercase font-sharetech mb-2">Theme Mode</div>
+                  <select 
+                    value={localSettings.aura.theme}
+                    onChange={(e) => setLocalSettings({ ...localSettings, aura: { ...localSettings.aura, theme: e.target.value } })}
+                    className="w-full bg-black/80 border border-white/10 rounded p-2 text-white text-xs font-rajdhani focus:border-yellow-500 transition-colors"
+                  >
+                    <option>Cinematic Dark</option>
+                    <option>Neon Surge</option>
+                    <option>Cosmic Void</option>
+                  </select>
+                </div>
+              </AuraFeatureCard>
+
+              {/* 4. ZYNC */}
+              <AuraFeatureCard 
+                title="ZYNC" 
+                sub="Sync Protocol" 
+                icon="🔄" 
+                color="green" 
+                active={localSettings.zync.active}
+                onToggle={(val) => setLocalSettings({ ...localSettings, zync: { ...localSettings.zync, active: val } })}
+              >
+                <AuraSliderRow 
+                  label="Sync Frequency" 
+                  val={localSettings.zync.freq} 
+                  color="green" 
+                  max={120}
+                  suffix="hz" 
+                  onChange={(v) => setLocalSettings({ ...localSettings, zync: { ...localSettings.zync, freq: v } })} 
+                />
+                <div className="mt-4">
+                  <div className="text-[10px] text-zinc-500 uppercase font-sharetech mb-2">Conflict Mode</div>
+                  <select 
+                    value={localSettings.zync.conflict}
+                    onChange={(e) => setLocalSettings({ ...localSettings, zync: { ...localSettings.zync, conflict: e.target.value } })}
+                    className="w-full bg-black/80 border border-white/10 rounded p-2 text-white text-xs font-rajdhani focus:border-green-500 transition-colors"
+                  >
+                    <option>Auto-Resolve</option>
+                    <option>Manual</option>
+                  </select>
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-zinc-500 text-xs tracking-wider uppercase font-rajdhani">Live Sync</span>
+                  <AuraToggle active={localSettings.zync.live} color="green" onToggle={(val) => setLocalSettings({ ...localSettings, zync: { ...localSettings.zync, live: val } })} />
+                </div>
+              </AuraFeatureCard>
+
+              {/* 5. ORYN */}
+              <AuraFeatureCard 
+                title="ORYN" 
+                sub="Orbit Navigator" 
+                icon="🎯" 
+                color="blue" 
+                active={localSettings.oryn.active}
+                onToggle={(val) => setLocalSettings({ ...localSettings, oryn: { ...localSettings.oryn, active: val } })}
+              >
+                <AuraSliderRow 
+                  label="Nav Sensitivity" 
+                  val={localSettings.oryn.sens} 
+                  color="blue" 
+                  suffix="%" 
+                  onChange={(v) => setLocalSettings({ ...localSettings, oryn: { ...localSettings.oryn, sens: v } })} 
+                />
+                <div className="mt-4">
+                  <div className="text-[10px] text-zinc-500 uppercase font-sharetech mb-2">Path Algorithm</div>
+                  <select 
+                    value={localSettings.oryn.algorithm}
+                    onChange={(e) => setLocalSettings({ ...localSettings, oryn: { ...localSettings.oryn, algorithm: e.target.value } })}
+                    className="w-full bg-black/80 border border-white/10 rounded p-2 text-white text-xs font-rajdhani focus:border-blue-500 transition-colors"
+                  >
+                    <option>A* Dynamic</option>
+                    <option>Dijkstra</option>
+                    <option>Orbital Flow</option>
+                  </select>
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-zinc-500 text-xs tracking-wider uppercase font-rajdhani">Predictive Mode</span>
+                  <AuraToggle active={localSettings.oryn.predictive} color="blue" onToggle={(val) => setLocalSettings({ ...localSettings, oryn: { ...localSettings.oryn, predictive: val } })} />
+                </div>
+              </AuraFeatureCard>
+
+              {/* 6. FLUXE */}
+              <AuraFeatureCard 
+                title="FLUXE" 
+                sub="Dynamic Flow" 
+                icon="🌊" 
+                color="red" 
+                active={localSettings.fluxe.active}
+                onToggle={(val) => setLocalSettings({ ...localSettings, fluxe: { ...localSettings.fluxe, active: val } })}
+              >
+                <AuraSliderRow 
+                  label="Flow Rate" 
+                  val={localSettings.fluxe.rate} 
+                  color="red" 
+                  suffix="%" 
+                  onChange={(v) => setLocalSettings({ ...localSettings, fluxe: { ...localSettings.fluxe, rate: v } })} 
+                />
+                <AuraSliderRow 
+                  label="Turbulence" 
+                  val={localSettings.fluxe.turb} 
+                  color="red" 
+                  suffix="%" 
+                  onChange={(v) => setLocalSettings({ ...localSettings, fluxe: { ...localSettings.fluxe, turb: v } })} 
+                />
+                <div className="mt-4">
+                  <div className="text-[10px] text-zinc-500 uppercase font-sharetech mb-2">Wave Pattern</div>
+                  <select 
+                    value={localSettings.fluxe.pattern}
+                    onChange={(e) => setLocalSettings({ ...localSettings, fluxe: { ...localSettings.fluxe, pattern: e.target.value } })}
+                    className="w-full bg-black/80 border border-white/10 rounded p-2 text-white text-xs font-rajdhani focus:border-red-500 transition-colors"
+                  >
+                    <option>Sine Wave</option>
+                    <option>Chaos Flow</option>
+                    <option>Laminar</option>
+                  </select>
+                </div>
+              </AuraFeatureCard>
+
+              {/* 7. KOVA */}
+              <AuraFeatureCard 
+                title="KOVA" 
+                sub="Armor Shield" 
+                icon="🛡️" 
+                color="yellow" 
+                active={localSettings.kova.active}
+                onToggle={(val) => setLocalSettings({ ...localSettings, kova: { ...localSettings.kova, active: val } })}
+              >
+                <AuraSliderRow 
+                  label="Shield Strength" 
+                  val={localSettings.kova.shield} 
+                  color="yellow" 
+                  suffix="%" 
+                  onChange={(v) => setLocalSettings({ ...localSettings, kova: { ...localSettings.kova, shield: v } })} 
+                />
+                <div className="mt-4">
+                  <div className="text-[10px] text-zinc-500 uppercase font-sharetech mb-2">Defense Layer</div>
+                  <select 
+                    value={localSettings.kova.layer}
+                    onChange={(e) => setLocalSettings({ ...localSettings, kova: { ...localSettings.kova, layer: e.target.value } })}
+                    className="w-full bg-black/80 border border-white/10 rounded p-2 text-white text-xs font-rajdhani focus:border-yellow-500 transition-colors"
+                  >
+                    <option>Quantum Layer</option>
+                    <option>Plasma Barrier</option>
+                    <option>Neural Guard</option>
+                  </select>
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-zinc-500 text-xs tracking-wider uppercase font-rajdhani">Auto-Protect</span>
+                  <AuraToggle active={localSettings.kova.auto} color="yellow" onToggle={(val) => setLocalSettings({ ...localSettings, kova: { ...localSettings.kova, auto: val } })} />
+                </div>
+              </AuraFeatureCard>
+
+              {/* 8. LUMIS */}
+              <AuraFeatureCard 
+                title="LUMIS" 
+                sub="Light Intelligence" 
+                icon="💡" 
+                color="green" 
+                active={localSettings.lumis.active}
+                onToggle={(val) => setLocalSettings({ ...localSettings, lumis: { ...localSettings.lumis, active: val } })}
+              >
+                <AuraSliderRow 
+                  label="Luminance" 
+                  val={localSettings.lumis.luminance} 
+                  color="green" 
+                  suffix="%" 
+                  onChange={(v) => setLocalSettings({ ...localSettings, lumis: { ...localSettings.lumis, luminance: v } })} 
+                />
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-zinc-500 text-xs tracking-wider uppercase font-rajdhani">AI Adapt</span>
+                  <AuraToggle active={localSettings.lumis.adaptive} color="green" onToggle={(val) => setLocalSettings({ ...localSettings, lumis: { ...localSettings.lumis, adaptive: val } })} />
+                </div>
+                <div className="mt-4">
+                  <div className="text-[10px] text-zinc-500 uppercase font-sharetech mb-2">Spectrum Mode</div>
+                  <select 
+                    value={localSettings.lumis.spectrum}
+                    onChange={(e) => setLocalSettings({ ...localSettings, lumis: { ...localSettings.lumis, spectrum: e.target.value } })}
+                    className="w-full bg-black/80 border border-white/10 rounded p-2 text-white text-xs font-rajdhani focus:border-green-500 transition-colors"
+                  >
+                    <option>Full Spectrum</option>
+                    <option>Warm Glow</option>
+                    <option>Cold Arc</option>
+                    <option>Pulse</option>
+                  </select>
+                </div>
+              </AuraFeatureCard>
+            </div>
+          </section>
+
+          {/* UNIVERSE SECTION */}
+          <section>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-px flex-1 bg-white/10" />
+              <div className="text-yellow-500 font-sharetech text-[9px] tracking-[0.3em] uppercase border border-yellow-500/20 bg-yellow-500/5 px-3 py-0.5 rounded">
+                UNIVERSE PAGE OPTIMIZATION
+              </div>
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
+
+            <div className="bg-gradient-to-br from-zinc-900 to-black p-4 border border-blue-500/10 rounded-xl relative overflow-hidden group">
+              <div className="absolute right-[-10px] top-1/2 -translate-y-1/2 font-orbitron text-[32px] font-black text-blue-500/[0.02] rotate-90 pointer-events-none select-none">
+                UNIVERSE
+              </div>
+              
+              <div className="flex items-start justify-between mb-3 relative z-10">
+                <div>
+                  <h3 className="font-orbitron text-sm font-bold text-white tracking-widest uppercase">
+                    <span className="text-red-500">GA</span><span className="text-blue-500">M</span><span className="text-green-500">UR</span><span className="text-yellow-500">A</span> UNIVERSE
+                  </h3>
+                  <div className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-0.5">Global page rendering & performance controls</div>
+                </div>
+                <AuraToggle active={localSettings.universe.active} color="green" onToggle={(val) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, active: val } })} />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 relative z-10">
+                {/* Render */}
+                <div className="p-3 bg-blue-500/[0.03] border border-blue-500/5 rounded-lg hover:border-blue-500/20 transition-all">
+                  <div className="font-sharetech text-[9px] text-blue-500 uppercase tracking-widest mb-2">🌐 PAGE RENDER</div>
+                  <AuraSliderRow 
+                    label="FPS Target" 
+                    val={localSettings.universe.fps} 
+                    color="blue" 
+                    min={30} max={144}
+                    suffix="fps" 
+                    onChange={(v) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, fps: v } })} 
+                  />
+                  <div className="mt-2">
+                    <div className="text-[8px] text-zinc-500 uppercase font-sharetech mb-1">Render Mode</div>
+                    <select 
+                      value={localSettings.universe.renderMode}
+                      onChange={(e) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, renderMode: e.target.value } })}
+                      className="w-full bg-black border border-white/10 rounded p-1.5 text-white text-[10px] font-rajdhani focus:border-blue-500 transition-colors"
+                    >
+                      <option>GPU Accelerated</option>
+                      <option>CPU Fallback</option>
+                      <option>Hybrid</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Network */}
+                <div className="p-3 bg-blue-500/[0.03] border border-blue-500/5 rounded-lg hover:border-blue-500/20 transition-all">
+                  <div className="font-sharetech text-[9px] text-blue-500 uppercase tracking-widest mb-2">📡 NETWORK</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-zinc-500 text-[11px] uppercase font-rajdhani">CDN Priority</span>
+                    <select 
+                      value={localSettings.universe.cdn}
+                      onChange={(e) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, cdn: e.target.value } })}
+                      className="bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[9px] px-1.5 py-0.5 rounded font-sharetech outline-none"
+                    >
+                      <option>LOW</option>
+                      <option>MED</option>
+                      <option>HIGH</option>
+                      <option>ULTRA</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 text-[11px] uppercase font-rajdhani">Preload Assets</span>
+                    <AuraToggle active={localSettings.universe.preload} color="blue" onToggle={(val) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, preload: val } })} />
+                  </div>
+                </div>
+
+                {/* Visuals */}
+                <div className="p-3 bg-blue-500/[0.03] border border-blue-500/5 rounded-lg hover:border-blue-500/20 transition-all">
+                  <div className="font-sharetech text-[9px] text-blue-500 uppercase tracking-widest mb-2">🎨 VISUALS</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-zinc-500 text-[11px] uppercase font-rajdhani">Animation Quality</span>
+                    <select 
+                      value={localSettings.universe.animationQuality}
+                      onChange={(e) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, animationQuality: e.target.value } })}
+                      className="bg-black border border-white/10 text-white text-[9px] px-1.5 py-0.5  rounded font-rajdhani outline-none"
+                    >
+                      <option>Ultra</option>
+                      <option>High</option>
+                      <option>Medium</option>
+                      <option>Low</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 text-[11px] uppercase font-rajdhani">Shader Effects</span>
+                    <AuraToggle active={localSettings.universe.shader} color="blue" onToggle={(val) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, shader: val } })} />
+                  </div>
+                </div>
+
+                {/* Audio */}
+                <div className="p-3 bg-blue-500/[0.03] border border-blue-500/5 rounded-lg hover:border-blue-500/20 transition-all">
+                  <div className="font-sharetech text-[9px] text-blue-500 uppercase tracking-widest mb-2">🔊 AUDIO</div>
+                  <AuraSliderRow 
+                    label="Master Volume" 
+                    val={localSettings.universe.volume} 
+                    color="blue" 
+                    suffix="%" 
+                    onChange={(v) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, volume: v } })} 
+                  />
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-zinc-500 text-[11px] uppercase font-rajdhani">Spatial Audio</span>
+                    <AuraToggle active={localSettings.universe.spatial} color="blue" onToggle={(val) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, spatial: val } })} />
+                  </div>
+                </div>
+
+                {/* Performance */}
+                <div className="p-3 bg-blue-500/[0.03] border border-blue-500/5 rounded-lg hover:border-blue-500/20 transition-all">
+                  <div className="font-sharetech text-[9px] text-blue-500 uppercase tracking-widest mb-2">⚡ PERFORMANCE</div>
+                  <AuraSliderRow 
+                    label="Memory Limit" 
+                    val={localSettings.universe.memory} 
+                    color="blue" 
+                    min={128} max={2048} step={128}
+                    suffix="mb" 
+                    onChange={(v) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, memory: v } })} 
+                  />
+                  <div className="mt-2">
+                    <div className="text-[8px] text-zinc-500 uppercase font-sharetech mb-1">GC Strategy</div>
+                    <select 
+                      value={localSettings.universe.gc}
+                      onChange={(e) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, gc: e.target.value } })}
+                      className="w-full bg-black border border-white/10 rounded p-1.5 text-white text-[10px] font-rajdhani outline-none"
+                    >
+                      <option>Aggressive</option>
+                      <option>Balanced</option>
+                      <option>Conservative</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Security */}
+                <div className="p-3 bg-blue-500/[0.03] border border-blue-500/5 rounded-lg hover:border-blue-500/20 transition-all">
+                  <div className="font-sharetech text-[9px] text-blue-500 uppercase tracking-widest mb-2">🔐 SECURITY</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-zinc-500 text-[11px] uppercase font-rajdhani">Auth Mode</span>
+                    <select 
+                      value={localSettings.universe.auth}
+                      onChange={(e) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, auth: e.target.value } })}
+                      className="bg-black border border-white/10 text-white text-[9px] px-1.5 py-0.5 rounded font-rajdhani outline-none"
+                    >
+                      <option>Token-Based</option>
+                      <option>OAuth2</option>
+                      <option>Biometric</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-zinc-500 text-[11px] uppercase font-rajdhani">Auto-Lock</span>
+                    <AuraToggle active={localSettings.universe.lock} color="blue" onToggle={(val) => setLocalSettings({ ...localSettings, universe: { ...localSettings.universe, lock: val } })} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ACTIONS */}
+          <div className="flex justify-end gap-3 pb-12">
+            <button 
+              onClick={handleReset}
+              className="font-orbitron text-[9px] font-black text-red-500 bg-red-500/5 border border-red-500/20 px-4 py-2 rounded tracking-[0.2em] uppercase hover:bg-red-500/10 transition-all"
+            >
+              RESET DEFAULTS
+            </button>
+            <button 
+              onClick={handleSave}
+              className="font-orbitron text-[9px] font-black text-black bg-gradient-to-br from-green-500 to-emerald-400 px-5 py-2 rounded tracking-[0.2em] uppercase hover:scale-105 transition-all shadow-md shadow-green-500/20"
+            >
+              APPLY & OPTIMIZE
+            </button>
+          </div>
+
+          {/* FOOTER */}
+          <div className="flex items-center justify-between py-6 border-t border-white/5 font-sharetech text-[10px] tracking-[0.3em] text-zinc-600 mt-auto uppercase">
+            <div className="flex items-center gap-4">
+              <span className="text-zinc-500">GAMURA UNIVERSE</span>
+              <div className="w-1 h-1 rounded-full bg-zinc-800" />
+              <span>MESH STATUS: STABLE</span>
+            </div>
+            <div>
+              v2.4.1 — SYNCED
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AuraFeatureCard = ({ title, sub, icon, color, active, onToggle, children }: any) => {
+  const colorMap: any = {
+    red: "border-red-500/20 hover:border-red-500/40 from-red-500",
+    blue: "border-blue-500/20 hover:border-blue-500/40 from-blue-500",
+    green: "border-green-500/20 hover:border-green-500/40 from-green-500",
+    yellow: "border-yellow-500/20 hover:border-yellow-500/40 from-yellow-500"
+  };
+
+  const iconBgMap: any = {
+    red: "bg-red-500/15 border-red-500/30",
+    blue: "bg-blue-500/15 border-blue-500/30",
+    green: "bg-green-500/15 border-green-500/30",
+    yellow: "bg-yellow-500/15 border-yellow-500/30"
+  };
+
+  const borderAccentMap: any = {
+    red: "text-red-500",
+    blue: "text-blue-500",
+    green: "text-green-500",
+    yellow: "text-yellow-500"
+  };
+
+  return (
+    <div className={`p-3 bg-[#0d1428]/80 border ${colorMap[color]} rounded-lg relative overflow-hidden transition-all group backdrop-blur-md`}>
+      <div className={`absolute top-0 left-0 right-0 h-[1.5px] opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-transparent via-current to-transparent ${borderAccentMap[color]}`} />
+      
+      <div className="flex items-center justify-between mb-2 relative z-10 font-sans">
+        <div className="flex items-center gap-1.5">
+          <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs border shrink-0 ${iconBgMap[color]}`}>
+            {icon}
+          </div>
+          <div>
+            <h4 className="font-orbitron text-[10px] font-black text-white tracking-widest leading-none uppercase">{title}</h4>
+            <div className="text-[7px] text-zinc-500 font-bold uppercase tracking-wider mt-0.5 leading-none">{sub}</div>
+          </div>
+        </div>
+        <AuraToggle active={active} color={color} onToggle={onToggle} />
+      </div>
+      
+      <div className="h-px bg-white/5 mb-2 relative z-10" />
+      
+      <div className="space-y-2 relative z-10">
+        {children}
+      </div>
+    </div>
+  );
+};
+
+const AuraSliderRow = ({ label, val, color, suffix = "", min = 0, max = 100, step = 1, onChange }: any) => {
+  const accentMap: any = {
+    red: "text-red-400 bg-red-500/10 border-red-500/20",
+    blue: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+    green: "text-green-400 bg-green-500/10 border-green-500/20",
+    yellow: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20"
+  };
+
+  const textAccentMap: any = {
+    red: "text-red-500",
+    blue: "text-blue-500",
+    green: "text-green-500",
+    yellow: "text-yellow-500"
+  };
+
+  return (
+    <div className="space-y-1 font-sans">
+      <div className="flex justify-between items-center text-[10px]">
+        <span className="text-zinc-550 tracking-wider uppercase font-rajdhani font-medium">{label}</span>
+        <span className={`font-sharetech text-[8px] px-1.5 py-0.5 rounded border leading-none font-bold ${accentMap[color]}`}>{val}{suffix}</span>
+      </div>
+      <input 
+        type="range" 
+        min={min} max={max} step={step}
+        value={val}
+        onChange={(e) => onChange(parseInt(e.target.value))}
+        className={`w-full h-1 bg-zinc-800 rounded-full appearance-none cursor-pointer custom-range ${textAccentMap[color]}`}
+      />
+    </div>
+  );
+};
+
+const AuraToggle = ({ active, color, onToggle }: any) => {
+  const trackMap: any = {
+    red: active ? "bg-red-500/20 border-red-500" : "bg-zinc-800 border-zinc-700",
+    blue: active ? "bg-blue-500/20 border-blue-500" : "bg-zinc-800 border-zinc-700",
+    green: active ? "bg-green-500/20 border-green-500" : "bg-zinc-800 border-zinc-700",
+    yellow: active ? "bg-yellow-500/20 border-yellow-500" : "bg-zinc-800 border-zinc-700"
+  };
+
+  const thumbMap: any = {
+    red: active ? "bg-red-500 shadow-[0_0_6px_#ef4444]" : "bg-zinc-500",
+    blue: active ? "bg-blue-500 shadow-[0_0_6px_#3b82f6]" : "bg-zinc-500",
+    green: active ? "bg-green-500 shadow-[0_0_6px_#22c55e]" : "bg-zinc-500",
+    yellow: active ? "bg-yellow-500 shadow-[0_0_6px_#eab308]" : "bg-zinc-500"
+  };
+
+  return (
+    <button 
+      onClick={() => onToggle(!active)}
+      className={`relative w-7 h-4 rounded-full border transition-all duration-300 shrink-0 ${trackMap[color]}`}
+    >
+      <div className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full transition-transform duration-300 ${thumbMap[color]} ${active ? 'translate-x-3' : ''}`} />
+    </button>
+  );
+};
+
+
+
+const FeaturePipelineView = ({ features, user, db, addActivity, showToast }: { features: any[], user: any, db: any, addActivity: any, showToast: any }) => {
+  const statuses = ['Proposed', 'Dev', 'Review', 'Testing', 'Live'];
+  
+  const handleAddFeature = async () => {
+    const name = prompt("Enter new feature name:");
+    if (!name || !user) return;
+    try {
+      await setDoc(doc(db, "features", name), {
+        name,
+        status: "Proposed",
+        progress: 0,
+        color: "violet",
+        order: features.length + 1,
+        timestamp: serverTimestamp(),
+        createdBy: user.uid
+      });
+      addActivity(`Proposed feature: ${name}`, "💡");
+      showToast("💡", "Proposal Synchronized", `${name} is now in the roadmap.`);
+    } catch (e: any) {
+      showToast("❌", "Sync Error", e.message);
+    }
+  };
+
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+      await updateDoc(doc(db, "features", id), { status: newStatus });
+      addActivity(`Feature moved to ${newStatus}`, "🔄");
+    } catch (e: any) {
+      showToast("❌", "Move Error", e.message);
+    }
+  };
+
+  const deleteFeature = async (id: string) => {
+    if (!confirm(`Permanently terminate project ${id}?`)) return;
+    try {
+      await deleteDoc(doc(db, "features", id));
+      addActivity(`Terminated feature: ${id}`, "🗑️");
+      showToast("🗑️", "Feature Removed", "The project has been purged from the pipeline.");
+    } catch (e: any) {
+      showToast("❌", "Delete Failed", e.message);
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_cyan]" />
+            <span className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.3em]">Neural Roadmap Live</span>
+          </div>
+          <h2 className="text-4xl font-black text-white uppercase tracking-tighter leading-none">Universe <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">Pipeline</span></h2>
+        </div>
+        <button 
+          onClick={handleAddFeature}
+          className="group flex items-center gap-3 px-8 py-4 bg-white text-black rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-[0_20px_40px_rgba(255,255,255,0.1)] hover:scale-105 active:scale-95 transition-all duration-500"
+        >
+          <div className="p-1 bg-black text-white rounded-lg"><Plus size={14} strokeWidth={3} /></div>
+          New Proposal
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {statuses.map((status, sIndex) => {
+          const items = features.filter(f => f.status === status);
+          return (
+            <div key={status} className="flex flex-col bg-zinc-900/40 border border-white/5 rounded-2xl min-h-[450px] backdrop-blur-md group/col hover:border-white/10 transition-colors">
+              <div className="p-6 pb-2 flex justify-between items-center">
+                <div>
+                  <span className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-500 group-hover/col:text-white transition-colors">{status}</span>
+                  <div className="h-0.5 w-6 bg-cyan-500 mt-1 opacity-20 group-hover/col:opacity-100 transition-all rounded-full" />
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-[10px] font-black text-zinc-500">
+                  {items.length}
+                </div>
+              </div>
+              
+              <div className="p-4 space-y-3 flex-1 overflow-y-auto scrollbar-hide">
+                {items.length > 0 ? items.map((f, i) => (
+                  <motion.div 
+                    key={f.id || i}
+                    layoutId={f.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 + sIndex * 0.1 }}
+                    className="p-5 rounded-2xl bg-zinc-900/80 border border-white/5 hover:border-cyan-500/40 group transition-all cursor-pointer relative overflow-hidden backdrop-blur-3xl shadow-xl"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <span className="text-xs font-black text-white group-hover:text-cyan-400 transition-colors uppercase tracking-tight leading-tight">{f.name}</span>
+                      <button onClick={(e) => { e.stopPropagation(); deleteFeature(f.id); }} className="opacity-0 group-hover:opacity-100 p-1 text-zinc-700 hover:text-red-500 transition-all">
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-zinc-600 transition-colors group-hover:text-zinc-400">
+                        <span>Lvl {f.progress >= 100 ? 'MAX' : Math.floor(f.progress/10)}</span>
+                        <span>{f.progress}%</span>
+                      </div>
+                      <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }} 
+                          animate={{ width: `${f.progress}%` }} 
+                          className={`h-full bg-gradient-to-r from-cyan-600 to-cyan-400`} 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-between">
+                      <div className="flex -space-x-1">
+                        {[1,2].map(x => <div key={x} className="w-4 h-4 rounded-full bg-zinc-800 border border-zinc-900 flex items-center justify-center text-[6px] font-black text-zinc-500"><User size={8}/></div>)}
+                      </div>
+                      {status !== 'Live' && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); updateStatus(f.id, statuses[statuses.indexOf(status) + 1]); }} 
+                          className="px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-[8px] font-black text-zinc-500 hover:text-white uppercase tracking-widest transition-all"
+                        >
+                          Next Stage
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                )) : (
+                  <div className="h-32 flex flex-col items-center justify-center opacity-10 border-2 border-dashed border-white/10 rounded-[1.5rem]">
+                    <span className="text-[8px] font-black uppercase tracking-[0.4em]">Standby</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+
+const FeaturesView = ({ onBack, loaderImgSources, showToast }: { onBack: () => void, loaderImgSources: string[], showToast: any }) => {
+  const [showProposeModal, setShowProposeModal] = useState(false);
+  const [proposalTitle, setProposalTitle] = useState("");
+  const [proposalDesc, setProposalDesc] = useState("");
+
+  const handlePropose = (e: React.FormEvent) => {
+    e.preventDefault();
+    showToast("🚀", "Proposal Received", "User innovation data has been synced to the neural network for review.");
+    setShowProposeModal(false);
+    setProposalTitle("");
+    setProposalDesc("");
+  };
+
+  return (
+    <div className="w-full h-full min-h-[600px] bg-black/40 border border-white/5 flex flex-col p-8 backdrop-blur-2xl relative overflow-hidden animate-in fade-in zoom-in duration-700 shadow-2xl">
+      <div className="flex items-center justify-between mb-12">
+        <button onClick={onBack} className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 text-white font-black text-[9px] uppercase tracking-widest hover:bg-white/10 transition-all">
+          <ArrowLeft size={12} /> Return
+        </button>
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setShowProposeModal(true)}
+            className="flex items-center gap-2 px-4 py-1.5 bg-cyan-500 text-black font-black text-[9px] uppercase tracking-widest hover:scale-105 transition-all shadow-[0_0_15px_rgba(34,211,238,0.4)]"
+          >
+            <Plus size={12} /> Propose Feature
+          </button>
+          <h2 className="text-xl font-black text-white uppercase tracking-tighter">System Features</h2>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+        {[
+          { title: "Aerospace Grid Systems", subtitle: "Orbitron & Rajdhani Alignment", icon: Sun, text: "Aesthetics powered by premium futuristic type pairings. Sharp lines, elegant borders, glowing modules, and high contrast cyber interfaces." },
+          { title: "Interactive Particle field", subtitle: "Warp Starfields Canvas", icon: Star, text: "Runs responsive custom renders calculated using high frequency state update arrays to adapt perfectly to window resize margins." },
+          { title: "Quantum Telemetry API", subtitle: "BuBuBai Multi-Engine Integrations", icon: Terminal, text: "Access high-performance neural modules capable of parsing inputs, formulating code, and keeping logs secure via advanced FireStore patterns." },
+          { title: "Galaxy Connectivity", subtitle: "Mesh Resource Allocation", icon: Network, text: "Distributed client-side rendering engine bringing ultra-responsive interfaces to any portal with sub-millisecond response." },
+          { title: "Direct Neural Link", subtitle: "Encrypted Nickname Uplink", icon: Cpu, text: "Connect with others using unique nicknames. Shared channels and temporary hubs allow for frictionless cosmic collaboration." },
+          { title: "Aura Modulation", subtitle: "Global Real-time Controls", icon: Zap, text: "Fine-tune the universe speed, density and visual themes instantly through the Aura Settings interface." }
+        ].map((feat, i) => (
+          <div key={i} className="bg-white/5 border border-white/5 p-6 hover:border-cyan-500/20 transition-all duration-300 backdrop-blur-md space-y-3">
+            <div className="w-10 h-10 border border-cyan-500/20 bg-cyan-500/5 flex items-center justify-center text-cyan-400">
+              <feat.icon className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[8px] font-black text-cyan-500/60 uppercase tracking-[0.2em]">{feat.subtitle}</span>
+              <h3 className="font-black text-sm text-white uppercase mt-1">{feat.title}</h3>
+            </div>
+            <p className="text-[10px] text-zinc-400 leading-relaxed font-medium">{feat.text}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Removed Visual Assets & Signals as requested */}
+
+      {/* PROPOSE MODAL */}
+      <AnimatePresence>
+        {showProposeModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[1000] flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden"
+            >
+              <form onSubmit={handlePropose} className="p-8 space-y-6">
+                <div>
+                  <h2 className="text-lg font-black text-white uppercase tracking-widest leading-none mb-2">Propose Innovation</h2>
+                  <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">Share your vision for the Gamura Universe</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Feature Name</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={proposalTitle}
+                      onChange={e => setProposalTitle(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-[10px] font-bold text-white focus:outline-none focus:border-cyan-500/50 transition-all"
+                      placeholder="e.g. Neural Visualization Hub"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">System Description</label>
+                    <textarea 
+                      required
+                      value={proposalDesc}
+                      onChange={e => setProposalDesc(e.target.value)}
+                      rows={3}
+                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-[10px] font-bold text-white focus:outline-none focus:border-cyan-500/50 transition-all resize-none"
+                      placeholder="Explain the functional benefits..."
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => setShowProposeModal(false)}
+                    className="flex-1 py-3 bg-white/5 border border-white/10 text-white font-black text-[9px] rounded-xl uppercase tracking-widest hover:bg-white/10 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 py-3 bg-cyan-500 text-black font-black text-[9px] rounded-xl uppercase tracking-widest hover:scale-[1.02] shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all"
+                  >
+                    Send Protocol
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+
+interface Notification {
+  id: string;
+  msg: string;
+  ic: string;
+  time?: string;
+  timestamp: any;
+  unread: boolean;
+}
+
+const UsersView = ({ 
+  db, 
+  currentUser, 
+  showToast, 
+  addActivity, 
+  initialFilter = "all", 
+  onBack 
+}: { 
+  db: any; 
+  currentUser: any; 
+  showToast: any; 
+  addActivity: any; 
+  initialFilter: 'all' | 'active'; 
+  onBack: () => void; 
+}) => {
+  const [filterMode, setFilterMode] = useState<'all' | 'active' | 'admins'>(initialFilter);
+  const [search, setSearch] = useState("");
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [pingingId, setPingingId] = useState<string | null>(null);
+  const [userToDelete, setUserToDelete] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const q = query(collection(db, "users"), orderBy("lastLogin", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setUsersList(list);
+      setLoading(false);
+    }, (err) => {
+      console.error(err);
+      setLoading(false);
+    });
+    return unsub;
+  }, [currentUser, db]);
+
+  useEffect(() => {
+    setFilterMode(initialFilter);
+  }, [initialFilter]);
+
+  const activeThreshold = 5 * 60 * 1000;
+
+  const getUserStatus = (u: any) => {
+    if (!u.lastLogin) return { label: "OFFLINE", active: false, color: "text-zinc-550 border-white/5 bg-black/20" };
+    let t = 0;
+    if (u.lastLogin.toDate) t = u.lastLogin.toDate().getTime();
+    else if (u.lastLogin instanceof Date) t = u.lastLogin.getTime();
+    else t = new Date(u.lastLogin).getTime();
+
+    const isActive = Date.now() - t < activeThreshold;
+    if (isActive) {
+      return { label: "ACTIVE", active: true, color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/5 shadow-[0_0_8px_rgba(16,185,129,0.1)] animate-pulse" };
+    }
+    return { label: "STANDBY", active: false, color: "text-amber-500 border-amber-500/20 bg-amber-500/5" };
+  };
+
+  const getFilteredUsers = () => {
+    return usersList.filter(u => {
+      const matchesSearch = 
+        (u.uid && u.uid.toLowerCase().includes(search.toLowerCase())) ||
+        (u.username && u.username.toLowerCase().includes(search.toLowerCase())) ||
+        (u.nickname && u.nickname.toLowerCase().includes(search.toLowerCase())) ||
+        (u.email && u.email.toLowerCase().includes(search.toLowerCase()));
+
+      if (!matchesSearch) return false;
+
+      const status = getUserStatus(u);
+      if (filterMode === 'active') {
+        return status.active;
+      } else if (filterMode === 'admins') {
+        return u.role === 'admin' || u.email === 'gamuragalaxy@gmail.com' || u.email === 'selvaranjancg@gmail.com';
+      }
+      return true;
+    });
+  };
+
+  const currentCount = usersList.length;
+  const activeCount = usersList.filter(u => getUserStatus(u).active).length;
+
+  const handleCopy = (id: string) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    showToast("📋", "ID Copied", `Copied user identifier to clipboard.`, "success");
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handlePing = (user: any) => {
+    setPingingId(user.uid);
+    showToast("📡", "Pinging Node", `Broadcasting sync signal to node G-ID:${user.uid.substring(0, 6).toUpperCase()}...`);
+    setTimeout(() => {
+      setPingingId(null);
+      const latency = Math.floor(Math.random() * 60) + 12;
+      showToast("⚡", "Signal Sync Successful", `Node responded in ${latency}ms. Connection strength 100%.`, "success");
+      addActivity(`Pinged user node ${user.nickname || user.username} (${user.uid.substring(0, 6)})`, "📡");
+    }, 1200);
+  };
+
+  const filtered = getFilteredUsers();
+  const currentLoggedInUserDoc = usersList.find(u => u.uid === currentUser?.uid);
+  const isAdmin = currentUser && (
+    (currentLoggedInUserDoc && currentLoggedInUserDoc.role === 'admin') || 
+    currentUser.email === 'gamuragalaxy@gmail.com' || 
+    currentUser.email === 'selvaranjancg@gmail.com'
+  );
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500 font-sans pb-16">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
+        <div>
+          <div 
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-zinc-500 hover:text-cyan-400 font-sharetech text-[10px] tracking-[0.2em] uppercase cursor-pointer select-none transition-colors"
+          >
+            <ArrowLeft size={12} /> BACK TO ANALYTICS
+          </div>
+          <h2 className="font-orbitron text-xl font-black text-white tracking-[0.15em] uppercase mt-1">
+            NEURAL <span className="text-cyan-400 font-bold">USERS DIRECTORY</span>
+          </h2>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">
+            Real-time synchronization matrix monitoring active core node connections.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="bg-black/30 border border-white/5 rounded-xl px-4 py-2.5 flex flex-col items-center min-w-[100px]">
+            <span className="text-[8px] text-zinc-500 uppercase tracking-widest font-sharetech">REGISTRATION CORES</span>
+            <span className="text-sm font-black text-white font-mono mt-0.5">{currentCount}</span>
+          </div>
+          <div className="bg-black/30 border border-white/5 rounded-xl px-4 py-2.5 flex flex-col items-center min-w-[100px] relative overflow-hidden group">
+            <div className="absolute top-0 inset-x-0 h-[1.5px] bg-emerald-500/50" />
+            <span className="text-[8px] text-emerald-500 uppercase tracking-widest font-sharetech flex items-center gap-1">
+              <span className="w-1 h-1 bg-emerald-400 rounded-full animate-pulse" /> ACTIVE NODES
+            </span>
+            <span className="text-sm font-black text-emerald-400 font-mono mt-0.5">{activeCount}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col md:flex-row items-center gap-4">
+        <div className="relative flex-1 w-full">
+          <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input 
+            type="text" 
+            placeholder="FILTER BY USER ID, NICKNAME, EMAIL OR HANDLE..." 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-black/30 border border-white/5 rounded-xl pl-10 pr-4 py-3 text-xs font-bold text-white placeholder:text-zinc-600 tracking-wider focus:outline-none focus:border-cyan-500/30 uppercase"
+          />
+        </div>
+
+        <div className="flex bg-black/30 border border-white/5 p-1 rounded-xl w-full md:w-auto">
+          {[
+            { id: "all", label: "ALL USERS", count: currentCount },
+            { id: "active", label: "LIVE NODES", count: activeCount },
+            { id: "admins", label: "OPERATORS", count: usersList.filter(u => u.role === 'admin' || u.email === 'gamuragalaxy@gmail.com' || u.email === 'selvaranjancg@gmail.com').length }
+          ].map((tab) => {
+            const isActive = filterMode === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setFilterMode(tab.id as any)}
+                className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  isActive 
+                    ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/20' 
+                    : 'text-zinc-500 border border-transparent hover:text-zinc-300'
+                }`}
+              >
+                {tab.label}
+                <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-mono leading-none ${
+                  isActive ? 'bg-cyan-500/20 text-cyan-400' : 'bg-white/5 text-zinc-650'
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="py-20 flex flex-col items-center justify-center gap-3">
+          <RefreshCw className="w-8 h-8 text-cyan-500 animate-spin" />
+          <span className="text-[10px] text-zinc-500 font-sharetech uppercase tracking-[0.3em] animate-pulse">Accessing centralized user schemas...</span>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="py-20 text-center border border-dashed border-white/10 rounded-2xl bg-black/10">
+          <div className="text-zinc-500 text-3xl mb-2">🛸</div>
+          <h3 className="font-orbitron text-xs font-black text-white tracking-widest uppercase mb-1">No Sync Logs Found</h3>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider leading-relaxed">Try expanding search query parameters or modifying selection filters.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((u, index) => {
+            const status = getUserStatus(u);
+            const isCurrentUser = currentUser && currentUser.uid === u.uid;
+            return (
+              <div
+                key={u.id}
+                className={`p-4 rounded-xl flex flex-col justify-between border hover:border-cyan-500/20 transition-all duration-300 relative overflow-hidden group ${
+                  isCurrentUser ? 'bg-cyan-500/[0.02] border-cyan-500/20' : 'bg-[#0a0f1d]/40 border-white/5'
+                }`}
+              >
+                {isCurrentUser && (
+                  <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-cyan-500 via-blue-500 to-transparent" />
+                )}
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                      <span className="text-[8px] font-mono text-zinc-500 uppercase">G-NODE:0X{u.uid?.substring(0, 6).toUpperCase()}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {isCurrentUser && (
+                        <span className="text-[8px] font-black border border-cyan-500/20 text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">YOU</span>
+                      )}
+                      <span className={`text-[8px] font-mono uppercase border px-1.5 py-0.5 rounded font-black tracking-widest ${status.color}`}>
+                        {status.label}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className={`w-11 h-11 rounded-xl overflow-hidden border bg-zinc-900 ${
+                        status.active ? 'border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'border-white/10'
+                      }`}>
+                        {u.photoURL || u.avatarUrl ? (
+                          <img src={u.photoURL || u.avatarUrl} className="w-full h-full object-cover" alt="User Avatar" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-zinc-500 text-xs font-black uppercase font-orbitron">
+                            {(u.nickname || u.username || 'A').charAt(0)}
+                          </div>
+                        )}
+                      </div>
+                      {status.active && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#050810] animate-ping" />
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="font-orbitron text-[11px] font-black text-white uppercase tracking-wider truncate leading-tight">
+                        {u.nickname || "Anonymous Explorer"}
+                      </div>
+                      <div className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5 truncate">
+                        @{u.username || "explorer"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-black/40 border border-white/5 rounded-lg space-y-1.5 font-mono text-[9px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-zinc-500 uppercase shrink-0">USER ID (UID)</span>
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="text-zinc-300 select-text cursor-text truncate font-semibold">{u.uid}</span>
+                        <button 
+                          onClick={() => handleCopy(u.uid)}
+                          className="text-zinc-500 hover:text-cyan-400 p-0.5 rounded cursor-pointer shrink-0 transition-colors"
+                        >
+                          {copiedId === u.uid ? <Check size={10} className="text-emerald-500" /> : <Copy size={10} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-zinc-500 uppercase shrink-0">NET EMAIL</span>
+                      <span className="text-zinc-300 select-text cursor-text truncate font-semibold">{u.email || "NO_EMAIL"}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 font-sans">
+                    <div className="flex justify-between items-center text-[8px] uppercase tracking-wider">
+                      <span className="text-zinc-500">CONNECTION PULSE</span>
+                      <span className="text-zinc-400 font-mono">
+                        {u.lastLogin ? (u.lastLogin.toDate ? u.lastLogin.toDate().toLocaleString() : new Date(u.lastLogin).toLocaleString()) : "NEVER"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[8px] uppercase tracking-wider">
+                      <span className="text-zinc-500">NODE DISCOVERY</span>
+                      <span className="text-zinc-400 font-mono">
+                        {u.createdAt ? (u.createdAt.toDate ? u.createdAt.toDate().toLocaleDateString() : new Date(u.createdAt).toLocaleDateString()) : "UNKNOWN"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between gap-2">
+                  <button 
+                    onClick={() => handlePing(u)}
+                    disabled={pingingId === u.uid}
+                    className="flex-1 py-1.5 bg-white/5 hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/20 rounded-md text-[8px] font-black text-zinc-400 hover:text-cyan-400 uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
+                  >
+                    {pingingId === u.uid ? (
+                      <>
+                        <RefreshCw size={9} className="animate-spin" /> PINGING...
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={9} /> PING NODE
+                      </>
+                    )}
+                  </button>
+
+                  {isAdmin && u.uid !== currentUser?.uid && (
+                    <button 
+                      onClick={() => setUserToDelete(u)}
+                      className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 text-red-400 rounded-md text-[8px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                      title="Purge User Node"
+                    >
+                      <Trash2 size={9} />
+                    </button>
+                  )}
+                  
+                  <button 
+                    onClick={() => handleCopy(u.uid)}
+                    className="px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/15 rounded-md text-[8px] font-black text-cyan-400 uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    COPY ID
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {userToDelete && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/85 backdrop-blur-md z-[500] flex items-center justify-center p-4 font-sans"
+            onClick={() => setUserToDelete(null)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              className="w-full max-w-md bg-[#0a0f1d] border border-red-500/25 rounded-2xl p-6 shadow-[0_0_50px_rgba(239,68,68,0.15)] relative overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* High Contrast Red Laser Accent */}
+              <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-red-500/20 via-red-500 to-red-500/20" />
+              
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 shrink-0">
+                  <Trash2 size={20} />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <h3 className="font-orbitron text-xs font-black text-white tracking-[0.15em] uppercase">
+                    PURGE USER NODE?
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 uppercase tracking-widest leading-relaxed">
+                    You are initiating system purging protocol for node alignment. This operation cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              {/* Target Details Panel */}
+              <div className="mt-6 p-4 bg-black/45 border border-white/5 rounded-xl space-y-3 font-mono text-[10px]">
+                <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                  <span className="text-zinc-500 uppercase tracking-wider">Target Identifier</span>
+                  <span className="text-red-400 font-bold">@{userToDelete.username || "explorer"}</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                  <span className="text-zinc-500 uppercase tracking-wider">Nickname</span>
+                  <span className="text-zinc-200 font-bold">{userToDelete.nickname || "Anonymous"}</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                  <span className="text-zinc-500 uppercase tracking-wider">Registered Email</span>
+                  <span className="text-zinc-200 truncate max-w-[200px] font-bold">{userToDelete.email || "NO_EMAIL"}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-500 uppercase tracking-wider">User ID (UID)</span>
+                  <span className="text-zinc-450 tracking-wider text-[9px] font-bold select-all">{userToDelete.uid}</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setUserToDelete(null)}
+                  disabled={isDeleting}
+                  className="px-4 py-2 hover:bg-white/5 border border-white/5 rounded-xl text-[9px] font-black text-zinc-400 hover:text-zinc-200 uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
+                >
+                  ABORT SEQUENCE
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      // Delete user document from Firestore users collection
+                      await deleteDoc(doc(db, "users", userToDelete.id));
+                      addActivity(`Purged user node ${userToDelete.nickname || userToDelete.username} (${userToDelete.uid?.substring(0, 6)})`, "🗑️");
+                      showToast("🗑️", "Node Purged", `User @${userToDelete.username || 'explorer'} has been completely deleted.`, "success");
+                    } catch (err: any) {
+                      console.error("Purging failed", err);
+                      showToast("❌", "Purge Failed", err.message || "An error occurred during database purging.", "error");
+                    } finally {
+                      setIsDeleting(false);
+                      setUserToDelete(null);
+                    }
+                  }}
+                  disabled={isDeleting}
+                  className="px-5 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-black font-black font-orbitron text-[9px] tracking-widest rounded-xl hover:scale-[1.02] active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 size={10} className="animate-spin" /> PURGING...
+                    </>
+                  ) : (
+                    <>
+                      CONFIRM PURGE
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const UniverseDashboard = ({ onBack, isLoggedIn, onConnect, user, userInfo, setCurrentPage, isDark, setIsDark, loaderImgSources }: { onBack: () => void, isLoggedIn: boolean, onConnect: () => void, user: any, userInfo: any, setCurrentPage: (p: any) => void, isDark: boolean, setIsDark: (val: boolean) => void, loaderImgSources: string[] }) => {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("Analytics");
+  const [quickAddText, setQuickAddText] = useState("");
+  const [quickPriority, setQuickPriority] = useState("Medium");
+  const [quickDueDate, setQuickDueDate] = useState("");
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [time, setTime] = useState(new Date());
+  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(null);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [newUsername, setNewUsername] = useState(userInfo?.username || "");
+  const [newNickname, setNewNickname] = useState(userInfo?.nickname || "");
+  const [newAvatar, setNewAvatar] = useState(userInfo?.avatarUrl || "");
+  const [sharedProjects, setSharedProjects] = useState<any[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [projectTitle, setProjectTitle] = useState("");
+  const [projectLink, setProjectLink] = useState("");
+  const [projectImage, setProjectImage] = useState("");
+  
+  // Derive display name and ID early for scope safety
+  const displayName = userInfo?.username || user?.displayName || "SELVARANJAN G";
+  const gamuraId = user ? `GM-${user.uid.substring(0, 8).toUpperCase()}` : "G-ID-UNSET";
+
+  // Calculate if the user can change their Gamura ID handle (once per year restriction)
+  const isUsernameLocked = useMemo(() => {
+    const lastChange = userInfo?.lastUidChange;
+    if (!lastChange) return false;
+    const lastChangeMs = typeof lastChange === "number" ? lastChange : (lastChange.toMillis ? lastChange.toMillis() : (lastChange.seconds ? lastChange.seconds * 1000 : 0));
+    const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+    return Date.now() - lastChangeMs < oneYearMs;
+  }, [userInfo]);
+
+  const nextAllowedDateStr = useMemo(() => {
+    const lastChange = userInfo?.lastUidChange;
+    if (!lastChange) return "";
+    const lastChangeMs = typeof lastChange === "number" ? lastChange : (lastChange.toMillis ? lastChange.toMillis() : (lastChange.seconds ? lastChange.seconds * 1000 : 0));
+    const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+    return new Date(lastChangeMs + oneYearMs).toLocaleDateString();
+  }, [userInfo]);
+
+  const [loginCount, setLoginCount] = useState(0);
+  const [recentUsers, setRecentUsers] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [features, setFeatures] = useState<any[]>([]);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [visibleActivitiesCount, setVisibleActivitiesCount] = useState(6);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const [toasts, setToasts] = useState<any[]>([]);
+
+  const [themeColors, setThemeColors] = useState({
+    preset: 'starlight',
+    primary: '#3b82f6',
+    secondary: '#10b981',
+    accent: '#cbd5e1'
+  });
+
+  const [dbToken, setDbToken] = useState(() => localStorage.getItem("gamura_github_token") || "");
+  const [dbRepo, setDbRepo] = useState(() => localStorage.getItem("gamura_github_repo") || "my-web-portfolio");
+  const [dbCommitMsg, setDbCommitMsg] = useState("Pipeline: sync portfolio build");
+  const [dbStatus, setDbStatus] = useState<{ type: "idle" | "loading" | "success" | "error"; message?: string; url?: string }>({ type: "idle" });
+
+  useEffect(() => {
+    localStorage.setItem("gamura_github_token", dbToken);
+  }, [dbToken]);
+
+  useEffect(() => {
+    localStorage.setItem("gamura_github_repo", dbRepo);
+  }, [dbRepo]);
+
+  const handleDashboardPublishGithub = async () => {
+    const token = dbToken.trim();
+    const repo = dbRepo.trim();
+    const commitMsg = dbCommitMsg.trim() || "Pipeline sync portfolio build";
+
+    if (!token) {
+      setDbStatus({ type: "error", message: "Please provide a valid GitHub Personal Access Token." });
+      return;
+    }
+    if (!repo) {
+      setDbStatus({ type: "error", message: "Please specify a repository name." });
+      return;
+    }
+
+    setDbStatus({ type: "loading", message: "Connecting via Octokit..." });
+
+    try {
+      const octokit = new Octokit({ auth: token });
+
+      // 1. Authenticate user
+      const { data: userData } = await octokit.rest.users.getAuthenticated();
+      const username = userData.login;
+
+      setDbStatus({ type: "loading", message: `Authenticated as @${username}. Seeking repo...` });
+
+      // 2. Repo lookup/creation
+      let repoData;
+      try {
+        const { data: existingRepo } = await octokit.rest.repos.get({
+          owner: username,
+          repo: repo,
+        });
+        repoData = existingRepo;
+      } catch (repoErr: any) {
+        if (repoErr.status === 404) {
+          setDbStatus({ type: "loading", message: `Repo "${repo}" not found. Creating repo...` });
+          const { data: newRepo } = await octokit.rest.repos.createForAuthenticatedUser({
+            name: repo,
+            description: "Personal web portfolio compiled on Gamura Engine Studio.",
+            private: false,
+            auto_init: false,
+          });
+          repoData = newRepo;
+        } else {
+          throw repoErr;
+        }
+      }
+
+      setDbStatus({ type: "loading", message: "Generating bundle archive package..." });
+
+      // 3. Compile portfolio HTML
+      const saved = localStorage.getItem("portfolio_system");
+      let portfolioData = DEFAULT_PORTFOLIO;
+      if (saved) {
+        try {
+          portfolioData = JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      const liveHTML = generatePortfolioHTML(portfolioData, false);
+
+      // Check if index.html already exists to obtain SHA
+      let existingSha: string | undefined = undefined;
+      try {
+        const { data: fileData } = await octokit.rest.repos.getContent({
+          owner: username,
+          repo: repo,
+          path: "index.html",
+        });
+        if (!Array.isArray(fileData) && fileData.type === "file") {
+          existingSha = fileData.sha;
+        }
+      } catch (fileErr: any) {
+        if (fileErr.status !== 404) {
+          console.warn("Failed checking index.html metadata", fileErr);
+        }
+      }
+
+      // Safe base64 encode supporting Unicode characters
+      const b64Data = btoa(unescape(encodeURIComponent(liveHTML)));
+
+      setDbStatus({ type: "loading", message: "Transmitting payload to index.html..." });
+
+      // 4. Create or update file content
+      const { data: commitResponse } = await octokit.rest.repos.createOrUpdateFileContents({
+        owner: username,
+        repo: repo,
+        path: "index.html",
+        message: commitMsg,
+        content: b64Data,
+        sha: existingSha,
+      });
+
+      const fileUrl = `https://github.com/${username}/${repo}/blob/${repoData.default_branch || "main"}/index.html`;
+
+      showToast(
+        "🐙",
+        "Pipeline Connected",
+        `Pushed latest build to ${repo}!`,
+        "success"
+      );
+
+      setDbStatus({
+        type: "success",
+        message: `Compiled & Synchronized with absolute success! Repository active on: github.com/${username}/${repo}. Remember to activate GitHub Pages under Repo Settings -> Pages to enable instant hosting!`,
+        url: repoData.html_url,
+      });
+
+      if (addActivity) {
+        addActivity(`Synchronized portfolio payload with GitHub (${repo})`, "🐙");
+      }
+    } catch (err: any) {
+      setDbStatus({ 
+        type: "error", 
+        message: err.message || "An unexpected error occurred during GitHub transition." 
+      });
+    }
+  };
+
+  const showToast = (ic: string, title: string, content: string, type?: 'success' | 'error' | 'info' | 'warning') => {
+    const id = Date.now();
+    let deducedType: 'success' | 'error' | 'info' | 'warning' = type || 'info';
+    if (!type) {
+      const lowerTitle = title.toLowerCase();
+      const lowerContent = content ? content.toLowerCase() : "";
+      if (ic === "❌" || ic === "🚫" || ic === "🚫" || lowerTitle.includes("fail") || lowerTitle.includes("error") || lowerTitle.includes("denied")) {
+        deducedType = 'error';
+      } else if (ic === "✅" || ic === "✓" || lowerTitle.includes("success") || lowerTitle.includes("successful") || lowerTitle.includes("complete") || lowerTitle.includes("linked") || lowerTitle.includes("ready")) {
+        deducedType = 'success';
+      } else if (ic === "⚠️") {
+        deducedType = 'warning';
+      } else {
+        deducedType = 'info';
+      }
+    }
+    // Backward compatibility for templates using msg instead of content
+    setToasts(prev => [...prev, { id, ic, title, content, msg: content, type: deducedType }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
+
+  const addActivity = async (title: string, ic: string = "⚡", priority: string = "Medium", dueDate: string = "") => {
+    if (!user) return; // Guard against unauthenticated writes
+    try {
+      await setDoc(doc(collection(db, "activities")), {
+        title,
+        ic,
+        timestamp: serverTimestamp(),
+        user: displayName,
+        userId: user.uid,
+        priority,
+        dueDate
+      });
+    } catch (e) {
+      console.error("Failed to add activity", e);
+    }
+  };
+
+  const handleQuickAdd = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!quickAddText.trim() || !user) return;
+    
+    const icon = quickAddText.toLowerCase().includes("note") ? "📝" : "✅";
+    await addActivity(quickAddText.trim(), icon, quickPriority, quickDueDate);
+    setQuickAddText("");
+    setQuickPriority("Medium");
+    setQuickDueDate("");
+    showToast("⚡", "Broadcast Synced", "Task/Note added to your timeline.");
+  };
+
+  const addNotification = async (msg: string, ic: string = "⚡") => {
+    if (!user) return;
+    try {
+      await setDoc(doc(collection(db, `users/${user.uid}/notifications`)), {
+        msg,
+        ic,
+        unread: true,
+        timestamp: serverTimestamp()
+      });
+    } catch (e) {
+      console.error("Failed to add notification", e);
+    }
+  };
+
+  useEffect(() => {
+    // Stats listener
+    const statsRef = doc(db, "system", "stats");
+    const unsubStats = onSnapshot(statsRef, (doc) => {
+      if (doc.exists()) {
+        setLoginCount(doc.data().loginCount || 0);
+      }
+    }, (error) => handleFirestoreError(error, OperationType.GET, "system/stats"));
+
+    // Users listener (Loads all registered users)
+    let unsubUsers = () => {};
+    if (user) {
+      const usersQuery = query(collection(db, "users"), orderBy("lastLogin", "desc"));
+      unsubUsers = onSnapshot(usersQuery, (snap) => {
+        const usersList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAllUsers(usersList);
+        setRecentUsers(usersList.slice(0, 5));
+      }, (error) => handleFirestoreError(error, OperationType.LIST, "users"));
+    }
+
+    // Features listener
+    const featQuery = query(collection(db, "features"), orderBy("order", "asc"));
+    const unsubFeat = onSnapshot(featQuery, (snap) => {
+      if (snap.empty && user) {
+        // Seed initial features if empty (Requires auth to write)
+        const initialFeatures = [
+          { name: "BuBuBai", status: "Dev", progress: 55, color: "violet", order: 1 },
+          { name: "Galaxy Core v2", status: "Testing", progress: 80, color: "cyan", order: 2 },
+          { name: "Auth System", status: "Live", progress: 100, color: "emerald", order: 3 },
+          { name: "Notifications", status: "Review", progress: 65, color: "yellow", order: 4 },
+          { name: "API v3", status: "Dev", progress: 40, color: "cyan", order: 5 },
+        ];
+        initialFeatures.forEach(f => setDoc(doc(db, "features", f.name), f));
+      } else if (!snap.empty) {
+        const featList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setFeatures(featList);
+      }
+    }, (error) => handleFirestoreError(error, OperationType.LIST, "features"));
+
+    // Activities listener (Requires auth - restricted strictly to current user's activities)
+    let unsubAct = () => {};
+    if (user) {
+      const actQuery = query(collection(db, "activities"), where("userId", "==", user.uid));
+      unsubAct = onSnapshot(actQuery, (snap) => {
+        const actList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Client-side sort ensures descending timestamp order without composite query index constraints
+        actList.sort((a: any, b: any) => {
+          const tA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : (a.timestamp ? new Date(a.timestamp).getTime() : 0);
+          const tB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : (b.timestamp ? new Date(b.timestamp).getTime() : 0);
+          return tB - tA;
+        });
+        setActivities(actList);
+      }, (error) => handleFirestoreError(error, OperationType.LIST, "activities"));
+    }
+
+    // Notifications listener
+    let unsubNotif = () => {};
+    if (user) {
+      const notifQuery = query(collection(db, `users/${user.uid}/notifications`), orderBy("timestamp", "desc"), limit(20));
+      unsubNotif = onSnapshot(notifQuery, (snap) => {
+        const notifList = snap.docs.map(d => {
+           const data = d.data();
+           let time = "Just now";
+           if (data.timestamp?.toDate) {
+             const diff = Date.now() - data.timestamp.toDate().getTime();
+             const mins = Math.floor(diff / 60000);
+             if (mins < 1) time = "Just now";
+             else if (mins < 60) time = `${mins}m ago`;
+             else time = `${Math.floor(mins/60)}h ago`;
+           }
+           return { id: d.id, ...data, time } as Notification;
+        });
+        setNotifications(notifList);
+      }, (error) => handleFirestoreError(error, OperationType.LIST, `users/${user.uid}/notifications`));
+    }
+
+    // Projects listener
+    const projectsQuery = query(collection(db, "shared_projects"), orderBy("timestamp", "desc"));
+    const unsubProjects = onSnapshot(projectsQuery, (snap) => {
+      const pList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setSharedProjects(pList);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, "shared_projects"));
+
+    // Theme listener
+    const unsubTheme = onSnapshot(doc(db, "system_configs", "aura_global"), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setThemeColors({
+          preset: data.themePreset || 'starlight',
+          primary: data.customPrimary || '#3b82f6',
+          secondary: data.customSecondary || '#10b981',
+          accent: data.customAccent || '#cbd5e1'
+        });
+      }
+    });
+
+    return () => {
+      unsubStats();
+      unsubUsers();
+      unsubFeat();
+      unsubAct();
+      unsubNotif();
+      unsubProjects();
+      unsubTheme();
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (user && db) {
+      const updatePulse = async () => {
+        try {
+          await updateDoc(doc(db, "users", user.uid), {
+            lastLogin: serverTimestamp()
+          });
+        } catch (e) {
+          console.error("Pulse update failed", e);
+        }
+      };
+      updatePulse();
+      const interval = setInterval(updatePulse, 45000); 
+      return () => clearInterval(interval);
+    }
+  }, [user, db]);
+
+  useEffect(() => {
+    if (editProfileOpen && userInfo) {
+      setNewUsername(userInfo.username || "");
+      setNewNickname(userInfo.nickname || "");
+      setNewAvatar(userInfo.avatarUrl || "");
+    }
+  }, [editProfileOpen, userInfo]);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !userInfo) return;
+    try {
+      const normalizedNew = newUsername.trim().toLowerCase();
+      const normalizedOld = userInfo.username?.trim().toLowerCase();
+      const isUsernameChanged = normalizedNew !== normalizedOld;
+
+      if (isUsernameChanged) {
+        if (!newUsername.trim()) {
+          alert("Gamura ID (Username Handle) cannot be empty.");
+          return;
+        }
+        if (newUsername.length < 6) {
+          alert("Gamura ID (Username Handle) must be at least 6 characters long.");
+          return;
+        }
+
+        // Check last change timestamp
+        const lastChange = userInfo.lastUidChange;
+        if (lastChange) {
+          const lastChangeMs = typeof lastChange === "number" ? lastChange : (lastChange.toMillis ? lastChange.toMillis() : (lastChange.seconds ? lastChange.seconds * 1000 : 0));
+          const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+          if (Date.now() - lastChangeMs < oneYearMs) {
+            const nextAllowedDate = new Date(lastChangeMs + oneYearMs);
+            alert(`Gamura ID (Username Handle) can only be edited once per year.\nYour next update is available on: ${nextAllowedDate.toLocaleDateString()}`);
+            return;
+          }
+        }
+
+        // Check if new handle is taken of other users
+        const nameCheck = await getDoc(doc(db, "usernames", normalizedNew));
+        if (nameCheck.exists()) {
+          alert("This Gamura ID (Username Handle) is already taken. Please choose another.");
+          return;
+        }
+
+        // Reserve new username, and release old one
+        await setDoc(doc(db, "usernames", normalizedNew), { uid: user.uid });
+        if (normalizedOld) {
+          await deleteDoc(doc(db, "usernames", normalizedOld));
+        }
+      }
+
+      const updateData: any = {
+        nickname: newNickname,
+        avatarUrl: newAvatar
+      };
+
+      if (isUsernameChanged) {
+        updateData.username = newUsername;
+        updateData.lastUidChange = Date.now();
+      }
+
+      await updateDoc(doc(db, "users", user.uid), updateData);
+      showToast("👤", "Profile Updated", "Your identity has been re-calibrated.");
+      setEditProfileOpen(false);
+      addActivity("Updated profile details and avatar" + (isUsernameChanged ? " & secured a new Gamura ID" : ""), "✏️");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+    }
+  };
+
+  const handleAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setNewAvatar(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    try {
+      await setDoc(doc(db, "shared_projects", user.uid), {
+        userId: user.uid,
+        userName: displayName,
+        title: projectTitle,
+        link: projectLink,
+        image: projectImage,
+        timestamp: serverTimestamp()
+      });
+      showToast("🚀", "Project Shared", "Your project is now live in the Universe.");
+      setShowProjectModal(false);
+      addActivity(`Shared project: ${projectTitle}`, "🎨");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, "shared_projects");
+    }
+  };
+
+  const handleProjectImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProjectImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const totalUsersVal = allUsers.length.toLocaleString();
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const t = time.toLocaleTimeString('en-US', { hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const dateStr = time.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  const h = time.getHours();
+  const greeting = h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening';
+
+  const trafficData = [
+    { name: 'Mon', visitors: 400, active: 240 },
+    { name: 'Tue', visitors: 300, active: 139 },
+    { name: 'Wed', visitors: 200, active: 980 },
+    { name: 'Thu', visitors: 278, active: 390 },
+    { name: 'Fri', visitors: 189, active: 480 },
+    { name: 'Sat', visitors: 239, active: 380 },
+    { name: 'Sun', visitors: 349, active: 430 },
+  ];
+
+  const platformData = [
+    { name: 'Mobile', value: 60, color: '#38bdf8' },
+    { name: 'Desktop', value: 30, color: '#a78bfa' },
+    { name: 'Tablet', value: 10, color: '#34d399' },
+  ];
+
+  const [isDeploying, setIsDeploying] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(doc(db, "user_connections", user.uid), (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        setConnectedApps(data.connections || []);
+      }
+    });
+    return unsub;
+  }, [user]);
+
+  const handleDeploy = async () => {
+    setIsDeploying(true);
+    showToast("🚀", "Deployment Started", "Initializing Galaxy Core v2 rollout...");
+    
+    // Simulate deployment delay
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    try {
+      // Update a deployment count in stats or something
+      const statsRef = doc(db, "system", "stats");
+      await updateDoc(statsRef, { deployCount: increment(1) });
+      
+      addActivity(`Deployed Galaxy Core v2`, "🚀");
+      showToast("✅", "Deployment Successful", "All nodes updated to latest protocols.");
+      await addNotification("Galaxy Core v2 rollout successfully completed. System integrity 100%.", "🚀");
+    } catch (e) {
+      console.error("Failed to update deploy count", e);
+    } finally {
+      setIsDeploying(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    showToast('🔄', 'Synchronizing', 'Gamura Universe nodes are syncing...');
+    setTimeout(() => {
+      setIsRefreshing(false);
+      showToast('✅', 'Updated', 'Dashboard data is now fully synchronized.');
+      addActivity("Data synchronization completed", "🔄");
+    }, 1500);
+  };
+
+  const activeCount = Math.max(1, allUsers.filter(u => {
+    if (!u.lastLogin) return false;
+    let t = 0;
+    if (u.lastLogin.toDate) t = u.lastLogin.toDate().getTime();
+    else if (u.lastLogin instanceof Date) t = u.lastLogin.getTime();
+    else t = new Date(u.lastLogin).getTime();
+    return Date.now() - t < 5 * 60 * 1000;
+  }).length);
+
+  const navGroups = [
+    {
+      label: "",
+      items: [
+        { name: "Analytics", icon: <Activity size={18} /> },
+        { name: "Users", icon: <Users size={18} />, badge: allUsers.length > 0 ? `${allUsers.length}` : undefined, badgeColor: "cyan" },
+        { name: "Active Users", icon: <Radio size={18} />, badge: `${activeCount} Live`, badgeColor: "green" },
+        { name: "Features", icon: <Layers size={18} />, badge: "NEW", badgeColor: "cyan" },
+        { name: "Integrations", icon: <Share2 size={18} /> },
+      ]
+    },
+    {
+      label: "Universe",
+      items: [
+        { name: "Galaxy Core", icon: <Cpu size={18} /> },
+        { name: "Aura Settings", icon: <Settings size={18} /> },
+        { name: "Neutral Link", icon: <Link size={18} />, badge: "GETA", badgeColor: "cyan" },
+        { name: "Gamura", icon: <Globe size={18} />, action: () => window.open('https://gamura.vercel.app/', '_blank') },
+        { name: "Gamura Galaxy", icon: <Sparkles size={18} />, action: () => window.open('https://gamuragalaxy.vercel.app/', '_blank') },
+        { name: "SR Portfolio", icon: <User size={18} />, action: () => window.open('https://selvaranjan.netlify.app/', '_blank') },
+        { name: "BuBuBai", icon: <Bot size={18} />, action: () => showToast('🤖', 'Coming Soon', 'BuBuBai AI sub-systems are charging...') },
+        { name: "Resume Builder", icon: <FileText size={18} />, action: () => showToast('📝', 'Access Denied', 'Professional development tools are currently offline.') },
+        { name: "Portfolio Builder", icon: <Briefcase size={18} /> },
+      ]
+    },
+  ];
+
+  const [connectedApps, setConnectedApps] = useState<any[]>([]);
+
+  const handleConnectApp = async (app: string) => {
+    if (!user) return;
+    showToast("🔌", `Connecting ${app}`, "Redirecting to secure authorization...");
+    
+    // For Vercel/Netlify/etc., simulate with a prompt for API Key (Real enough for "Authorization")
+    const apiKey = prompt(`Enter your ${app} API Token to authorize Gamura:`);
+    if (apiKey) {
+      const connRef = doc(db, "user_connections", user.uid);
+      const currentConns = [...connectedApps];
+      if (!currentConns.includes(app)) currentConns.push(app);
+      
+      await setDoc(connRef, { 
+        connections: currentConns,
+        [`${app.toLowerCase()}_token`]: apiKey 
+      }, { merge: true });
+
+      addActivity(`Authorized ${app} integration`, "🔗");
+      showToast("✅", `${app} Connected`, `Successfully linked ${app} via token.`);
+    }
+  };
+
+  const [isLoadingUniverse, setIsLoadingUniverse] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoadingUniverse(false), 6000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoadingUniverse) {
+    return (
+      <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center p-8 overflow-hidden font-sans">
+        {/* Animated Background Grid */}
+        <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(56,189,248,0.2) 1px, transparent 0)', backgroundSize: '40px 40px' }} />
+        
+        <div className="relative z-10 flex flex-col items-center">
+          {/* Central Logo */}
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0, rotate: -20 }}
+            animate={{ scale: 1, opacity: 1, rotate: 0 }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+            className="w-24 h-24 border border-cyan-500/30 flex items-center justify-center mb-12 relative group"
+          >
+            <img src={GAMURA_G_LOGO} className="w-16 h-16 object-contain brightness-125 contrast-125" alt="Loading Logo" />
+            <div className="absolute -inset-4 border border-cyan-400/10 animate-spin-slow pointer-events-none" />
+            <div className="absolute -inset-8 border border-white/5 animate-reverse-spin-slow pointer-events-none" />
+          </motion.div>
+
+          {/* Loading Text */}
+          <div className="space-y-2 text-center">
+            <h2 className="text-2xl font-black text-white uppercase tracking-[0.4em] animate-pulse">Initializing <span className="text-cyan-400">Universe</span></h2>
+          </div>
+
+          {/* Progress Bar (6s) */}
+          <div className="w-64 h-1 bg-white/5 border border-white/10 mt-12 overflow-hidden relative">
+            <motion.div 
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              transition={{ duration: 6, ease: "linear" }}
+              className="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-cyan-600 via-blue-500 to-cyan-400 shadow-[0_0_15px_#00d2ff]"
+            />
+          </div>
+
+          <div className="mt-6 flex flex-col items-center gap-1.5">
+            <p className="text-[8px] font-bold text-zinc-700 uppercase tracking-widest">GAMURA UNIVERSE</p>
+          </div>
+        </div>
+
+        {/* Decorative Corner Borders */}
+        <div className="absolute top-8 left-8 w-12 h-12 border-t-2 border-l-2 border-cyan-500/30" />
+        <div className="absolute top-8 right-8 w-12 h-12 border-t-2 border-r-2 border-white/10" />
+        <div className="absolute bottom-8 left-8 w-12 h-12 border-b-2 border-l-2 border-white/10" />
+        <div className="absolute bottom-8 right-8 w-12 h-12 border-b-2 border-r-2 border-cyan-500/30" />
       </div>
     );
   }
 
   return (
-    <img
-      src={srcs[idx]}
-      alt={alt}
-      className={className}
-      referrerPolicy="no-referrer"
-      loading="lazy"
-      decoding="async"
-      onError={() => setIdx(prev => prev + 1)}
-      {...props}
-    />
+    <div className={`universe-dashboard-root ${isDark ? 'dark-theme' : 'light-theme'}`} data-theme={isDark ? "dark" : "light"}>
+      {/* Global CSS custom variables overrides that update the entire Aura UI dynamically */}
+      <style>{`
+        :root {
+          --aura-primary: ${themeColors.primary};
+          --aura-secondary: ${themeColors.secondary};
+          --aura-accent: ${themeColors.accent};
+          --aura-primary-rgb: ${hexToRgb(themeColors.primary)};
+          --aura-secondary-rgb: ${hexToRgb(themeColors.secondary)};
+          --aura-accent-rgb: ${hexToRgb(themeColors.accent)};
+        }
+
+        /* Dashboard-wide static token style re-skins */
+        .text-blue-500 { color: var(--aura-primary) !important; }
+        .text-blue-400 { color: var(--aura-primary) !important; }
+        .bg-blue-500\/5 { background-color: rgba(var(--aura-primary-rgb), 0.05) !important; }
+        .bg-blue-500\/10 { background-color: rgba(var(--aura-primary-rgb), 0.1) !important; }
+        .bg-blue-500\/15 { background-color: rgba(var(--aura-primary-rgb), 0.15) !important; }
+        .border-blue-500\/10 { border-color: rgba(var(--aura-primary-rgb), 0.1) !important; }
+        .border-blue-500\/20 { border-color: rgba(var(--aura-primary-rgb), 0.2) !important; }
+        .hover\:border-blue-500\/30:hover { border-color: rgba(var(--aura-primary-rgb), 0.3) !important; }
+        .shadow-blue-500\/40 { box-shadow: 0 4px 14px 0 rgba(var(--aura-primary-rgb), 0.4) !important; }
+        .shadow-blue-500\/30 { box-shadow: 0 4px 14px 0 rgba(var(--aura-primary-rgb), 0.3) !important; }
+        .shadow-blue-500\/20 { box-shadow: 0 4px 14px 0 rgba(var(--aura-primary-rgb), 0.2) !important; }
+        .bg-gradient-to-br.from-blue-500.to-cyan-400 {
+          background-image: linear-gradient(135deg, var(--aura-primary), var(--aura-accent)) !important;
+        }
+
+        .text-green-500 { color: var(--aura-secondary) !important; }
+        .text-green-400 { color: var(--aura-secondary) !important; }
+        .bg-green-500\/5 { background-color: rgba(var(--aura-secondary-rgb), 0.05) !important; }
+        .bg-green-500\/10 { background-color: rgba(var(--aura-secondary-rgb), 0.1) !important; }
+        .bg-green-500\/15 { background-color: rgba(var(--aura-secondary-rgb), 0.15) !important; }
+        .border-green-500\/10 { border-color: rgba(var(--aura-secondary-rgb), 0.1) !important; }
+        .border-green-500\/20 { border-color: rgba(var(--aura-secondary-rgb), 0.2) !important; }
+        .hover\:border-green-500\/30:hover { border-color: rgba(var(--aura-secondary-rgb), 0.3) !important; }
+
+        .text-yellow-500 { color: var(--aura-accent) !important; }
+        .text-yellow-400 { color: var(--aura-accent) !important; }
+        .bg-yellow-500\/5 { background-color: rgba(var(--aura-accent-rgb), 0.05) !important; }
+        .bg-yellow-500\/10 { background-color: rgba(var(--aura-accent-rgb), 0.1) !important; }
+        .bg-yellow-500\/15 { background-color: rgba(var(--aura-accent-rgb), 0.15) !important; }
+        .border-yellow-500\/10 { border-color: rgba(var(--aura-accent-rgb), 0.1) !important; }
+        .border-yellow-500\/20 { border-color: rgba(var(--aura-accent-rgb), 0.2) !important; }
+        .hover\:border-yellow-500\/30:hover { border-color: rgba(var(--aura-accent-rgb), 0.3) !important; }
+
+        .text-red-500 { color: var(--aura-accent) !important; }
+        .text-red-400 { color: var(--aura-accent) !important; }
+        .bg-red-500\/5 { background-color: rgba(var(--aura-accent-rgb), 0.05) !important; }
+        .bg-red-500\/10 { background-color: rgba(var(--aura-accent-rgb), 0.1) !important; }
+        .bg-red-500\/15 { background-color: rgba(var(--aura-accent-rgb), 0.15) !important; }
+        .border-red-500\/10 { border-color: rgba(var(--aura-accent-rgb), 0.1) !important; }
+        .border-red-500\/20 { border-color: rgba(var(--aura-accent-rgb), 0.2) !important; }
+        .hover\:border-red-500\/30:hover { border-color: rgba(var(--aura-accent-rgb), 0.3) !important; }
+      `}</style>
+      {/* Toast Notification Container */}
+      <div className="fixed bottom-6 right-6 z-[99999] flex flex-col gap-3 pointer-events-none">
+        <AnimatePresence>
+          {toasts.map((t) => {
+            const scheme = ({
+              success: {
+                border: 'border-emerald-500/20 bg-[#071912]/95',
+                bar: 'bg-emerald-400 shadow-[0_0_12px_#34d399]',
+                iconBg: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+              },
+              error: {
+                border: 'border-red-500/20 bg-[#140507]/95',
+                bar: 'bg-red-400 shadow-[0_0_12px_#f87171]',
+                iconBg: 'bg-red-500/10 text-red-500 border border-red-500/20',
+              },
+              warning: {
+                border: 'border-[#f59e0b]/20 bg-[#140d05]/95',
+                bar: 'bg-amber-400 shadow-[0_0_12px_#fbbf24]',
+                iconBg: 'bg-[#f59e0b]/10 text-amber-400 border border-[#f59e0b]/20',
+              },
+              info: {
+                border: 'border-cyan-500/20 bg-[#05111c]/95',
+                bar: 'bg-cyan-400 shadow-[0_0_12px_#22d3ee]',
+                iconBg: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20',
+              }
+            })[t.type || 'info'];
+
+            return (
+              <motion.div
+                key={t.id}
+                initial={{ opacity: 0, x: 20, y: 10, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9, x: 20 }}
+                className={`min-w-[280px] ${scheme.border} border p-4 pointer-events-auto shadow-2xl relative overflow-hidden backdrop-blur-md rounded-xl`}
+              >
+                <div className={`absolute inset-y-0 left-0 w-1 ${scheme.bar}`} />
+                <div className="flex items-start gap-3 pl-1">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black ${scheme.iconBg}`}>{t.ic}</div>
+                  <div className="flex-1">
+                    <h4 className="text-[11px] font-black text-white uppercase tracking-tighter leading-tight">{t.title}</h4>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase mt-0.5 leading-tight">{t.content}</p>
+                  </div>
+                  <button 
+                    onClick={() => setToasts(prev => prev.filter(tt => tt.id !== t.id))}
+                    className="text-zinc-600 hover:text-white transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+
+      <style>{`
+        .universe-dashboard-root {
+          --bg: #05080c;
+          --bg2: #0a0e14;
+          --bg3: #0d121b;
+          --surface: #0a0e14;
+          --surface2: #0f151e;
+          --border: rgba(255,255,255,0.06);
+          --border2: rgba(255,255,255,0.03);
+          --text: #ffffff;
+          --text2: #94a3b8;
+          --text3: #475569;
+          --cyan: #38bdf8;
+          --cyan2: #0ea5e9;
+          --blue: #3b82f6;
+          --purple: #a78bfa;
+          --green: #34d399;
+          --red: #f87171;
+          --yellow: #fbbf24;
+          --orange: #fb923c;
+          --pink: #f472b6;
+          --white: #f8fafc;
+          --sidebar-w: 220px;
+          --topbar-h: 56px;
+          --r: 0px; /* Global Sharpness! */
+          --shadow: 0 4px 24px rgba(0,0,0,0.6);
+          font-family: 'Inter', 'Google Sans', sans-serif;
+          background: var(--bg);
+          color: var(--text);
+          min-height: 100vh;
+        }
+        .universe-dashboard-root[data-theme="light"] {
+          --bg: #f8fafc;
+          --bg2: #ffffff;
+          --bg3: #f1f5f9;
+          --surface: #ffffff;
+          --surface2: #f8fafc;
+          --border: rgba(0,0,0,0.05);
+          --border2: rgba(0,0,0,0.02);
+          --text: #0f172a;
+          --text2: #475569;
+          --text3: #94a3b8;
+          --shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+
+        .universe-dashboard-root * { box-sizing: border-box; border-radius: 0 !important; } /* Hard Sharpness Enforcement */
+
+        .ud-sidebar {
+          position: fixed; top: 0; left: 0; bottom: 0;
+          width: var(--sidebar-w);
+          background: var(--bg2);
+          border-right: 1px solid var(--border);
+          display: flex; flex-direction: column;
+          z-index: 300;
+          transition: transform 0.3s cubic-bezier(.4,0,.2,1), width 0.3s cubic-bezier(.4,0,.2,1);
+        }
+        .ud-sidebar.collapsed { width: 72px; }
+        
+        .ud-logo-wrap {
+          display: flex; align-items: center; gap: 12px;
+          padding: 24px; border-bottom: 1px solid var(--border);
+          min-height: 80px; cursor: pointer;
+          transition: all 0.2s ease;
+          background: #000;
+        }
+        .ud-logo-wrap:hover { background: #050505; }
+        .ud-sidebar.collapsed .ud-logo-wrap {
+          padding: 24px 0;
+          justify-content: center;
+        }
+        .ud-logo-icon {
+          width: 44px; height: 44px; border: 1px solid rgba(56,189,248,0.2); flex-shrink: 0;
+          background: #000;
+          display: flex; align-items: center; justify-content: center;
+          position: relative; overflow: hidden;
+        }
+        .ud-logo-name {
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 16px; font-weight: 900;
+          color: #fff;
+          letter-spacing: 0.15em; white-space: nowrap;
+          line-height: 1; text-transform: uppercase;
+        }
+        .ud-logo-sub {
+          font-size: 9px; color: var(--cyan); letter-spacing: 0.4em;
+          text-transform: uppercase; white-space: nowrap;
+          font-weight: 800; opacity: 0.6;
+          margin-top: 2px;
+        }
+
+        .ud-nav { flex: 1; padding: 16px 8px; overflow-y: auto; }
+        .ud-nav-label {
+          font-size: 9px; color: var(--text3); letter-spacing: 0.15em;
+          text-transform: uppercase; padding: 16px 12px 8px; font-weight: 800;
+        }
+        .ud-nav-item {
+          display: flex; align-items: center; gap: 12px;
+          padding: 10px 14px;
+          color: var(--text2); font-size: 11px; font-weight: 800;
+          transition: all 0.15s; cursor: pointer; margin-bottom: 2px;
+          position: relative; border: 1px solid transparent; text-transform: uppercase; tracking-widest;
+        }
+        .ud-nav-item:hover { background: var(--bg3); color: var(--text); border-color: var(--border); }
+        .ud-nav-item.active { background: rgba(56,189,248,0.05); color: var(--cyan); border-color: rgba(56,189,248,0.1); }
+        .ud-nav-item.active::before {
+          content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+          width: 3px; background: var(--cyan);
+        }
+        .ud-nav-badge {
+          font-size: 8px; font-weight: 900; padding: 1px 6px; border: 1px solid currentColor;
+        }
+
+        .ud-user-panel { padding: 8px; border-top: 1px solid var(--border); background: #000; }
+        .ud-user-card {
+          display: flex; align-items: center; gap: 10px;
+          padding: 10px 14px; cursor: pointer; transition: all 0.15s; border: 1px solid var(--border);
+        }
+        .ud-user-card:hover { border-color: var(--cyan); background: var(--bg3); }
+        .ud-user-av {
+          width: 34px; height: 34px; flex-shrink: 0;
+          background: #111; border: 1px solid var(--border);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 11px; font-weight: 900; color: white;
+        }
+        .ud-online-dot { width: 6px; height: 6px; background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+        .ud-main { 
+          margin-left: var(--sidebar-w); min-height: 100vh; 
+          display: flex; flex-direction: column; transition: margin-left 0.3s; 
+          background: var(--bg);
+        }
+        .ud-main.wide { margin-left: 72px; }
+
+        .ud-topbar {
+          position: sticky; top: 0; z-index: 200; height: var(--topbar-h);
+          background: var(--bg2); border-bottom: 1px solid var(--border);
+          display: flex; align-items: center; gap: 12px; padding: 0 24px;
+        }
+        .ud-topbar-toggle {
+          width: 36px; height: 36px; background: none; border: 1px solid var(--border);
+          color: var(--text2); display: flex; align-items: center; justify-content: center;
+          transition: all 0.15s; cursor: pointer;
+        }
+        .ud-topbar-toggle:hover { background: var(--bg3); color: var(--text); border-color: var(--text2); }
+        
+        .ud-search-box {
+          display: flex; align-items: center; gap: 6px;
+          background: var(--bg); border: 1px solid var(--border);
+          padding: 6px 14px; width: 240px; transition: all 0.2s; cursor: pointer;
+        }
+        .ud-search-box input { background: none; border: none; color: var(--text); font-size: 11px; width: 100%; cursor: pointer; outline: none; font-weight: 700; text-transform: uppercase; }
+        
+        .ud-tb-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+        .ud-tb-btn {
+          width: 38px; height: 38px; background: var(--bg); border: 1px solid var(--border);
+          display: flex; align-items: center; justify-content: center;
+          color: var(--text2); transition: all 0.15s; position: relative; cursor: pointer;
+        }
+        .ud-tb-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+        .ud-tb-pip { position: absolute; top: -1px; right: -1px; width: 8px; height: 8px; background: var(--red); border: 1px solid var(--bg2); }
+
+        .ud-content { flex: 1; padding: 32px; display: flex; flex-direction: column; gap: 32px; max-width: 1600px; margin: 0 auto; w-full; }
+
+        .ud-welcome {
+          background: #000; border: 1px solid var(--border);
+          padding: 32px 40px; position: relative; overflow: hidden;
+        }
+        .ud-welcome-bg {
+          position: absolute; inset: 0; pointer-events: none; opacity: 0.1;
+          background-image: linear-gradient(rgba(56,189,248,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.1) 1px, transparent 1px);
+          background-size: 20px 20px;
+        }
+        .ud-welcome-title { font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 900; color: var(--white); margin-bottom: 4px; text-transform: uppercase; letter-spacing: -0.02em; }
+        .ud-welcome-title span { color: var(--cyan); }
+        .ud-welcome-desc { font-size: 11px; color: var(--text2); line-height: 1.6; max-width: 500px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        .ud-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+        .ud-metric {
+          background: var(--bg2); border: 1px solid var(--border);
+          padding: 20px; transition: all 0.3s ease; position: relative; overflow: hidden; cursor: default;
+        }
+        .ud-metric:hover { 
+          border-color: var(--cyan); 
+          background: var(--bg3);
+          transform: translateY(-2px);
+        }
+        .ud-m-val { 
+          font-family: 'Space Grotesk', sans-serif; 
+          font-size: 28px; 
+          font-weight: 900; 
+          margin-bottom: 2px; 
+          letter-spacing: -0.06em; 
+        }
+        .ud-m-label { 
+          font-size: 9px; 
+          color: var(--text3); 
+          font-weight: 900; 
+          text-transform: uppercase; 
+          letter-spacing: 0.2em; 
+        }
+
+        .ud-charts-row { display: grid; grid-template-columns: 1fr 360px; gap: 20px; }
+        .ud-panel { background: var(--bg2); border: 1px solid var(--border); overflow: hidden; }
+        .ud-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); background: #000; }
+        .ud-panel-title { font-size: 11px; font-weight: 900; color: var(--text); text-transform: uppercase; letter-spacing: 0.1em; }
+
+        .ud-tables-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .ud-table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th { font-size: 9px; color: var(--text3); text-transform: uppercase; padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-weight: 900; letter-spacing: 0.1em; }
+        td { padding: 12px 16px; font-size: 11px; color: var(--text2); border-bottom: 1px solid var(--border2); font-weight: 700; }
+        
+        .ud-bottom-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+        .ud-status-chip { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border: 1px solid var(--border); font-size: 10px; color: var(--text2); cursor: default; font-weight: 800; text-transform: uppercase; }
+        .ud-sc-dot { width: 6px; height: 6px; }
+
+        @media(max-width: 1200px) {
+          .ud-metrics { grid-template-columns: repeat(2, 1fr); }
+          .ud-charts-row { grid-template-columns: 1fr; }
+          .ud-tables-row { grid-template-columns: 1fr; }
+          .ud-bottom-row { grid-template-columns: 1fr 1fr; }
+        }
+        @media(max-width: 900px) {
+          .ud-sidebar { transform: translateX(-100%); }
+          .ud-sidebar.mob-open { transform: translateX(0); }
+          .ud-main { margin-left: 0 !important; }
+        }
+        @media(max-width: 640px) {
+          .ud-metrics { grid-template-columns: 1fr 1fr; }
+          .ud-bottom-row { grid-template-columns: 1fr; }
+          .ud-search-box { display: none; }
+        }
+      `}</style>
+
+      {/* MOBILE OVERLAY */}
+      {mobileOpen && <div className="fixed inset-0 bg-black/50 z-[299] backdrop-blur-sm" onClick={() => setMobileOpen(false)} />}
+
+      {/* SIDEBAR */}
+      <aside className={`ud-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mob-open' : ''}`}>
+        <div className="ud-logo-wrap" onClick={onBack}>
+          <div className="ud-logo-icon">
+            <img src={GAMURA_G_LOGO} className="w-9 h-9 object-contain" alt="Logo" />
+          </div>
+          {!collapsed && (
+            <div className="flex flex-col ml-3">
+              <span className="ud-logo-name">GAMURA</span>
+              <span className="ud-logo-sub">UNIVERSE</span>
+            </div>
+          )}
+        </div>
+
+        <nav className="ud-nav">
+          {navGroups.map((group, gIdx) => (
+            <React.Fragment key={gIdx}>
+              {group.label && !collapsed && <div className="ud-nav-label mt-4">{group.label}</div>}
+              {group.items.map((item: any, iIdx) => (
+                <div 
+                  key={iIdx} 
+                  className={`ud-nav-item group relative hover:bg-white/10 ${activeTab === item.name ? 'active bg-cyan-500/10' : ''}`}
+                  onClick={() => {
+                    if (item.action) {
+                      item.action();
+                    } else {
+                      setActiveTab(item.name);
+                    }
+                  }}
+                >
+                  {/* Sidebar Teal indicator bar like in screenshot */}
+                  {activeTab === item.name && (
+                    <motion.div 
+                      layoutId="activeNav"
+                      className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-cyan-400 rounded-r-full shadow-[0_0_8px_rgba(34,211,238,0.5)]" 
+                    />
+                  )}
+                  
+                  <div className={`transition-transform duration-300 ${activeTab === item.name ? 'scale-110 text-cyan-400' : 'group-hover:scale-110 text-zinc-500'} group-hover:text-cyan-400`}>
+                    {item.icon}
+                  </div>
+                  {!collapsed && <span className={`flex-1 font-black text-xs tracking-tight ${activeTab === item.name ? 'text-cyan-400' : 'text-zinc-400 group-hover:text-zinc-200'}`}>{item.name}</span>}
+                  {!collapsed && item.badge && (
+                    <span className={`ud-nav-badge px-2 py-0.5 text-[9px] font-black ${item.badgeColor === 'yellow' ? 'bg-amber-500/20 text-amber-500' : `nb-${item.badgeColor}`}`}>{item.badge}</span>
+                  )}
+                </div>
+              ))}
+            </React.Fragment>
+          ))}
+        </nav>
+
+        {/* BOTTOM CONNECT BUTTON / USER INFO */}
+        {!collapsed && (
+          <div className="p-4 mt-auto">
+            {isLoggedIn ? (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/5 border border-white/10 rounded-2xl p-3 flex items-center gap-3 cursor-pointer hover:bg-white/10 transition-all group"
+                onClick={() => setProfileOpen(true)}
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-400/20 to-blue-400/20 flex items-center justify-center text-cyan-400 font-black text-sm relative p-1.5 overflow-hidden">
+                  {userInfo?.avatarUrl ? (
+                    <img src={userInfo.avatarUrl} className="w-full h-full object-cover rounded-lg" alt="User" />
+                  ) : user?.photoURL ? (
+                    <img src={user.photoURL} className="w-full h-full object-cover rounded-lg" alt="User" />
+                  ) : (
+                    <User size={18} />
+                  )}
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <div className="text-[11px] font-black text-zinc-100 truncate">{displayName}</div>
+                  <div className="text-[8px] font-black text-cyan-500 uppercase tracking-widest truncate">{gamuraId}</div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.button 
+                whileHover={{ scale: 1.02, boxShadow: '0 0 20px rgba(34,211,238,0.3)' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  showToast('🔌', 'Authenticating', 'Establishing neural uplink...');
+                  onConnect();
+                }}
+                className="w-full bg-cyan-500 text-black font-black text-[11px] py-3 rounded-xl uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(34,211,238,0.2)] border border-cyan-400/50"
+              >
+                <Zap size={14} fill="currentColor" />
+                CONNECT
+              </motion.button>
+            )}
+          </div>
+        )}
+
+      </aside>
+
+      {/* MAIN */}
+      <main className={`ud-main ${collapsed ? 'wide' : ''}`}>
+        <header className="ud-topbar">
+          <button className="ud-topbar-toggle" onClick={() => {
+            if (window.innerWidth <= 900) setMobileOpen(!mobileOpen);
+            else setCollapsed(!collapsed);
+          }}>
+            <Menu size={18} />
+          </button>
+
+          <div className="flex items-center gap-4">
+            <h1 className="text-[18px] font-black tracking-tighter leading-none text-white uppercase font-sans">DASHBOARD</h1>
+            <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
+            <p className="text-[10px] text-zinc-500 font-bold tracking-widest hidden sm:block uppercase">Command Center</p>
+          </div>
+
+          <div className="ud-tb-actions">
+            <button className="ud-tb-btn group" onClick={() => {
+              setIsDark(!isDark);
+              addActivity(isDark ? "Switched to Light mode" : "Switched to Dark mode", "🌓");
+            }}>
+              {isDark ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+            <button className="ud-tb-btn group" onClick={() => {
+              setNotifOpen(!notifOpen);
+              if (!notifOpen) {
+                // Mark all as read when opening? Or just leave it.
+              }
+              addActivity("Checked notifications", "🔔");
+            }}>
+              <Bell size={17} />
+              {notifications.some(n => n.unread) && (
+                <span className="absolute top-[8px] right-[9px] w-1.5 h-1.5 rounded-full bg-red-500 border border-zinc-900 shadow-[0_0_10px_rgba(239,68,68,0.5)]" />
+              )}
+            </button>
+            <button className="ud-tb-btn group" onClick={handleRefresh}>
+               <RotateCw size={17} className={`${isRefreshing ? 'animate-spin' : ''} transition-all`} />
+            </button>
+            
+            <motion.button 
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onBack}
+              className="ud-user-av ml-2 cursor-pointer shadow-[0_0_15px_rgba(56,189,248,0.4)] border border-white/20 bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center group relative"
+            >
+              <Home size={14} className="text-white group-hover:hidden" />
+              <span className="hidden group-hover:block text-[9px] font-black">EXIT</span>
+            </motion.button>
+          </div>
+        </header>
+
+        <div className="ud-content">
+          {activeTab === "Portfolio Builder" ? (
+            <PortfolioBuilderView onBack={() => setActiveTab("Analytics")} showToast={showToast} />
+          ) : activeTab === "Neutral Link" ? (
+            <NeuralLinkView 
+              onBack={() => setActiveTab("Analytics")} 
+              user={user} 
+              userInfo={userInfo}
+              showToast={showToast}
+              addActivity={addActivity}
+            />
+          ) : activeTab === "Users" ? (
+            <UsersView 
+              db={db} 
+              currentUser={user} 
+              showToast={showToast} 
+              addActivity={addActivity} 
+              initialFilter="all" 
+              onBack={() => setActiveTab("Analytics")} 
+            />
+          ) : activeTab === "Active Users" ? (
+            <UsersView 
+              db={db} 
+              currentUser={user} 
+              showToast={showToast} 
+              addActivity={addActivity} 
+              initialFilter="active" 
+              onBack={() => setActiveTab("Analytics")} 
+            />
+          ) : activeTab === "Aura Settings" ? (
+             <AuraSettingsView onBack={() => setActiveTab("Analytics")} showToast={showToast} />
+          ) : activeTab === "Galaxy Core" ? (
+             <GalaxyCoreView />
+          ) : activeTab === "Features" ? (
+            <FeaturesView onBack={() => setActiveTab("Analytics")} loaderImgSources={loaderImgSources} showToast={showToast} />
+          ) : activeTab === "Integrations" ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-2">
+              {[
+                { id: "Vercel", name: "Vercel", desc: "Manage deployments and edge functions directly.", ic: <ArrowUpRight size={32} />, color: "bg-black" },
+                { id: "Netlify", name: "Netlify", desc: "Global hosting and serverless form handling.", ic: <Globe size={32} />, color: "bg-cyan-500/10" },
+                { id: "Slack", name: "Slack", desc: "Push system alerts and logs to your workspace.", ic: <MessageSquare size={32} />, color: "bg-red-500/10" },
+                { id: "Discord", name: "Discord", desc: "Gamified community management and webhooks.", ic: <MessageCircle size={32} />, color: "bg-indigo-500/10" },
+              ].map((app, i) => {
+                const isConnected = connectedApps.includes(app.id);
+                return (
+                  <motion.div 
+                    key={i}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="ud-panel p-6 flex flex-col gap-4 group hover:border-cyan-500/30 transition-all cursor-default"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className={`w-14 h-14 rounded-2xl ${app.color} flex items-center justify-center border border-white/5`}>
+                        {app.ic}
+                      </div>
+                      {isConnected ? (
+                        <div className="px-2 py-1 rounded-md bg-emerald-500/20 text-emerald-500 text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Authorized
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => handleConnectApp(app.id)}
+                          className="px-3 py-1.5 rounded-lg bg-cyan-500 text-black text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform"
+                        >
+                          Authorize
+                        </button>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-white">{app.name}</h3>
+                      <p className="text-xs text-zinc-500 font-medium leading-relaxed mt-1">{app.desc}</p>
+                    </div>
+                    {isConnected && (
+                      <div className="mt-2 pt-4 border-t border-white/5 flex gap-2">
+                         <button className="text-[10px] font-bold text-zinc-500 hover:text-white transition-colors">Configure</button>
+                         <div className="w-px h-3 bg-white/10 my-auto" />
+                         <button className="text-[10px] font-bold text-red-500/60 hover:text-red-500 transition-colors">Revoke</button>
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              {/* WELCOME CARD */}
+              <div className="ud-welcome py-8">
+            <div className="ud-welcome-bg" />
+            <div className="ud-welcome-grid absolute inset-0 opacity-10" />
+            <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-2 text-[10px] font-black text-cyan-400 uppercase tracking-widest">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+                  Live Dashboard
+                </div>
+                <h1 className="ud-welcome-title">Welcome back, <span className="text-cyan-400">{displayName}!</span> 👋</h1>
+            </div>
+          </div>
+          
+          {/* QUICK ADD MODULE */}
+          <div className="mb-8 group">
+            <form 
+              onSubmit={handleQuickAdd}
+              className="bg-black/40 border border-white/10 rounded-[2rem] p-2 flex flex-col md:flex-row items-center gap-2 group-hover:border-cyan-500/30 transition-all shadow-xl backdrop-blur-md relative"
+            >
+              <div className="flex items-center flex-1 w-full gap-2">
+                <div className="w-10 h-10 rounded-2xl bg-zinc-800 flex items-center justify-center text-zinc-500 group-focus-within:text-cyan-400 group-focus-within:bg-cyan-500/10 transition-all ml-1 shrink-0">
+                  <Plus size={18} />
+                </div>
+                <input 
+                  type="text" 
+                  value={quickAddText}
+                  onChange={(e) => setQuickAddText(e.target.value)}
+                  placeholder="Broadcast a quick task or signal to the mesh..."
+                  className="flex-1 bg-transparent border-none outline-none text-xs font-bold text-white placeholder:text-zinc-600 px-2 font-sans"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full md:w-auto px-2 pb-2 md:pb-0">
+                <button 
+                  type="submit"
+                  disabled={!quickAddText.trim()}
+                  className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl text-black text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] disabled:opacity-30 disabled:grayscale disabled:scale-100 shrink-0"
+                >
+                  SYNC SIGNAL
+                </button>
+              </div>
+            </form>
+          </div>
+          
+          {/* GITHUB PIPELINE DIRECT COUPLING */}
+          <div className="mb-8 p-6 bg-zinc-950/60 border border-white/5 rounded-3xl relative overflow-hidden backdrop-blur-md shadow-2xl">
+            {/* Ambient subtle glow */}
+            <div className="absolute top-0 right-0 w-44 h-44 bg-cyan-400/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-10 -left-10 w-44 h-44 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-4 mb-5 gap-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[12px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-mono font-bold tracking-wider uppercase">Pipeline Engine</span>
+                </div>
+                <h3 className="text-sm font-black uppercase text-white tracking-[0.1em] font-sans">GitHub Direct Deploy Connection</h3>
+                <p className="text-[9.5px] text-zinc-500 font-mono">Push compiled developer portfolio and live code modifications directly to GitHub</p>
+              </div>
+
+              <div className="flex items-center gap-1.5 self-start md:self-auto font-mono text-[9px] text-zinc-400">
+                <div className={`w-2 h-2 rounded-full ${dbStatus.type === 'success' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : dbToken ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]' : 'bg-zinc-600 animate-pulse'}`} />
+                <span className="font-bold tracking-widest uppercase">
+                  {dbStatus.type === 'success' ? 'Active Uplink' : dbToken ? 'Configured' : 'Offline'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+              <div>
+                <label className="block text-[8px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5 font-black">GitHub Token</label>
+                <input 
+                  type="password"
+                  placeholder="ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                  value={dbToken}
+                  onChange={(e) => setDbToken(e.target.value)}
+                  className="w-full bg-zinc-900/60 border border-white/10 rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:border-cyan-500 font-mono transition-all placeholder:text-zinc-700"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[8px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5 font-black">Repository Target</label>
+                <input 
+                  type="text"
+                  placeholder="my-personal-portfolio"
+                  value={dbRepo}
+                  onChange={(e) => setDbRepo(e.target.value)}
+                  className="w-full bg-zinc-900/60 border border-white/10 rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:border-cyan-500 font-mono transition-all placeholder:text-zinc-700"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[8px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5 font-black">Commit Annotation</label>
+                <input 
+                  type="text"
+                  placeholder="Publish custom changes"
+                  value={dbCommitMsg}
+                  onChange={(e) => setDbCommitMsg(e.target.value)}
+                  className="w-full bg-zinc-900/60 border border-white/10 rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:border-cyan-500 font-mono transition-all placeholder:text-zinc-700"
+                />
+              </div>
+            </div>
+
+            {dbStatus.type !== "idle" && (
+              <div className={`p-3 text-[9px] font-mono rounded-xl border mb-5 leading-relaxed ${
+                dbStatus.type === "loading" ? "bg-amber-500/10 border-amber-500/20 text-amber-300" :
+                dbStatus.type === "success" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300 break-all" :
+                "bg-red-500/10 border-red-500/20 text-red-300 break-all"
+              }`}>
+                <div className="flex items-start gap-2">
+                  <div className="mt-0.5 font-black font-sans">
+                    {dbStatus.type === "loading" ? "⏳" : dbStatus.type === "success" ? "⚡" : "⚠️"}
+                  </div>
+                  <div>
+                    <span className="font-bold">{dbStatus.message}</span>
+                    {dbStatus.type === "success" && dbStatus.url && (
+                      <div className="mt-2 flex gap-3">
+                        <a 
+                          href={dbStatus.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 hover:text-emerald-200 rounded-md transition-all font-black uppercase text-[8px] tracking-widest inline-flex items-center gap-1 border border-emerald-500/30"
+                        >
+                          View Repository <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-white/5">
+              <span className="text-[9px] text-zinc-500 leading-relaxed font-mono">
+                {dbStatus.type === 'success' 
+                  ? '🎯 Portfolio synchronized on the decentralized internet successfully.' 
+                  : '🔧 Compiles single-page static HTML structures via developer pipeline parameters.'}
+              </span>
+              
+              <button 
+                onClick={handleDashboardPublishGithub}
+                disabled={dbStatus.type === "loading"}
+                className={`py-3 px-8 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-pointer flex items-center justify-center gap-1.5 transition-all self-end sm:self-auto ${
+                  dbStatus.type === "loading" 
+                    ? "bg-zinc-800 text-zinc-500 border border-zinc-700" 
+                    : "bg-[#10b981] hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.35)] hover:scale-[1.02] active:scale-[0.98] duration-200"
+                }`}
+              >
+                {dbStatus.type === "loading" ? (
+                  <span className="flex items-center gap-1.5 justify-center">
+                    <RefreshCw className="w-3 h-3 animate-spin text-amber-300" />
+                    <span>Syncing Uplink...</span>
+                  </span>
+                ) : (
+                  <>
+                    Sync to GitHub 🚀
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* METRICS */}
+          <div className="ud-metrics">
+            {[
+              { label: "Total Users", val: totalUsersVal, trend: "+12.4%", color: "text-cyan-400" },
+              { label: "Uptime", val: "98.7%", trend: "+0.3%", color: "text-violet-400" },
+              { label: "Avg Load Time", val: "1.2s", trend: "-0.3s", color: "text-yellow-400" },
+              { label: "Features Shipped", val: "16", trend: "+24%", color: "text-emerald-400" },
+            ].map((m, i) => (
+              <motion.div 
+                key={i} 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className="ud-metric group relative"
+              >
+                        {(m.label === "Total Users" || m.label === "Uptime") && (
+                          <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                            {m.label === "Total Users" ? <Users size={64} /> : <Sparkles size={64} />}
+                          </div>
+                        )}
+                <div className="flex justify-between items-start mb-4">
+                  <div className={`p-2 rounded-xl bg-zinc-800/80 text-zinc-400 group-hover:text-white group-hover:bg-cyan-500/20 group-hover:border-cyan-500/30 border border-white/5 transition-all duration-500 flex items-center justify-center`}>
+                    {m.label === "Total Users" ? <Users size={14} /> : m.label === "Uptime" ? <Sparkles size={14} /> : m.label === "Avg Load Time" ? <Activity size={14} /> : <ArrowRight size={14} />}
+                  </div>
+                  <div className={`text-[8px] font-black px-2 py-0.5 rounded-md bg-white/5 backdrop-blur-sm border border-white/5 shadow-inner ${m.trend.startsWith('+') ? 'text-emerald-500' : 'text-red-500'}`}>
+                    {m.trend}
+                  </div>
+                </div>
+                        <div className="relative z-10">
+                          <div className={`ud-m-val ${m.color} transition-colors duration-500`}>{m.val}</div>
+                          <div className="ud-m-label">{m.label}</div>
+                        </div>
+                {/* Background glow on hover */}
+                <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              </motion.div>
+            ))}
+          </div>
+
+          {/* CHARTS ROW */}
+          <div className="ud-charts-row">
+            <div className="ud-panel">
+              <div className="ud-panel-head">
+                <span className="ud-panel-title">Traffic Overview</span>
+              </div>
+              <div className="p-4 pt-1 h-[260px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trafficData}>
+                    <defs>
+                      <linearGradient id="colorVis" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#38bdf8" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorAct" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#a78bfa" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#a78bfa" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis 
+                      dataKey="name" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fill: '#475569', fontSize: 10, fontWeight: 700 }}
+                      dy={10}
+                    />
+                    <YAxis hide />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1a2332', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                      itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
+                    />
+                    <Area type="monotone" dataKey="visitors" stroke="#38bdf8" strokeWidth={3} fillOpacity={1} fill="url(#colorVis)" />
+                    <Area type="monotone" dataKey="active" stroke="#a78bfa" strokeWidth={3} fillOpacity={1} fill="url(#colorAct)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="ud-panel">
+              <div className="ud-panel-head">
+                <span className="ud-panel-title">Platform Distribution</span>
+              </div>
+              <div className="p-6 flex flex-col items-center">
+                <div className="relative w-40 h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={platformData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={70}
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {platformData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-black text-white">60%</span>
+                    <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Mobile</span>
+                  </div>
+                </div>
+                <div className="w-full mt-8 space-y-4">
+                  {[
+                    { label: "Mobile", pct: "60%", color: "bg-cyan-500", val: "2.9K" },
+                    { label: "Desktop", pct: "30%", color: "bg-violet-500", val: "1.4K" },
+                    { label: "Tablet", pct: "10%", color: "bg-emerald-500", val: "482" },
+                  ].map((d, i) => (
+                    <div key={i} className="flex items-center gap-4 group cursor-default">
+                      <div className={`w-1.5 h-1.5 rounded-full ${d.color} shadow-[0_0_8px_rgba(0,0,0,0.5)]`} />
+                      <span className="text-[11px] font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors flex-1">{d.label}</span>
+                      <div className="flex-1 max-w-[80px] h-1 bg-zinc-800 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: d.pct }}
+                          transition={{ duration: 1.5, delay: 0.5 + i * 0.1, ease: "circOut" }}
+                          className={`h-full ${d.color}`} 
+                        />
+                      </div>
+                      <span className="text-[11px] font-black text-zinc-200 font-mono w-10 text-right">{d.pct}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* TABLES ROW */}
+          <div className="ud-tables-row">
+            <div className="ud-panel">
+              <div className="ud-panel-head">
+                 <span className="ud-panel-title">Recent Users</span>
+                 <button className="text-[11px] text-cyan-400 font-bold hover:underline">View All →</button>
+              </div>
+              <div className="ud-table-wrap">
+                 <table>
+                   <thead>
+                     <tr><th>User</th><th>Joined</th><th>Status</th><th>Activity</th></tr>
+                   </thead>
+                   <tbody>
+                      {recentUsers.length > 0 ? recentUsers.map((u, i) => {
+                        const lastSeen = u.lastLogin?.toDate ? u.lastLogin.toDate() : new Date();
+                        const now = new Date();
+                        const diffMs = now.getTime() - lastSeen.getTime();
+                        const diffMin = Math.floor(diffMs / 60000);
+                        
+                        let status = "Offline";
+                        let statusColor = "zinc";
+                        if (diffMin < 5) {
+                          status = "Active";
+                          statusColor = "emerald";
+                        } else if (diffMin < 30) {
+                          status = "Away";
+                          statusColor = "yellow";
+                        }
+
+                        const joined = diffMin < 1 ? "Just now" : diffMin < 60 ? `${diffMin}m ago` : `${Math.floor(diffMin/60)}h ago`;
+                        
+                        return (
+                          <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
+                            <td className="font-bold text-zinc-100 group-hover:text-cyan-400 transition-colors uppercase text-[10px] tracking-tight flex items-center gap-2">
+                               <div className="w-1.5 h-1.5 rounded-full bg-cyan-400/50" />
+                               {u.username || "Anonymous"}
+                            </td>
+                            <td className="text-zinc-500 text-[9px] font-bold">{joined}</td>
+                            <td><span className={`text-[8px] font-black px-2 py-0.5 rounded-md bg-${statusColor}-500/10 text-${statusColor}-500 uppercase tracking-wider shadow-[0_0_10px_rgba(0,0,0,0.1)]`}>{status}</span></td>
+                            <td><div className="w-16 h-1 bg-zinc-800 rounded-full overflow-hidden"><motion.div initial={{ width: 0 }} animate={{ width: `${60 + (i * 7) % 35}%` }} className={`h-full bg-${statusColor}-500 rounded-full shadow-[0_0_5px_rgba(0,0,0,0.5)]`} /></div></td>
+                          </tr>
+                        );
+                      }) : (
+                        <tr>
+                          <td colSpan={4} className="text-center py-8 text-zinc-600 font-bold uppercase tracking-widest text-[10px]">No active user sessions found</td>
+                        </tr>
+                      )}
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+          </div>
+
+          <div className="ud-bottom-row">
+            <div className="ud-panel col-span-full border border-zinc-800/80 rounded-2xl bg-slate-950 overflow-hidden shadow-2xl">
+               <div className="ud-panel-head bg-black px-5 py-4 border-b border-zinc-900 flex items-center justify-between">
+                 <span className="text-[11px] font-black tracking-[0.2em] text-white uppercase font-sans">
+                   Activity Log
+                 </span>
+                 <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest font-mono">
+                   User Activity
+                 </span>
+               </div>
+               <div className="flex flex-col max-h-[620px] overflow-y-auto divide-y divide-zinc-900/60 bg-[#070a13]/80">
+                   {activities.length > 0 ? activities.slice(0, visibleActivitiesCount).map((a, i) => {
+                    const timeAgo = a.timestamp?.toDate ? Math.floor((new Date().getTime() - a.timestamp.toDate().getTime()) / 60000) : 0;
+                    const timeStr = timeAgo < 1 ? "Just now" : timeAgo < 60 ? `${timeAgo}m ago` : `${Math.floor(timeAgo/60)}h ago`;
+                    return (
+                      <div 
+                        key={i} 
+                        onClick={() => setExpandedActivityId(expandedActivityId === a.id ? null : (a.id || i.toString()))}
+                        className={`flex flex-col p-4.5 hover:bg-white/[0.02] active:bg-white/[0.04] transition-all cursor-pointer border-b border-zinc-900/40 last:border-0 ${expandedActivityId === a.id ? 'bg-white/[0.03]' : ''}`}
+                      >
+                         <div className="flex items-center gap-4">
+                            {(() => {
+                              const isKeyEvent = a.ic === "🔑" || a.title?.toLowerCase().includes("login") || a.title?.toLowerCase().includes("auth");
+                              const isLinkEvent = a.ic === "🔗" || a.ic === "🧬" || a.title?.toLowerCase().includes("connect");
+                              const iconBgClass = isKeyEvent 
+                                ? "bg-amber-500/10 border border-amber-500/20 text-amber-500" 
+                                : isLinkEvent 
+                                  ? "bg-sky-500/10 border border-sky-500/20 text-sky-450" 
+                                  : "bg-zinc-900 border border-zinc-800 text-slate-300";
+                              return (
+                                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm md:text-base font-bold transition-transform shrink-0 ${iconBgClass} ${expandedActivityId === a.id ? 'scale-110 shadow-[0_0_12px_rgba(245,158,11,0.2)]' : ''}`}>
+                                  {a.ic || "⚡"}
+                                </div>
+                              );
+                            })()}
+                         <div className="flex-1 min-w-0">
+                            <div className="text-[12.5px] font-bold text-slate-100 flex items-center justify-between gap-2">
+                                <span className={`truncate ${expandedActivityId === a.id ? 'text-cyan-400' : 'text-slate-200'}`}>{a.title}</span>
+                                <ChevronDown size={14} className={`text-slate-500 transition-transform shrink-0 ${expandedActivityId === a.id ? 'rotate-180 text-cyan-400' : ''}`} />
+                              </div>
+                            <div className="text-[10px] text-slate-500 flex justify-between items-center mt-1.5 font-sans">
+                               <div className="flex items-center gap-2">
+                                 <span className="font-semibold text-slate-400/80">{timeStr}</span>
+                                 {a.priority && (
+                                   <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
+                                     a.priority === 'High' ? 'bg-red-500/10 border border-red-500/20 text-red-400' :
+                                     a.priority === 'Medium' ? 'bg-amber-500/10 border border-amber-500/20 text-amber-500' :
+                                     'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                                   }`}>
+                                     {a.priority}
+                                   </span>
+                                 )}
+                                 {a.dueDate && (
+                                   <span className="flex items-center gap-1 text-[8px] text-slate-500 font-bold uppercase tracking-widest">
+                                     <Calendar size={10} /> {a.dueDate}
+                                   </span>
+                                 )}
+                               </div>
+                               {a.user && (
+                                 <span className="text-[10px] font-semibold text-slate-500/80 italic">
+                                   by {a.user}
+                                 </span>
+                               )}
+                            </div>
+                         </div>
+                      </div>
+                         
+                       <AnimatePresence>
+                         {expandedActivityId === a.id && (
+                           <motion.div 
+                             initial={{ height: 0, opacity: 0 }}
+                             animate={{ height: 'auto', opacity: 1 }}
+                             exit={{ height: 0, opacity: 0 }}
+                             className="overflow-hidden"
+                           >
+                             <div className="pt-3.5 pl-13 space-y-3 pb-1">
+                               <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
+                                 Detailed activity record securely logged inside your personal account ecosystem. This secure log entry remains strictly confidential.
+                               </p>
+                               <div className="flex gap-2">
+                                 <button 
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     const lowerTitle = a.title.toLowerCase();
+                                     if (lowerTitle.includes("feature")) setActiveTab("Features");
+                                     else if (lowerTitle.includes("integration") || lowerTitle.includes("github")) setActiveTab("Integrations");
+                                     else setActiveTab("Analytics");
+                                   }}
+                                   className="text-[10px] font-black text-cyan-400 hover:text-cyan-300 uppercase tracking-widest transition-colors cursor-pointer"
+                                 >
+                                   Go to Section
+                                 </button>
+                                 <div className="w-px h-3 bg-zinc-850 my-auto" />
+                                 <span className="text-[9px] font-bold text-slate-650 uppercase tracking-widest font-mono">HASH: {a.id ? a.id.substring(0, 8) : 'ACT-SYS'}</span>
+                               </div>
+                             </div>
+                           </motion.div>
+                         )}
+                       </AnimatePresence>
+                      </div>
+                    );
+                  }) : (
+                    <div className="p-8 text-center text-slate-600 text-[10px] font-black uppercase tracking-widest">No activities recorded in your current session</div>
+                  )}
+
+                  {/* LOAD MORE BUTTON FOR ACCORDION LIST */}
+                  {activities.length > visibleActivitiesCount && (
+                    <div className="p-3 bg-black/40 border-t border-zinc-950 text-center flex items-center justify-center">
+                      <button
+                        onClick={() => setVisibleActivitiesCount(prev => prev + 6)}
+                        className="w-full sm:w-auto px-6 py-2.5 bg-zinc-900 hover:bg-zinc-850 hover:border-zinc-705 text-sky-400 hover:text-sky-300 border border-zinc-800 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                      >
+                        <Plus size={11} className="stroke-[2.5]" />
+                        Show More Activities ({activities.length - visibleActivitiesCount} remaining)
+                      </button>
+                    </div>
+                  )}
+               </div>
+            </div>
+          </div>
+
+          {/* SHARED PROJECTS SECTION */}
+          <div className="mt-8 mb-12">
+            <div className="flex items-center justify-between mb-6 px-2">
+              <div className="flex flex-col">
+                <h2 className="text-[14px] font-black text-white uppercase tracking-[0.2em] flex items-center gap-2">
+                  <LayoutGrid size={16} className="text-violet-400" />
+                  Shared Universe Projects
+                </h2>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Innovation from the Gamura community</p>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  if (!isLoggedIn) {
+                    showToast("🔒", "Access Denied", "Connect your account to share projects.");
+                    return;
+                  }
+                  setProjectTitle("");
+                  setProjectLink("");
+                  setProjectImage("");
+                  setShowProjectModal(true);
+                }}
+                className="px-6 py-3 bg-gradient-to-r from-violet-500/20 to-cyan-500/20 border border-violet-500/30 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2 hover:from-violet-500/30 hover:to-cyan-500/30 transition-all font-sans"
+              >
+                <Plus size={14} />
+                Add Project
+              </motion.button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {sharedProjects.length > 0 ? sharedProjects.map((project, i) => (
+                <motion.div
+                  key={project.id || i}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                  className="group bg-zinc-900 border border-white/5 rounded-[2rem] overflow-hidden hover:border-violet-500/50 transition-all flex flex-col h-full"
+                >
+                  <div className="aspect-video bg-zinc-800 relative overflow-hidden">
+                    {project.image ? (
+                      <img src={project.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={project.title} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center opacity-20">
+                        <ImageIcon size={48} />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent opacity-60" />
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <div className="text-[12px] font-black text-white uppercase tracking-wider">{project.title}</div>
+                      <div className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">by {project.userName}</div>
+                    </div>
+                  </div>
+                  <div className="p-6 flex flex-col flex-1 gap-4">
+                    <p className="text-[10px] text-zinc-500 font-bold leading-relaxed uppercase tracking-tight">
+                      A unique visualization project connected to the Gamura Universe neural link.
+                    </p>
+                    <div className="mt-auto flex items-center justify-between">
+                      <a 
+                        href={project.link} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="text-[10px] font-black text-cyan-400 hover:text-white transition-colors uppercase tracking-widest flex items-center gap-1.5"
+                      >
+                        View Project <ExternalLink size={12} />
+                      </a>
+                      <div className="text-[8px] text-zinc-600 font-black uppercase tracking-widest">
+                        {project.timestamp?.toDate ? project.timestamp.toDate().toLocaleDateString() : 'Active'}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )) : (
+                <div className="col-span-full py-12 bg-white/[0.02] border border-dashed border-white/10 rounded-[2rem] flex flex-col items-center justify-center text-center">
+                  <LayoutGrid size={32} className="text-zinc-700 mb-4 opacity-50" />
+                  <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">No shared projects yet</p>
+                  <p className="text-zinc-600 text-[9px] mt-2 font-bold uppercase tracking-widest">Be the first to showcase your innovation</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  </main>
+
+      {/* SEARCH OVERLAY */}
+      <AnimatePresence>
+        {searchOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-md z-[500] flex items-start justify-center pt-[15vh] px-4"
+            onClick={() => setSearchOpen(false)}
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: -20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -20 }}
+              className="w-full max-w-xl bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 p-5 border-b border-white/5">
+                <Search size={20} className="text-zinc-500" />
+                <input 
+                  autoFocus
+                  className="flex-1 bg-transparent border-none outline-none text-base text-zinc-100 placeholder:text-zinc-600"
+                  placeholder="Search Universe commands..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                <div className="px-2 py-1 bg-zinc-800 border border-white/10 rounded text-[9px] font-bold text-zinc-500">ESC</div>
+              </div>
+              <div className="p-2 space-y-1 max-h-[400px] overflow-y-auto">
+                {[
+                  { ic: "📊", title: "Analytics Overview", sub: "View metrics" },
+                  { ic: "🎮", title: "BuBuBai Feature", sub: "Development progress" },
+                  { ic: "🌌", title: "Galaxy Core", sub: "Platform status" },
+                  { ic: "👥", title: "User Management", sub: "4,829 users" },
+                ].filter(i => i.title.toLowerCase().includes(searchQuery.toLowerCase())).map((item, i) => (
+                  <div 
+                    key={i} 
+                    className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group"
+                    onClick={() => {
+                      setSearchOpen(false);
+                      showToast(item.ic, item.title, "Opening dashboard module...");
+                    }}
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center text-lg">{item.ic}</div>
+                    <div className="flex-1">
+                      <div className="text-sm font-bold text-zinc-200 group-hover:text-cyan-400 transition-colors">{item.title}</div>
+                      <div className="text-[11px] text-zinc-500">{item.sub}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* NOTIFICATION DRAWER */}
+      <AnimatePresence>
+        {notifOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[399]"
+              onClick={() => setNotifOpen(false)}
+            />
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed top-0 right-0 bottom-0 w-full sm:w-[340px] bg-zinc-900 border-l border-white/5 z-[400] flex flex-col"
+            >
+              <div className="p-5 border-b border-white/5 flex items-center justify-between">
+                <span className="text-sm font-black tracking-widest uppercase">Notifications</span>
+                <button 
+                  onClick={() => setNotifOpen(false)}
+                  className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-500 hover:text-white transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {notifications.length > 0 ? notifications.map((n, i) => (
+                  <div 
+                    key={i} 
+                    onClick={async () => {
+                      if (n.unread && user) {
+                        try {
+                          await updateDoc(doc(db, `users/${user.uid}/notifications`, n.id), { unread: false });
+                        } catch (e) {
+                          console.error("Failed to update notification", e);
+                        }
+                      }
+                    }}
+                    className={`p-4 rounded-xl transition-all cursor-pointer border ${n.unread ? 'bg-cyan-500/5 border-cyan-500/10' : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.05]'}`}
+                  >
+                    <div className="flex gap-4">
+                      <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-lg shrink-0">{n.ic}</div>
+                      <div className="space-y-1">
+                        <p className="text-[12.5px] leading-relaxed text-zinc-200">{n.msg}</p>
+                        <p className="text-[10px] text-zinc-500 font-bold">{n.time}</p>
+                      </div>
+                      {n.unread && <div className="w-2 h-2 rounded-full bg-cyan-500 shrink-0 mt-1" />}
+                    </div>
+                  </div>
+                )) : (
+                  <div className="h-full flex flex-col items-center justify-center text-center opacity-40 px-6">
+                    <Bell size={48} className="mb-4" />
+                    <p className="text-sm font-bold uppercase tracking-widest">No active notifications</p>
+                    <p className="text-[10px] mt-2">Real-time alerts will appear here as they are triggered.</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* PROFILE DROPDOWN */}
+      <AnimatePresence>
+        {profileOpen && (
+          <>
+            <div className="fixed inset-0 z-[399]" onClick={() => setProfileOpen(false)} />
+            <motion.div 
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              className="fixed top-[70px] right-6 w-72 bg-zinc-900/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[400] overflow-hidden"
+            >
+              <div className="p-8 text-center border-b border-white/5 bg-gradient-to-br from-cyan-500/10 to-violet-500/10">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-500 mx-auto mb-4 flex items-center justify-center text-3xl font-black text-white shadow-[0_0_30px_rgba(56,189,248,0.5)] relative border-2 border-white/10 p-1">
+                  {userInfo?.avatarUrl ? (
+                    <img src={userInfo.avatarUrl} className="w-full h-full object-cover rounded-full" alt="User" />
+                  ) : user?.photoURL ? (
+                    <img src={user.photoURL} className="w-full h-full object-cover rounded-full" alt="User" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                       <img src={GAMURA_G_LOGO} className="w-1/2 h-1/2 object-contain filter invert opacity-50" alt="Logo" />
+                    </div>
+                  )}
+                </div>
+                <div className="text-[17px] font-black text-white">{displayName}</div>
+                <div className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] mt-1.5 flex items-center justify-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" /> {gamuraId}
+                </div>
+              </div>
+              <div className="p-3">
+                {[
+                  { label: "My Profile", icon: <User size={16} /> },
+                  { label: "Edit Profile", icon: <Settings size={16} />, action: () => setEditProfileOpen(true) },
+                  { label: "Add New ID", icon: <MessageSquarePlus size={16} />, action: () => { firebaseSignOut(auth); setCurrentPage("signup"); } },
+                  { label: "Open Gamura", icon: <ExternalLink size={16} />, action: () => window.open('https://gamura.vercel.app/', '_blank') },
+                  { label: "Delete Account", icon: <Trash2 size={16} />, danger: true, action: () => { setProfileOpen(false); setCurrentPage("login"); } },
+                  { label: "Sign Out", icon: <LogOut size={16} />, danger: true, action: () => firebaseSignOut(auth) },
+                ].map((item, i) => (
+                  <div 
+                    key={i} 
+                    className={`flex items-center gap-4 p-4 rounded-2xl transition-all duration-300 cursor-pointer group ${item.danger ? 'text-red-400 hover:bg-red-500/10' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+                    onClick={() => {
+                      if (item.action) item.action();
+                      setProfileOpen(false);
+                      showToast(item.danger ? '👋' : '⚙️', item.label, `Accessing ${item.label.toLowerCase()}...`);
+                    }}
+                  >
+                    <div className="transition-transform group-hover:scale-110">{item.icon}</div>
+                    <span className="text-[14px] font-bold tracking-tight">{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* EDIT PROFILE MODAL */}
+      <AnimatePresence>
+        {editProfileOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[1000] flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden relative"
+            >
+              <div className="p-8 border-b border-white/5 bg-gradient-to-br from-cyan-500/10 to-violet-500/10">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-xl font-black text-white uppercase tracking-widest leading-none">Edit Profile</h2>
+                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-2">Re-calibrate your Universe identity</p>
+                  </div>
+                  <button onClick={() => setEditProfileOpen(false)} className="text-zinc-500 hover:text-white transition-colors">
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+              
+              <form onSubmit={handleUpdateProfile} className="p-8 space-y-6">
+                <div className="flex flex-col items-center gap-4 py-2">
+                  <div className="w-24 h-24 rounded-full bg-zinc-800 border-2 border-white/10 overflow-hidden relative group shadow-[0_0_30px_rgba(56,189,248,0.2)]">
+                    {newAvatar ? (
+                      <img src={newAvatar} className="w-full h-full object-cover" alt="Avatar Preview" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                        <ImageIcon size={32} />
+                      </div>
+                    )}
+                    <label className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                      <ImageIcon size={20} className="text-white" />
+                      <input type="file" onChange={handleAvatarFile} className="hidden" accept="image/*" />
+                    </label>
+                  </div>
+                  <p className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">Click to upload custom avatar image</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center ml-1">
+                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Username Handle</label>
+                      {isUsernameLocked && (
+                        <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest bg-rose-500/10 px-2 py-0.5 rounded">LOCKED</span>
+                      )}
+                    </div>
+                    <input 
+                      type="text" 
+                      value={newUsername}
+                      onChange={e => !isUsernameLocked && setNewUsername(e.target.value)}
+                      readOnly={isUsernameLocked}
+                      className={`w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-xs font-bold transition-all font-sans ${isUsernameLocked ? 'text-zinc-500 cursor-not-allowed border-rose-500/20' : 'text-white focus:outline-none focus:border-cyan-500/50'}`}
+                      placeholder="Universe ID handle"
+                    />
+                    <p className={`text-[9px] font-bold uppercase tracking-widest mt-1 ml-1 ${isUsernameLocked ? 'text-rose-400' : 'text-zinc-500'}`}>
+                      {isUsernameLocked 
+                        ? `Gamura ID can be updated once per year. Next update: ${nextAllowedDateStr}` 
+                        : "Your unique Gamura handle. Can be modified once per year."
+                      }
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Identity Nickname</label>
+                    <input 
+                      type="text" 
+                      value={newNickname}
+                      onChange={e => setNewNickname(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50 transition-all font-sans"
+                      placeholder="Display nickname"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full py-5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-black text-[11px] font-black uppercase tracking-[0.2em] shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all font-sans"
+                >
+                  Confirm Re-calibration
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ADD PROJECT MODAL */}
+      <AnimatePresence>
+        {showProjectModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[1000] flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-white/5 bg-gradient-to-br from-violet-500/10 to-cyan-500/10">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setShowProjectModal(false)}
+                      className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-all active:scale-90"
+                    >
+                      <ArrowLeft size={14} />
+                    </button>
+                    <div>
+                      <h2 className="text-lg font-black text-white uppercase tracking-widest leading-none">Share Broadcast</h2>
+                      <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1.5">Broadcast your innovation to the Gamura Universe</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowProjectModal(false)} className="text-zinc-500 hover:text-white transition-colors">
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+              
+              <form onSubmit={handleAddProject} className="p-6 space-y-4">
+                <div className="space-y-3">
+                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1 text-center block w-full">Broadcast Module Thumbnail</label>
+                  <div className="aspect-video w-full rounded-xl bg-black/50 border border-dashed border-white/10 flex items-center justify-center relative overflow-hidden group">
+                    {projectImage ? (
+                      <img src={projectImage} className="w-full h-full object-cover" alt="Project Preview" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-1.5 text-zinc-600">
+                        <ImageIcon size={24} />
+                        <span className="text-[8px] font-black uppercase tracking-widest">Click to upload module cover</span>
+                      </div>
+                    )}
+                    <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                      <Plus size={24} className="text-white" />
+                      <input type="file" onChange={handleProjectImage} className="hidden" accept="image/*" />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Innovation Title</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={projectTitle}
+                      onChange={e => setProjectTitle(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-[10px] font-bold text-white focus:outline-none focus:border-violet-500/50 transition-all font-sans"
+                      placeholder="e.g. Galaxy Core Integration"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Neural Uplink URL</label>
+                    <input 
+                      type="url" 
+                      required
+                      value={projectLink}
+                      onChange={e => setProjectLink(e.target.value)}
+                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-[10px] font-bold text-white focus:outline-none focus:border-violet-500/50 transition-all font-sans"
+                      placeholder="https://your-project.vercel.app"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-violet-500/5 border border-violet-500/10 rounded-xl text-[8px] font-bold text-violet-400 leading-relaxed uppercase tracking-[0.05em]">
+                  PROTOCOL NOTICE: Each inhabitant can only host ONE active broadcast at a time. Sharing a new module will terminate your previous signal.
+                </div>
+
+                <div className="flex flex-col gap-2 pt-2">
+                  <button 
+                    type="submit"
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-violet-500/20 active:scale-[0.98] transition-all font-sans"
+                  >
+                    Initialize Broadcast Signal
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setShowProjectModal(false)}
+                    className="w-full py-3 text-[9px] font-black text-zinc-600 uppercase tracking-widest hover:text-white transition-colors"
+                  >
+                    Return to Universe
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* TOASTS */}
+      <div className="fixed bottom-8 right-8 z-[600] flex flex-col gap-3 pointer-events-none">
+        <AnimatePresence>
+          {toasts.map(t => {
+            const scheme = ({
+              success: {
+                border: 'border-emerald-500/20 bg-[#071912]/95',
+                bar: 'bg-emerald-400 shadow-[0_0_12px_#34d399]',
+                iconBg: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+              },
+              error: {
+                border: 'border-red-500/20 bg-[#140507]/95',
+                bar: 'bg-red-400 shadow-[0_0_12px_#f87171]',
+                iconBg: 'bg-red-500/10 text-red-500 border border-red-500/20',
+              },
+              warning: {
+                border: 'border-[#f59e0b]/20 bg-[#140d05]/95',
+                bar: 'bg-amber-400 shadow-[0_0_12px_#fbbf24]',
+                iconBg: 'bg-[#f59e0b]/10 text-amber-400 border border-[#f59e0b]/20',
+              },
+              info: {
+                border: 'border-cyan-500/20 bg-[#05111c]/95',
+                bar: 'bg-cyan-400 shadow-[0_0_12px_#22d3ee]',
+                iconBg: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20',
+              }
+            })[t.type || 'info'];
+
+            return (
+              <motion.div 
+                key={t.id}
+                initial={{ opacity: 0, x: 50, scale: 0.9 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 50, scale: 0.9 }}
+                layout
+                className={`min-w-[300px] ${scheme.border} border p-4 rounded-xl shadow-2xl flex items-center gap-4 group pointer-events-auto backdrop-blur-md relative overflow-hidden`}
+              >
+                <div className={`absolute inset-y-0 left-0 w-1 ${scheme.bar}`} />
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black shrink-0 ${scheme.iconBg}`}>{t.ic}</div>
+                <div className="flex-1 pl-1">
+                  <div className="text-[11px] font-black text-white leading-tight uppercase tracking-tighter">{t.title}</div>
+                  <div className="text-[10px] text-zinc-400 mt-0.5 uppercase font-bold leading-tight">{t.content || t.msg}</div>
+                </div>
+                <button 
+                  onClick={() => setToasts(prev => prev.filter(toast => toast.id !== t.id))}
+                  className="text-zinc-650 hover:text-white transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </div>
   );
 };
 
 export default function App() {
-  const logoSources = ["/logo.png", "https://lh3.googleusercontent.com/d/1gdDmsxtjEHxq4qvmshBQL3eX3c1cOSWY"];
-  const mainImgSources = ["/main.png", "https://lh3.googleusercontent.com/d/1Uo5baGqwR3v3qcG2XznFNGqhO47lAi4A"];
-  const secondaryLogoSources = ["/gpg-logo.png", "https://lh3.googleusercontent.com/d/1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x"];
-  const profileImgSources = ["/profile.png", "https://lh3.googleusercontent.com/d/1X_b-gsSwt_-LDOt7t8IyFqop60mHBUCY", "https://lh3.googleusercontent.com/d/1zZfXn3YsmmOGXxzJ6zNKAmW6BFusX0NH"];
-  const certImgSources = ["/certificate.png", "https://lh3.googleusercontent.com/d/1o6tralnliWDBJcAR62QUlpFuDuOHQR1W"];
-  const ggImgSources = ["/gg.png", "https://lh3.googleusercontent.com/d/1e-46lRbggMtRxalG_QwF0zCRd0E7A0jK"];
-
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState<"home" | "gpg" | "login" | "history" | "signup" | "about" | "portfolio" | "gg">("home");
+  const [currentPage, setCurrentPage] = useState<"home" | "gpg" | "login" | "history" | "signup" | "about" | "portfolio" | "gg" | "blank" | "aura" | "universe-active" | "white-page">("home");
+  const [viewingUsername, setViewingUsername] = useState<string | undefined>(undefined);
+  const [isDark, setIsDark] = useState(true);
+  const [showUniverseLoader, setShowUniverseLoader] = useState(false);
+  const [selectedAuraModule, setSelectedAuraModule] = useState<string | null>(null);
+  const [isSlideOpen, setIsSlideOpen] = useState(false);
+  const [showTelemetry, setShowTelemetry] = useState(false);
 
   // Login/Signup State
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUserInfo, setCurrentUserInfo] = useState<{username: string, nickname: string} | null>(null);
-  const [registeredUsers, setRegisteredUsers] = useState<{username: string, password: string, nickname: string}[]>([]);
+  const [email, setEmail] = useState("");
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUserInfo, setCurrentUserInfo] = useState<{username: string, nickname: string, gpgTimestamps?: number[]} | null>(null);
+  const isLoggedIn = !!currentUser;
+  
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Multi-Chat State
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+
+  const addActivity = async (title: string, ic: string = "⚡") => {
+    if (!currentUser) return; // Guard against unauthenticated writes
+    const path = "activities";
+    try {
+      await setDoc(doc(collection(db, path)), {
+        title,
+        ic,
+        timestamp: serverTimestamp(),
+        user: currentUserInfo?.username || currentUser?.displayName || currentUser?.email || "Anonymous",
+        userId: currentUser?.uid
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.WRITE, path);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    setIsAuthLoading(true);
+    setAuthError(null);
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Check if profile exists
+      let userDoc;
+      try {
+        userDoc = await getDoc(doc(db, "users", user.uid));
+      } catch (e) {
+        handleFirestoreError(e, OperationType.GET, `users/${user.uid}`);
+        return;
+      }
+
+      if (!userDoc.exists()) {
+        const usernameBase = (user.email?.split('@')[0] || "user").replace(/[^a-zA-Z0-9]/g, "");
+        const finalUsername = usernameBase.length < 6 ? (usernameBase + Math.random().toString(36).substring(2, 8)).substring(0, 10) : usernameBase;
+        const displayName = user.displayName || "Explorer";
+        
+        try {
+          await setDoc(doc(db, "users", user.uid), {
+            uid: user.uid,
+            username: finalUsername,
+            email: user.email,
+            nickname: displayName,
+            createdAt: serverTimestamp(),
+            gpgTimestamps: [],
+            lastLogin: serverTimestamp(),
+            photoURL: user.photoURL
+          });
+          setCurrentUserInfo({ 
+            username: finalUsername, 
+            nickname: displayName,
+            gpgTimestamps: []
+          });
+        } catch (e) {
+          handleFirestoreError(e, OperationType.WRITE, `users/${user.uid}`);
+        }
+      } else {
+        const data = userDoc.data();
+        setCurrentUserInfo({ 
+          username: data.username || data.email, // Fallback for old records
+          nickname: data.nickname || "Explorer",
+          gpgTimestamps: data.gpgTimestamps || []
+        });
+      }
+      setCurrentPage("blank");
+    } catch (error: any) {
+      setAuthError("Google sign-in failed: " + error.message);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Detect if client opened a claimed developer sub-url directly (e.g. gamura.vercel.app/Selvaranjan)
+    const path = window.location.pathname.replace(/^\/+/g, "").trim().toLowerCase();
+    const ignore = ["", "index.html", "main", "index", "api", "public", "assets", "favicon.ico", "home", "login", "signup", "about", "gpg", "history", "blank", "universe-active", "white-page", "portfolio", "gg", "aura"];
+    if (path && !ignore.includes(path)) {
+      const docRef = doc(db, "gamura_developers", path);
+      getDoc(docRef).then((docSnap) => {
+        if (docSnap.exists()) {
+          setViewingUsername(path);
+          setCurrentPage("white-page");
+        } else {
+          console.warn("Claimed user portfolio path not found:", path);
+          window.history.pushState({}, "", "/");
+        }
+      }).catch((err) => {
+        console.error("Path-detector Firestore error:", err);
+      });
+    }
+
+    const testConnection = async () => {
+      try {
+        const { getDocFromServer } = await import('firebase/firestore');
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration.");
+        }
+      }
+    };
+    testConnection();
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        // Skip setup if registration is actively writing custom user document
+        if ((window as any).isRegisteringUser) {
+          return;
+        }
+
+        // Increment global login counter
+        try {
+          const statsRef = doc(db, "system", "stats");
+          const statsDoc = await getDoc(statsRef).catch(() => null);
+          if (!statsDoc?.exists()) {
+            await setDoc(statsRef, { loginCount: 1 });
+          } else {
+            await updateDoc(statsRef, { loginCount: increment(1) });
+          }
+        } catch (e) {
+          console.error("Failed to increment login count", e);
+        }
+
+        // Fetch/Update user record
+        try {
+          const userRef = doc(db, "users", user.uid);
+          const userDoc = await getDoc(userRef);
+          
+          if (!userDoc.exists()) {
+            const usernameBase = (user.email?.split('@')[0] || "user").replace(/[^a-zA-Z0-9]/g, "");
+            const finalUsername = usernameBase.length < 6 ? (usernameBase + Math.random().toString(36).substring(2, 8)).substring(0, 10) : usernameBase;
+            const displayName = user.displayName || "Explorer";
+            
+            // Generate unique username reservation
+            const uDoc = await getDoc(doc(db, "usernames", finalUsername.toLowerCase()));
+            const finalUniqueUsername = uDoc.exists() ? (finalUsername + Math.floor(Math.random() * 1000)).substring(0, 15) : finalUsername;
+
+            await setDoc(doc(db, "usernames", finalUniqueUsername.toLowerCase()), { uid: user.uid });
+
+            const userData = {
+              uid: user.uid,
+              email: user.email || `${finalUniqueUsername}@gamura.app`,
+              username: finalUniqueUsername,
+              nickname: displayName,
+              photoURL: user.photoURL || null,
+              lastLogin: serverTimestamp(),
+              createdAt: serverTimestamp(),
+              gpgTimestamps: []
+            };
+            await setDoc(userRef, userData);
+          } else {
+            const data = userDoc.data();
+            const userData: any = {
+              uid: user.uid,
+              lastLogin: serverTimestamp()
+            };
+            if (user.email) userData.email = user.email;
+            if (user.photoURL) userData.photoURL = user.photoURL;
+            await updateDoc(userRef, userData);
+          }
+
+          const freshDoc = await getDoc(userRef);
+          const data = freshDoc.data();
+          if (data) {
+            setCurrentUserInfo({ 
+              username: data.username || data.email || "Explorer", 
+              nickname: data.nickname || "Explorer", 
+              gpgTimestamps: data.gpgTimestamps || [] 
+            });
+            // Log as activity
+            try {
+              await setDoc(doc(collection(db, "activities")), {
+                title: `${data.username || data.email} logged in`,
+                ic: "🔑",
+                timestamp: serverTimestamp(),
+                user: data.username || data.email,
+                userId: user.uid
+              });
+            } catch (err) {
+              console.error("Activity log failed", err);
+            }
+          }
+        } catch (e) {
+          handleFirestoreError(e, OperationType.GET, `users/${user.uid}`);
+        }
+      } else {
+        setCurrentUserInfo(null);
+        setChats([]);
+        setCurrentChatId(null);
+        // Only redirect to home if they are on a protected page
+        setCurrentPage(prev => {
+          if (["blank", "universe-active", "aura", "gpg", "history"].includes(prev)) {
+            return "home";
+          }
+          return prev;
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const q = query(collection(db, `users/${currentUser.uid}/chats`), limit(50));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedChats: Chat[] = [];
+      snapshot.forEach(doc => {
+        fetchedChats.push(doc.data() as Chat);
+      });
+      fetchedChats.sort((a,b) => b.timestamp - a.timestamp);
+      setChats(fetchedChats);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `users/${currentUser.uid}/chats`);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
   const [gpgInput, setGpgInput] = useState("");
   const [isGpgLoading, setIsGpgLoading] = useState(false);
+  const [limitError, setLimitError] = useState<string | null>(null);
+  const [isDeletingChat, setIsDeletingChat] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [showTools, setShowTools] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -158,18 +5873,44 @@ export default function App() {
   const currentChat = useMemo(() => chats.find(c => c.id === currentChatId) || null, [chats, currentChatId]);
   const gpgMessages = useMemo(() => currentChat?.messages || [], [currentChat]);
 
-  const startNewChat = useCallback(() => {
+  const deleteChat = async (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!currentUser) return;
+    
+    setIsDeletingChat(chatId);
+    try {
+      await deleteDoc(doc(db, `users/${currentUser.uid}/chats`, chatId));
+      if (currentChatId === chatId) setCurrentChatId(null);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `users/${currentUser.uid}/chats/${chatId}`);
+    } finally {
+      setIsDeletingChat(null);
+    }
+  };
+
+  const startNewChat = useCallback(async () => {
+    const newId = Date.now().toString();
     const newChat: Chat = {
-      id: Date.now().toString(),
+      id: newId,
       title: "New Chat",
       messages: [],
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      userId: currentUser?.uid
     };
+    
     setChats(prev => [newChat, ...prev]);
-    setCurrentChatId(newChat.id);
+    setCurrentChatId(newId);
     setCurrentPage("gpg");
     setIsMenuOpen(false);
-  }, []);
+
+    if (currentUser) {
+      try {
+        await setDoc(doc(db, `users/${currentUser.uid}/chats`, newId), newChat);
+      } catch (e) {
+        handleFirestoreError(e, OperationType.CREATE, `users/${currentUser.uid}/chats/${newId}`);
+      }
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -181,35 +5922,64 @@ export default function App() {
     e.preventDefault();
     if (!gpgInput.trim() || isGpgLoading) return;
 
+    if (currentUser && currentUserInfo) {
+      const now = Date.now();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      const recentTimestamps = (currentUserInfo.gpgTimestamps || []).filter((t: number) => now - t < twentyFourHours);
+      if (recentTimestamps.length >= 3) {
+        setLimitError("Your daily limit is over. Please try again after 24 hours.");
+        setTimeout(() => setLimitError(null), 5000);
+        return;
+      }
+    }
+
     let activeChatId = currentChatId;
-    let updatedChats = [...chats];
+    let oldChatMessages: Message[] = [];
+    let chatTitle = gpgInput.slice(0, 30) + (gpgInput.length > 30 ? "..." : "");
+    let baseTimestamp = Date.now();
 
     // If no active chat, create one
     if (!activeChatId) {
-      const newChat: Chat = {
-        id: Date.now().toString(),
-        title: gpgInput.slice(0, 30) + (gpgInput.length > 30 ? "..." : ""),
-        messages: [],
-        timestamp: Date.now()
-      };
-      updatedChats = [newChat, ...updatedChats];
-      activeChatId = newChat.id;
+      activeChatId = Date.now().toString();
       setCurrentChatId(activeChatId);
+    } else {
+      const existingChat = chats.find(c => c.id === activeChatId);
+      if (existingChat) {
+         oldChatMessages = existingChat.messages;
+         chatTitle = existingChat.messages.length === 0 ? chatTitle : existingChat.title;
+         baseTimestamp = existingChat.timestamp;
+      }
     }
 
     const userMessage: Message = { role: "user", content: gpgInput };
-    
-    // Update local state immediately for UI
-    const chatIndex = updatedChats.findIndex(c => c.id === activeChatId);
-    if (chatIndex !== -1) {
-      const isFirstMessage = updatedChats[chatIndex].messages.length === 0;
-      updatedChats[chatIndex] = {
-        ...updatedChats[chatIndex],
-        messages: [...updatedChats[chatIndex].messages, userMessage],
-        title: isFirstMessage ? (gpgInput.slice(0, 30) + (gpgInput.length > 30 ? "..." : "")) : updatedChats[chatIndex].title
-      };
+    const newMessages = [...oldChatMessages, userMessage];
+
+    const newChatSession: Chat = {
+      id: activeChatId,
+      title: chatTitle,
+      messages: newMessages,
+      timestamp: baseTimestamp,
+      userId: currentUser?.uid
+    };
+
+    setChats(prev => {
+      const idx = prev.findIndex(c => c.id === activeChatId);
+      if (idx !== -1) {
+        const next = [...prev];
+        next[idx] = newChatSession;
+        return next;
+      }
+      return [newChatSession, ...prev];
+    });
+
+    if (currentUser) {
+      try {
+        await setDoc(doc(db, `users/${currentUser.uid}/chats`, activeChatId), newChatSession);
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, `users/${currentUser.uid}/chats/${activeChatId}`);
+      }
     }
-    setChats(updatedChats);
+    
     setGpgInput("");
     setIsGpgLoading(true);
 
@@ -222,19 +5992,22 @@ export default function App() {
       }
       
       const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: updatedChats[chatIndex].messages.map(m => ({
+        model: "gemini-3.5-flash",
+        contents: newMessages.map(m => ({
           role: m.role,
           parts: [{ text: m.role === "user" ? toolContext + m.content : m.content }]
         })),
         config: {
-          systemInstruction: `You are the Gamura Prompt Generator (GPG) v3.1. Your output MUST be ONLY the generated prompt.
+          systemInstruction: `You are the Gamura Prompt Generator (GPG) v3.1. Your ONLY purpose is to generate highly optimized prompts based on the user's input.
+          If the user asks a general question, tries to chat with you, or asks you to do anything OTHER than generating a prompt, you MUST reply with exactly: "I'm a GPG". Do not generate a prompt in this case.
+          When generating a prompt, your output MUST be ONLY the generated prompt.
           
           STRICT RULES:
-          1. NO conversational filler.
-          2. NO markdown formatting.
-          3. NO unwanted symbols.
-          4. Output ONLY the raw prompt text.
+          1. ONLY generate prompts. Otherwise reply "I'm a GPG".
+          2. NO conversational filler.
+          3. NO markdown formatting.
+          4. NO unwanted symbols.
+          5. Output ONLY the raw prompt text.
           
           TOOL-SPECIFIC OPTIMIZATION:
           - CODE: Focus on logic, language-specific best practices, and architecture.
@@ -255,22 +6028,78 @@ export default function App() {
         content: response.text || "I couldn't generate a prompt right now. Please try again.",
       };
 
-      setChats(prev => prev.map(c => 
-        c.id === activeChatId 
-          ? { ...c, messages: [...c.messages, modelMessage] }
-          : c
-      ));
+      const aiChatSession: Chat = {
+        id: activeChatId,
+        title: chatTitle,
+        messages: [...newMessages, modelMessage],
+        timestamp: baseTimestamp,
+        userId: currentUser?.uid
+      };
+
+      setChats(prev => {
+        const idx = prev.findIndex(c => c.id === activeChatId);
+        if (idx !== -1) {
+          const next = [...prev];
+          next[idx] = aiChatSession;
+          return next;
+        }
+        return [aiChatSession, ...prev];
+      });
+
+      if (currentUser && currentUserInfo && modelMessage.content !== "I'm a GPG" && !modelMessage.content.startsWith("Error:")) {
+        try {
+          const now = Date.now();
+          const twentyFourHours = 24 * 60 * 60 * 1000;
+          const updatedTimestamps = [...(currentUserInfo.gpgTimestamps || []).filter((t: number) => now - t < twentyFourHours), now];
+          
+          await updateDoc(doc(db, "users", currentUser.uid), {
+            gpgTimestamps: updatedTimestamps
+          });
+          setCurrentUserInfo({ ...currentUserInfo, gpgTimestamps: updatedTimestamps });
+        } catch (e) {
+          handleFirestoreError(e, OperationType.UPDATE, `users/${currentUser.uid}`);
+        }
+      }
+
+      if (currentUser) {
+        try {
+          await setDoc(doc(db, `users/${currentUser.uid}/chats`, activeChatId), aiChatSession);
+        } catch (e) {
+          handleFirestoreError(e, OperationType.WRITE, `users/${currentUser.uid}/chats/${activeChatId}`);
+        }
+      }
     } catch (error: any) {
       console.error("GPG Error:", error);
       const errorMessage: Message = { 
         role: "model", 
         content: `Error: ${error.message || "Could not connect to the AI service. Please ensure your GEMINI_API_KEY is configured in the Secrets panel."}`
       };
-      setChats(prev => prev.map(c => 
-        c.id === activeChatId 
-          ? { ...c, messages: [...c.messages, errorMessage] }
-          : c
-      ));
+
+      const errorChatSession: Chat = {
+        id: activeChatId!, // activeChatId is always string via above logic
+        title: chatTitle,
+        messages: [...newMessages, errorMessage],
+        timestamp: baseTimestamp,
+        userId: currentUser?.uid
+      };
+
+      setChats(prev => {
+        const idx = prev.findIndex(c => c.id === activeChatId);
+        if (idx !== -1) {
+          const next = [...prev];
+          next[idx] = errorChatSession;
+          return next;
+        }
+        return [errorChatSession, ...prev];
+      });
+
+      if (currentUser && activeChatId) {
+        try {
+          await setDoc(doc(db, `users/${currentUser.uid}/chats`, activeChatId), errorChatSession);
+        } catch (e) {
+          handleFirestoreError(e, OperationType.WRITE, `users/${currentUser.uid}/chats/${activeChatId}`);
+        }
+      }
     } finally {
       setIsGpgLoading(false);
     }
@@ -286,12 +6115,12 @@ export default function App() {
     ];
 
     return (
-      <div className="min-h-screen bg-white flex flex-col">
+      <div className="min-h-screen bg-white dark:bg-zinc-950 flex flex-col">
         {/* Portfolio Header */}
-        <div className="border-b border-zinc-100 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between sticky top-0 bg-white/80 backdrop-blur-md z-20 overflow-x-auto no-scrollbar">
+        <div className="border-b border-zinc-100 dark:border-zinc-800/50 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between sticky top-0 bg-white dark:bg-zinc-950/80 backdrop-blur-md z-20 overflow-x-auto no-scrollbar">
           <button 
             onClick={() => setCurrentPage("home")}
-            className="text-zinc-400 hover:text-black transition-colors text-[10px] font-bold uppercase tracking-widest whitespace-nowrap mr-4"
+            className="text-zinc-400 hover:text-black dark:hover:text-white dark:text-white transition-colors text-[10px] font-bold uppercase tracking-widest whitespace-nowrap mr-4"
           >
             ← Exit
           </button>
@@ -302,8 +6131,8 @@ export default function App() {
                 onClick={() => setPortfolioTab(tab.id as any)}
                 className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all px-3 md:px-4 py-1.5 md:py-2 rounded-full flex items-center gap-2 whitespace-nowrap ${
                   portfolioTab === tab.id 
-                    ? "bg-black text-white shadow-lg shadow-black/20" 
-                    : "text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100"
+                    ? "bg-black text-white dark:bg-white dark:text-black shadow-lg shadow-black/20" 
+                    : "text-zinc-400 hover:text-zinc-900 dark:text-zinc-50 hover:bg-zinc-100"
                 }`}
               >
                 {tab.icon}
@@ -315,7 +6144,7 @@ export default function App() {
         </div>
 
         {/* Portfolio Content */}
-        <div className="flex-1 max-w-5xl mx-auto w-full p-6 md:p-16">
+        <div className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-10">
           <AnimatePresence mode="wait">
             <motion.div
               key={portfolioTab}
@@ -323,13 +6152,13 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3 }}
-              className="space-y-12"
+              className="space-y-8"
             >
               {portfolioTab === "home" && (
-                <div className="space-y-16">
-                  <div className="flex flex-col md:flex-row gap-8 md:gap-12 items-center md:items-start">
+                <div className="space-y-10">
+                  <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-start">
                     <div className="relative group">
-                      <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2rem] md:rounded-[2.5rem] overflow-hidden border-2 border-zinc-900 shadow-2xl transition-transform duration-500 group-hover:scale-105">
+                      <div className="w-24 h-24 md:w-32 md:h-32 rounded-[1.5rem] md:rounded-[2rem] overflow-hidden border-2 border-zinc-900 shadow-2xl transition-transform duration-500 group-hover:scale-105">
                         <SafeImage 
                           srcs={profileImgSources} 
                           alt="Profile" 
@@ -338,32 +6167,32 @@ export default function App() {
                         />
                       </div>
                     </div>
-                    <div className="space-y-4 md:space-y-6 flex-1 text-center md:text-left">
-                      <div className="space-y-2">
-                        <h1 className="text-3xl md:text-5xl font-serif font-medium tracking-tight text-zinc-900">Selvaranjan G</h1>
-                        <p className="text-zinc-400 text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em]">Aspiring Developer & AI Enthusiast</p>
+                    <div className="space-y-3 md:space-y-4 flex-1 text-center md:text-left">
+                      <div className="space-y-1">
+                        <h1 className="text-2xl md:text-4xl font-serif font-medium tracking-tight text-zinc-900 dark:text-zinc-50">SELVARANJAN G</h1>
+                        <p className="text-zinc-400 text-[8px] md:text-[9px] font-black uppercase tracking-[0.3em]">Aspiring Developer & AI Enthusiast</p>
                       </div>
-                      <p className="text-zinc-500 text-sm md:text-base max-w-md leading-relaxed mx-auto md:mx-0">
+                      <p className="text-zinc-500 text-xs md:text-sm max-w-md leading-relaxed mx-auto md:mx-0">
                         Welcome to my professional space. I am a dedicated student and aspiring developer, currently building the future through code and AI.
                       </p>
                       <button 
                         onClick={() => setPortfolioTab("contact")}
-                        className="inline-flex items-center gap-3 px-6 md:px-8 py-3 md:py-4 bg-black text-white rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all hover:shadow-xl hover:-translate-y-1 active:translate-y-0"
+                        className="inline-flex items-center gap-2 px-5 md:px-6 py-2.5 md:py-3 bg-black text-white dark:bg-white dark:text-black rounded-xl text-[8px] md:text-[9px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all hover:shadow-xl hover:-translate-y-1 active:translate-y-0"
                       >
                         Get In Touch
-                        <ArrowRight size={14} />
+                        <ArrowRight size={12} />
                       </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-6">
-                    <div className="p-10 bg-zinc-50 rounded-[2.5rem] border border-zinc-100 flex flex-col md:flex-row md:items-center justify-between gap-6 group hover:border-black transition-all duration-500">
-                      <div className="space-y-2">
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">Current Location</h3>
-                        <p className="text-xl font-bold tracking-tight text-zinc-900">MADHURAVOYAL, CHENNAI</p>
-                        <p className="text-sm text-zinc-500">TAMIL NADU, INDIA</p>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="p-6 md:p-8 bg-zinc-50 dark:bg-zinc-900/50 rounded-[2rem] border border-zinc-100 dark:border-zinc-800/50 flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:border-black dark:border-white transition-all duration-500">
+                      <div className="space-y-1">
+                        <h3 className="text-[8px] font-black uppercase tracking-[0.3em] text-zinc-400">Current Location</h3>
+                        <p className="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-50">MADHURAVOYAL, CHENNAI</p>
+                        <p className="text-xs text-zinc-500">TAMIL NADU, INDIA</p>
                       </div>
-                      <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-sm border border-zinc-100 group-hover:bg-black group-hover:text-white transition-all duration-500">
-                        <MapPin size={24} />
+                      <div className="w-12 h-12 bg-white dark:bg-zinc-950 rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 dark:border-zinc-800/50 group-hover:bg-black dark:hover:bg-white group-hover:text-white transition-all duration-500">
+                        <MapPin size={20} />
                       </div>
                     </div>
                   </div>
@@ -373,7 +6202,7 @@ export default function App() {
               {portfolioTab === "education" && (
                 <div className="space-y-16">
                   <div className="space-y-4">
-                    <h2 className="text-3xl font-serif font-medium tracking-tight text-zinc-900">Education & Certifications</h2>
+                    <h2 className="text-3xl font-serif font-medium tracking-tight text-zinc-900 dark:text-zinc-50">Education & Certifications</h2>
                     <p className="text-zinc-500 text-sm max-w-lg">
                       A journey of continuous learning, combining formal academic studies with specialized technical certifications.
                     </p>
@@ -381,7 +6210,7 @@ export default function App() {
 
                   {/* Formal Education - Tech Timeline Style */}
                   <div className="space-y-8">
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 border-b border-zinc-100 pb-2">Academic Path</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 border-b border-zinc-100 dark:border-zinc-800/50 pb-2">Academic Path</h3>
                     <div className="grid gap-6">
                       {[
                         { 
@@ -399,22 +6228,22 @@ export default function App() {
                           details: "Specialized in Computer Application and Accounting."
                         }
                       ].map((edu, i) => (
-                        <div key={i} className="group p-8 bg-zinc-50 rounded-[2rem] border border-zinc-100 hover:border-black transition-all duration-500 relative overflow-hidden">
+                        <div key={i} className="group p-8 bg-zinc-50 dark:bg-zinc-900/50 rounded-[2rem] border border-zinc-100 dark:border-zinc-800/50 hover:border-black dark:border-white transition-all duration-500 relative overflow-hidden">
                           <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 relative z-10">
                             <div className="space-y-2">
                               <div className="flex items-center gap-3">
-                                <span className="px-3 py-1 bg-black text-white text-[9px] font-black uppercase tracking-widest rounded-full">
+                                <span className="px-3 py-1 bg-black text-white dark:bg-white dark:text-black text-[9px] font-black uppercase tracking-widest rounded-full">
                                   {edu.year}
                                 </span>
                                 <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
                                   {edu.status}
                                 </span>
                               </div>
-                              <h4 className="text-xl font-bold tracking-tight text-zinc-900">{edu.degree}</h4>
+                              <h4 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{edu.degree}</h4>
                               <p className="text-sm font-medium text-zinc-600">{edu.school}</p>
                               <p className="text-xs text-zinc-400 max-w-md mt-2 leading-relaxed">{edu.details}</p>
                             </div>
-                            <GraduationCap className="text-zinc-200 group-hover:text-black transition-colors duration-500" size={40} />
+                            <GraduationCap className="text-zinc-200 group-hover:text-black dark:hover:text-white dark:text-white transition-colors duration-500" size={40} />
                           </div>
                           {/* Tech background element */}
                           <div className="absolute top-0 right-0 w-32 h-32 bg-zinc-100 rounded-full -mr-16 -mt-16 group-hover:bg-zinc-200 transition-colors duration-500" />
@@ -425,9 +6254,9 @@ export default function App() {
 
                   {/* Certifications - Tech Card Style */}
                   <div className="space-y-8">
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 border-b border-zinc-100 pb-2">Technical Certifications</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 border-b border-zinc-100 dark:border-zinc-800/50 pb-2">Technical Certifications</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="p-8 border-2 border-zinc-900 rounded-[2rem] bg-white space-y-6 flex flex-col justify-between group hover:shadow-2xl transition-all duration-500">
+                      <div className="p-8 border-2 border-zinc-900 rounded-[2rem] bg-white dark:bg-zinc-950 space-y-6 flex flex-col justify-between group hover:shadow-2xl transition-all duration-500">
                         <div className="space-y-4">
                           <div className="w-12 h-12 bg-zinc-900 rounded-2xl flex items-center justify-center">
                             <Sparkles className="text-white" size={24} />
@@ -442,14 +6271,14 @@ export default function App() {
                         </div>
                         <button 
                           onClick={() => setShowCertificateModal(true)}
-                          className="flex items-center justify-between w-full px-6 py-3 bg-zinc-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-black transition-colors"
+                          className="flex items-center justify-between w-full px-6 py-3 bg-zinc-900 text-white rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-black dark:hover:bg-white transition-colors"
                         >
                           View Certificate
                           <ImageIcon size={14} />
                         </button>
                       </div>
 
-                      <div className="p-8 border border-zinc-100 rounded-[2rem] bg-zinc-50 space-y-6 flex flex-col justify-center items-center text-center border-dashed">
+                      <div className="p-8 border border-zinc-100 dark:border-zinc-800/50 rounded-[2rem] bg-zinc-50 dark:bg-zinc-900/50 space-y-6 flex flex-col justify-center items-center text-center border-dashed">
                         <div className="w-12 h-12 bg-zinc-200 rounded-full flex items-center justify-center">
                           <Code className="text-zinc-400" size={20} />
                         </div>
@@ -465,7 +6294,7 @@ export default function App() {
               {portfolioTab === "achievement" && (
                 <div className="space-y-12">
                   <div className="space-y-4">
-                    <h2 className="text-3xl font-serif font-medium tracking-tight text-zinc-900">Achievements</h2>
+                    <h2 className="text-3xl font-serif font-medium tracking-tight text-zinc-900 dark:text-zinc-50">Achievements</h2>
                     <p className="text-zinc-500 text-sm max-w-lg">
                       A collection of certifications and milestones achieved through dedicated learning and project development.
                     </p>
@@ -483,11 +6312,11 @@ export default function App() {
                     ].map((ach, i) => (
                       <div 
                         key={i} 
-                        className="group p-6 bg-zinc-50 rounded-[2rem] border border-zinc-100 hover:border-black transition-all duration-500 cursor-pointer flex flex-col justify-between h-full"
+                        className="group p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-[2rem] border border-zinc-100 dark:border-zinc-800/50 hover:border-black dark:border-white transition-all duration-500 cursor-pointer flex flex-col justify-between h-full"
                         onClick={() => setSelectedAchievement({ title: ach.title, img: ach.img })}
                       >
                         <div className="space-y-4">
-                          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 group-hover:bg-black transition-colors duration-500 overflow-hidden">
+                          <div className="w-12 h-12 bg-white dark:bg-zinc-950 rounded-2xl flex items-center justify-center shadow-sm border border-zinc-100 dark:border-zinc-800/50 group-hover:bg-black dark:hover:bg-white transition-colors duration-500 overflow-hidden">
                             <SafeImage 
                               srcs={[ach.img]} 
                               alt={ach.title} 
@@ -497,7 +6326,7 @@ export default function App() {
                           </div>
                           <h3 className="font-bold text-lg tracking-tight">{ach.title}</h3>
                         </div>
-                        <div className="mt-6 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-zinc-400 group-hover:text-black transition-colors">
+                        <div className="mt-6 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-zinc-400 group-hover:text-black dark:hover:text-white dark:text-white transition-colors">
                           <span>View Certificate</span>
                           <ImageIcon size={14} />
                         </div>
@@ -510,7 +6339,7 @@ export default function App() {
               {portfolioTab === "projects" && (
                 <div className="space-y-12">
                   <div className="space-y-4">
-                    <h2 className="text-3xl font-serif font-medium tracking-tight text-zinc-900">Featured Projects</h2>
+                    <h2 className="text-3xl font-serif font-medium tracking-tight text-zinc-900 dark:text-zinc-50">Featured Projects</h2>
                     <p className="text-zinc-500 text-sm max-w-lg">
                       A showcase of my technical work, focusing on AI integration and modern web development.
                     </p>
@@ -519,21 +6348,21 @@ export default function App() {
                     {[
                       { name: "GAMURA", type: "FIRST PROJECT" }
                     ].map((project, i) => (
-                      <div key={i} className="flex flex-col md:flex-row items-center justify-between p-10 bg-zinc-50 rounded-[2.5rem] border border-zinc-100 group hover:border-black transition-all duration-500 gap-8">
+                      <div key={i} className="flex flex-col md:flex-row items-center justify-between p-10 bg-zinc-50 dark:bg-zinc-900/50 rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800/50 group hover:border-black dark:border-white transition-all duration-500 gap-8">
                         <div className="space-y-4 text-center md:text-left">
                           <div className="space-y-1">
                             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">{project.type}</span>
-                            <h3 className="text-3xl font-bold tracking-tight text-zinc-900">{project.name}</h3>
+                            <h3 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{project.name}</h3>
                           </div>
                           <button 
                             onClick={() => setShowProjectModal(true)}
-                            className="inline-flex items-center gap-2 px-8 py-3 bg-black text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-lg shadow-black/10"
+                            className="inline-flex items-center gap-2 px-8 py-3 bg-black text-white dark:bg-white dark:text-black rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-lg shadow-black/10"
                           >
                             View Project
                             <ImageIcon size={14} />
                           </button>
                         </div>
-                        <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-sm border border-zinc-100 group-hover:bg-black group-hover:text-white transition-all duration-500">
+                        <div className="w-20 h-20 bg-white dark:bg-zinc-950 rounded-3xl flex items-center justify-center shadow-sm border border-zinc-100 dark:border-zinc-800/50 group-hover:bg-black dark:hover:bg-white group-hover:text-white transition-all duration-500">
                           <Briefcase size={32} />
                         </div>
                       </div>
@@ -547,18 +6376,18 @@ export default function App() {
                   <div className="flex flex-col md:flex-row gap-12 items-start">
                     <div className="w-full md:w-1/2 space-y-8">
                       <div className="space-y-4">
-                        <h2 className="text-2xl font-serif font-medium tracking-tight text-zinc-900">Contact</h2>
-                        <h3 className="text-4xl font-black tracking-tighter text-zinc-900 uppercase">Selvaranjan G</h3>
+                        <h2 className="text-2xl font-serif font-medium tracking-tight text-zinc-900 dark:text-zinc-50">Contact</h2>
+                        <h3 className="text-4xl font-black tracking-tighter text-zinc-900 dark:text-zinc-50 uppercase">SELVARANJAN G</h3>
                         <p className="text-zinc-500">Interested in working together? Let's connect and build something extraordinary.</p>
                       </div>
                       
                       <div className="space-y-4">
                         <a 
                           href="mailto:selva6ranjan@gmail.com"
-                          className="flex items-center gap-4 p-6 bg-zinc-50 rounded-2xl border border-zinc-100 group hover:border-black transition-colors"
+                          className="flex items-center gap-4 p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-100 dark:border-zinc-800/50 group hover:border-black dark:border-white transition-colors"
                         >
-                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-zinc-100">
-                            <Mail className="text-zinc-400 group-hover:text-black transition-colors" size={18} />
+                          <div className="w-10 h-10 bg-white dark:bg-zinc-950 rounded-xl flex items-center justify-center shadow-sm border border-zinc-100 dark:border-zinc-800/50">
+                            <Mail className="text-zinc-400 group-hover:text-black dark:hover:text-white dark:text-white transition-colors" size={18} />
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Email</p>
@@ -566,9 +6395,9 @@ export default function App() {
                           </div>
                         </a>
 
-                        <div className="flex items-center gap-4 p-6 bg-zinc-50 rounded-2xl border border-zinc-100 group hover:border-black transition-colors">
-                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-zinc-100">
-                            <Phone className="text-zinc-400 group-hover:text-black transition-colors" size={18} />
+                        <div className="flex items-center gap-4 p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-100 dark:border-zinc-800/50 group hover:border-black dark:border-white transition-colors">
+                          <div className="w-10 h-10 bg-white dark:bg-zinc-950 rounded-xl flex items-center justify-center shadow-sm border border-zinc-100 dark:border-zinc-800/50">
+                            <Phone className="text-zinc-400 group-hover:text-black dark:hover:text-white dark:text-white transition-colors" size={18} />
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Mobile</p>
@@ -580,10 +6409,10 @@ export default function App() {
                           href="https://linkedin.com/in/selvaranjang"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-4 p-6 bg-zinc-50 rounded-2xl border border-zinc-100 group hover:border-black transition-colors"
+                          className="flex items-center gap-4 p-6 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-100 dark:border-zinc-800/50 group hover:border-black dark:border-white transition-colors"
                         >
-                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-zinc-100">
-                            <Linkedin className="text-zinc-400 group-hover:text-black transition-colors" size={18} />
+                          <div className="w-10 h-10 bg-white dark:bg-zinc-950 rounded-xl flex items-center justify-center shadow-sm border border-zinc-100 dark:border-zinc-800/50">
+                            <Linkedin className="text-zinc-400 group-hover:text-black dark:hover:text-white dark:text-white transition-colors" size={18} />
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">LinkedIn</p>
@@ -597,12 +6426,12 @@ export default function App() {
                       <div className="aspect-[4/5] rounded-[3rem] overflow-hidden border-2 border-zinc-900 shadow-2xl relative group">
                         <SafeImage 
                           srcs={profileImgSources} 
-                          alt="Selvaranjan G" 
+                          alt="SELVARANJAN G" 
                           className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700"
                           fallbackIcon={User}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-8">
-                          <p className="text-white text-xs font-bold uppercase tracking-[0.3em]">Selvaranjan G</p>
+                          <p className="text-white text-xs font-bold uppercase tracking-[0.3em]">SELVARANJAN G</p>
                         </div>
                       </div>
                     </div>
@@ -627,12 +6456,12 @@ export default function App() {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="relative max-w-5xl w-full bg-white rounded-3xl overflow-hidden shadow-2xl"
+                className="relative max-w-5xl w-full bg-white dark:bg-zinc-950 rounded-3xl overflow-hidden shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button 
                   onClick={() => setShowCertificateModal(false)}
-                  className="absolute top-4 right-4 p-2 bg-black/10 hover:bg-black/20 rounded-full transition-colors z-10"
+                  className="absolute top-4 right-4 p-2 bg-black/10 hover:bg-black dark:hover:bg-white/20 rounded-full transition-colors z-10"
                 >
                   <X size={20} />
                 </button>
@@ -664,16 +6493,16 @@ export default function App() {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="relative max-w-5xl w-full bg-white rounded-3xl overflow-hidden shadow-2xl"
+                className="relative max-w-5xl w-full bg-white dark:bg-zinc-950 rounded-3xl overflow-hidden shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button 
                   onClick={() => setShowProjectModal(false)}
-                  className="absolute top-4 right-4 p-2 bg-black/10 hover:bg-black/20 rounded-full transition-colors z-10"
+                  className="absolute top-4 right-4 p-2 bg-black/10 hover:bg-black dark:hover:bg-white/20 rounded-full transition-colors z-10"
                 >
                   <X size={20} />
                 </button>
-                <div className="p-2 bg-zinc-50 flex items-center justify-center min-h-[200px]">
+                <div className="p-2 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center min-h-[200px]">
                   <SafeImage 
                     srcs={secondaryLogoSources} 
                     alt="GAMURA Project" 
@@ -701,12 +6530,12 @@ export default function App() {
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                className="relative max-w-5xl w-full bg-white rounded-3xl overflow-hidden shadow-2xl"
+                className="relative max-w-5xl w-full bg-white dark:bg-zinc-950 rounded-3xl overflow-hidden shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button 
                   onClick={() => setSelectedAchievement(null)}
-                  className="absolute top-4 right-4 p-2 bg-black/10 hover:bg-black/20 rounded-full transition-colors z-10"
+                  className="absolute top-4 right-4 p-2 bg-black/10 hover:bg-black dark:hover:bg-white/20 rounded-full transition-colors z-10"
                 >
                   <X size={20} />
                 </button>
@@ -728,47 +6557,88 @@ export default function App() {
   }
 
   if (currentPage === "history") {
+    if (!isLoggedIn) {
+      return (
+        <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-6 text-center">
+          <button 
+            onClick={() => setCurrentPage("home")}
+            className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black dark:hover:text-white transition-colors text-xs font-medium"
+          >
+            ← Back
+          </button>
+          <div className="max-w-md w-full space-y-8 p-8 border border-zinc-100 dark:border-zinc-800/50 rounded-[2.5rem] bg-zinc-50 dark:bg-zinc-900/50 shadow-2xl">
+            <div className="w-20 h-20 bg-zinc-100 dark:bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <History className="text-zinc-400" size={32} />
+            </div>
+            <div className="space-y-3">
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase">Login Required</h2>
+              <p className="text-zinc-500 text-sm">
+                Chat history is only available for registered users. Please sign in to see your previous chats.
+              </p>
+            </div>
+            <div className="pt-6 space-y-3">
+              <button
+                onClick={() => setCurrentPage("login")}
+                className="w-full bg-black text-white dark:bg-white dark:text-black rounded-xl py-4 font-bold text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-black/10"
+              >
+                Sign In Now
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="min-h-screen bg-white relative flex flex-col p-6">
+      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col p-6">
         <button 
           onClick={() => setCurrentPage("home")}
-          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black transition-colors text-xs font-medium"
+          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black dark:hover:text-white dark:text-white transition-colors text-xs font-medium"
         >
           ← Back
         </button>
 
         <div className="max-w-2xl mx-auto w-full mt-12 space-y-8">
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold tracking-tight text-zinc-900">CHAT HISTORY</h2>
+            <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">CHAT HISTORY</h2>
             <p className="text-sm text-zinc-500">Your previous prompt generations</p>
           </div>
 
           <div className="space-y-3">
             {chats.length === 0 ? (
-              <div className="py-20 text-center border-2 border-dashed border-zinc-100 rounded-3xl">
+              <div className="py-20 text-center border-2 border-dashed border-zinc-100 dark:border-zinc-800/50 rounded-3xl">
                 <p className="text-zinc-400 text-sm">No history yet. Start a new chat!</p>
               </div>
             ) : (
               chats.map((chat) => (
-                <motion.button
+                <motion.div
                   key={chat.id}
                   whileHover={{ x: 4 }}
                   onClick={() => {
                     setCurrentChatId(chat.id);
                     setCurrentPage("gpg");
                   }}
-                  className="w-full flex items-center justify-between p-4 bg-zinc-50 hover:bg-zinc-100 rounded-2xl transition-all group border border-zinc-100"
+                  className="w-full flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 rounded-2xl transition-all group border border-zinc-100 dark:border-zinc-800/50 cursor-pointer"
                 >
                   <div className="flex flex-col items-start text-left">
-                    <span className="text-sm font-semibold text-zinc-900 line-clamp-1">{chat.title}</span>
+                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 line-clamp-1">{chat.title}</span>
                     <span className="text-[10px] text-zinc-400 uppercase tracking-wider mt-1">
                       {new Date(chat.timestamp).toLocaleDateString()} • {chat.messages.length} messages
                     </span>
                   </div>
-                  <div className="text-zinc-300 group-hover:text-black transition-colors">
-                    <Send size={16} />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => deleteChat(chat.id, e)}
+                      disabled={isDeletingChat === chat.id}
+                      className="p-2 text-zinc-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      {isDeletingChat === chat.id ? <Loader2 size={16} className="animate-spin text-zinc-400" /> : <Trash2 size={16} />}
+                    </button>
+                    <div className="text-zinc-300 group-hover:text-black dark:group-hover:text-white transition-colors">
+                      <ArrowRight size={16} />
+                    </div>
                   </div>
-                </motion.button>
+                </motion.div>
               ))
             )}
           </div>
@@ -779,20 +6649,20 @@ export default function App() {
 
   if (currentPage === "signup") {
     return (
-      <div className="min-h-screen bg-white relative flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-6">
         <button 
           onClick={() => {
             setAuthError(null);
             setCurrentPage("login");
           }}
-          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black transition-colors text-xs font-medium"
+          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black dark:hover:text-white dark:text-white transition-colors text-xs font-medium"
         >
           ← Back to Login
         </button>
 
         <div className="w-full max-w-sm space-y-8">
           <div className="text-center space-y-4">
-            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 mx-auto bg-zinc-50 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800/50 mx-auto bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
               <SafeImage 
                 srcs={secondaryLogoSources} 
                 alt="GPG Logo" 
@@ -800,32 +6670,106 @@ export default function App() {
                 fallbackIcon={Sparkles}
               />
             </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 uppercase">Create Account</h2>
-              <p className="text-sm text-zinc-500">Join Gamura to save your progress</p>
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase tracking-widest">GAMURA SIGNUP</h2>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Create unique Gamura ID</p>
             </div>
           </div>
 
-          <form className="space-y-4" onSubmit={(e) => {
+          <form className="space-y-4" onSubmit={async (e) => {
             e.preventDefault();
-            setAuthError(null);
-            
-            const userExists = registeredUsers.some(u => u.username.toLowerCase() === username.toLowerCase());
-            if (userExists) {
-              setAuthError("This username is already taken. Please choose another.");
+            if (username.length < 6) {
+              setAuthError("Username must be at least 6 characters long.");
               return;
             }
+            if (password.length < 8) {
+              setAuthError("Password must be at least 8 characters long.");
+              return;
+            }
+            setAuthError(null);
+            setIsAuthLoading(true);
+            
+            try {
+              const usernameLower = username.trim().toLowerCase();
+              const usernameDoc = await getDoc(doc(db, "usernames", usernameLower));
+              if (usernameDoc.exists()) {
+                setAuthError("This Gamura ID is already taken. Please choose another.");
+                setIsAuthLoading(false);
+                return;
+              }
 
-            const newUser = { username, password, nickname };
-            setRegisteredUsers(prev => [...prev, newUser]);
-            
-            // Clear inputs for login
-            setUsername("");
-            setPassword("");
-            setNickname("");
-            
-            alert("Account created successfully! Now please sign in.");
-            setCurrentPage("login");
+              const finalEmail = email.trim() || `${usernameLower}@gamura.app`;
+              
+              // Prevent race conditions in onAuthStateChanged
+              (window as any).isRegisteringUser = true;
+
+              const userCredential = await createUserWithEmailAndPassword(auth, finalEmail, password);
+              const user = userCredential.user;
+
+              try {
+                // 1. Reserve username
+                await setDoc(doc(db, "usernames", usernameLower), { uid: user.uid });
+                
+                // 2. Set custom user profile
+                await setDoc(doc(db, "users", user.uid), {
+                  uid: user.uid,
+                  email: finalEmail,
+                  username: username,
+                  nickname: nickname,
+                  createdAt: Date.now(),
+                  gpgTimestamps: [],
+                  lastLogin: Date.now()
+                });
+
+                // 3. Set current user states so the app is instantly active
+                setCurrentUserInfo({
+                  username: username,
+                  nickname: nickname,
+                  gpgTimestamps: []
+                });
+
+                // Add activity log
+                try {
+                  await setDoc(doc(collection(db, "activities")), {
+                    title: `${username} created a Gamura ID`,
+                    ic: "✨",
+                    timestamp: serverTimestamp(),
+                    user: username,
+                    userId: user.uid
+                  });
+                } catch (actErr) {
+                  console.error("Activity log failed", actErr);
+                }
+
+                setUsername("");
+                setPassword("");
+                setEmail("");
+                setNickname("");
+                setCurrentPage("blank");
+              } catch (dbError) {
+                // Delete the orphaned Auth user on Firestore write failure
+                await deleteUser(user).catch(err => console.error("Clean up orphaned credential failed:", err));
+                throw dbError;
+              } finally {
+                (window as any).isRegisteringUser = false;
+              }
+            } catch (error: any) {
+              (window as any).isRegisteringUser = false;
+              if (error.code === 'auth/email-already-in-use') {
+                 setAuthError("This Email or Gamura ID already exists.");
+              } else if (error.code === 'auth/operation-not-allowed') {
+                 setAuthError(
+                  <div className="space-y-2">
+                    <p className="font-bold">Auth Not Enabled</p>
+                    <p className="text-[10px] lowercase leading-relaxed opacity-80">Enable Email/Password in Firebase Console &gt; Auth &gt; Sign-in method.</p>
+                  </div>
+                 );
+              } else {
+                 setAuthError(error.message);
+              }
+            } finally {
+              setIsAuthLoading(false);
+            }
           }}>
             {authError && (
               <motion.div 
@@ -845,8 +6789,22 @@ export default function App() {
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   placeholder="What should we call you?"
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all text-sm"
+                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
                   required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1">Email <span className="text-[8px] opacity-60">(Optional for Recovery)</span></label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Recovery email"
+                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
                 />
               </div>
             </div>
@@ -860,7 +6818,7 @@ export default function App() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Choose a username"
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all text-sm"
+                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
                   required
                 />
               </div>
@@ -875,7 +6833,7 @@ export default function App() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Create a password"
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all text-sm"
+                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
                   required
                 />
               </div>
@@ -883,9 +6841,34 @@ export default function App() {
 
             <button
               type="submit"
-              className="w-full bg-black text-white rounded-xl py-3.5 font-semibold text-sm hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] mt-4"
+              disabled={isAuthLoading}
+              className="w-full bg-black text-white dark:bg-white dark:text-black rounded-xl py-3.5 font-semibold text-sm hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] mt-4 flex items-center justify-center gap-2"
             >
-              Sign Up
+              {isAuthLoading ? <Loader2 size={18} className="animate-spin" /> : "Sign Up"}
+            </button>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-zinc-100 dark:border-zinc-800/50"></div>
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+                <span className="bg-white dark:bg-zinc-950 px-2 text-zinc-400">Or continue with</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isAuthLoading}
+              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 transition-all active:scale-[0.98] shadow-sm"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              <span>Continue with Google</span>
             </button>
           </form>
 
@@ -893,7 +6876,7 @@ export default function App() {
             Already have an account? <span onClick={() => {
               setAuthError(null);
               setCurrentPage("login");
-            }} className="text-black font-medium cursor-pointer hover:underline">Sign in</span>
+            }} className="text-black dark:text-white font-medium cursor-pointer hover:underline">Sign in</span>
           </p>
         </div>
       </div>
@@ -901,9 +6884,111 @@ export default function App() {
   }
 
   if (currentPage === "login") {
+    if (forgotPassword) {
+      return (
+        <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-6">
+          <div className="w-full max-w-sm space-y-8">
+            <div className="text-center space-y-4">
+              <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800/50 mx-auto bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
+                <SafeImage srcs={secondaryLogoSources} alt="GPG" className="w-full h-full object-cover" />
+              </div>
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase tracking-widest">RESET PASSWORD</h2>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Enter Gamura ID or Email to recover</p>
+            </div>
+
+            <form className="space-y-4" onSubmit={async (e) => {
+              e.preventDefault();
+              setIsAuthLoading(true);
+              setAuthError(null);
+              try {
+                let resetTarget = username.trim();
+                if (!resetTarget) {
+                  setAuthError("Please enter your Gamura ID or Email first.");
+                  setIsAuthLoading(false);
+                  return;
+                }
+                
+                // If it looks like a username, attempt to resolve it to their real email from Firestore
+                if (!resetTarget.includes('@')) {
+                  const uNameDoc = await getDoc(doc(db, "usernames", resetTarget.toLowerCase()));
+                  if (uNameDoc.exists()) {
+                    const uid = uNameDoc.data()?.uid;
+                    if (uid) {
+                      const uDoc = await getDoc(doc(db, "users", uid));
+                      if (uDoc.exists()) {
+                        const matchedEmail = uDoc.data()?.email;
+                        if (matchedEmail) {
+                          resetTarget = matchedEmail;
+                        } else {
+                          resetTarget = `${resetTarget.toLowerCase()}@gamura.app`;
+                        }
+                      } else {
+                        resetTarget = `${resetTarget.toLowerCase()}@gamura.app`;
+                      }
+                    } else {
+                      resetTarget = `${resetTarget.toLowerCase()}@gamura.app`;
+                    }
+                  } else {
+                    resetTarget = `${resetTarget.toLowerCase()}@gamura.app`;
+                  }
+                }
+                
+                await sendPasswordResetEmail(auth, resetTarget);
+                setResetEmailSent(true);
+              } catch (err: any) {
+                if (err.code === "auth/user-not-found") {
+                  setAuthError("No account found with this Gamura ID or Email.");
+                } else if (err.code === "auth/invalid-email") {
+                  setAuthError("The email address format is invalid.");
+                } else {
+                  setAuthError(err.message || "Could not send reset email. Check your ID/Email.");
+                }
+              } finally {
+                setIsAuthLoading(false);
+              }
+            }}>
+              {resetEmailSent ? (
+                <div className="bg-green-50 text-green-600 text-xs font-bold p-4 rounded-xl text-center border border-green-100">
+                  Password reset link sent! Check your inbox.
+                </div>
+              ) : (
+                <>
+                  {authError && <div className="text-red-500 text-[10px] font-bold text-center">{authError}</div>}
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="Gamura ID or Email"
+                      className="w-full bg-zinc-100 dark:bg-zinc-900 border-none rounded-xl py-3 px-4 focus:ring-2 focus:ring-black outline-none text-sm"
+                      required
+                    />
+                  </div>
+                  <button type="submit" disabled={isAuthLoading} className="w-full bg-black text-white dark:bg-white dark:text-black rounded-xl py-3 font-bold text-xs uppercase tracking-widest">
+                    {isAuthLoading ? <Loader2 size={16} className="animate-spin mx-auto" /> : "Send Reset Link"}
+                  </button>
+                </>
+              )}
+              <button 
+                type="button"
+                onClick={() => {
+                  setForgotPassword(false);
+                  setResetEmailSent(false);
+                  setAuthError(null);
+                }}
+                className="w-full text-[10px] font-black text-zinc-500 uppercase tracking-widest hover:text-black transition-colors"
+              >
+                Back to Login
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
     if (isLoggedIn && currentUserInfo) {
       return (
-        <div className="min-h-screen bg-white relative flex flex-col items-center justify-center p-6">
+        <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-6">
           <div className="w-full max-w-sm space-y-8 text-center">
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
@@ -914,62 +6999,193 @@ export default function App() {
                 <Check className="text-green-600" size={40} />
               </div>
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold tracking-tight text-zinc-900">SIGN IN FINISHED</h2>
-                <p className="text-zinc-500">Welcome back to Gamura</p>
+                <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase tracking-widest">GAMURA PROFILE</h2>
+                <p className="text-zinc-500 text-sm">Manage your G-Project account</p>
               </div>
               
-              <div className="bg-zinc-50 rounded-2xl p-6 border border-zinc-100 space-y-4">
-                <div className="flex justify-between items-center border-b border-zinc-200 pb-3">
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Nickname</span>
-                  <span className="text-sm font-semibold text-zinc-900">{currentUserInfo.nickname}</span>
+              <div className="bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl p-6 border border-zinc-100 dark:border-zinc-800/50 space-y-4">
+                <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-800/50 pb-3">
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest text-left">Nickname</span>
+                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{currentUserInfo.nickname}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Username</span>
-                  <span className="text-sm font-semibold text-zinc-900">@{currentUserInfo.username}</span>
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest text-left">Gamura ID</span>
+                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">@{currentUserInfo.username}</span>
                 </div>
               </div>
 
               <div className="space-y-3 pt-4">
                 <button
                   onClick={() => setCurrentPage("home")}
-                  className="w-full bg-black text-white rounded-xl py-3.5 font-semibold text-sm hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98]"
+                  className="w-full bg-black text-white dark:bg-white dark:text-black rounded-xl py-3.5 font-semibold text-sm hover:opacity-90 transition-all shadow-lg active:scale-[0.98]"
                 >
-                  Go to Home
+                  Return
                 </button>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-3">
                   <button
-                    onClick={() => {
-                      setIsLoggedIn(false);
-                      setCurrentUserInfo(null);
+                    onClick={async () => {
+                      try {
+                        await firebaseSignOut(auth);
+                      } catch (e) {}
                       setCurrentPage("home");
                     }}
-                    className="bg-zinc-100 text-zinc-600 rounded-xl py-3 font-semibold text-xs hover:bg-zinc-200 transition-all active:scale-[0.98]"
+                    className="w-full bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 rounded-xl py-3 font-bold text-[10px] uppercase tracking-widest hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-all active:scale-[0.98]"
                   >
-                    Sign Out
+                    Logout Account
                   </button>
 
-                  {!showDeleteConfirm ? (
-                    <button
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="bg-red-50 text-red-600 rounded-xl py-3 font-semibold text-xs hover:bg-red-100 transition-all active:scale-[0.98]"
-                    >
-                      Delete Account
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setRegisteredUsers(prev => prev.filter(u => u.username !== currentUserInfo.username));
-                        setIsLoggedIn(false);
-                        setCurrentUserInfo(null);
-                        setShowDeleteConfirm(false);
-                        setCurrentPage("home");
-                      }}
-                      className="bg-red-600 text-white rounded-xl py-3 font-semibold text-xs hover:bg-red-700 transition-all active:scale-[0.98] animate-pulse"
-                    >
-                      Confirm Delete?
-                    </button>
-                  )}
+                  <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/10 mt-4">
+                    {!showDeleteConfirm ? (
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="text-[10px] font-black text-rose-500 uppercase tracking-widest hover:underline cursor-pointer"
+                      >
+                        Permanently Delete Account
+                      </button>
+                    ) : (
+                      <div className="space-y-4 bg-red-500/5 dark:bg-red-500/5 p-6 rounded-3xl border border-red-500/20 max-w-sm mx-auto text-center">
+                        <p className="text-red-500 font-extrabold tracking-widest text-xs uppercase mb-2">
+                          WARNING: THIS CANNOT BE UNDONE.
+                        </p>
+                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide">
+                          All projects, chats, notification logs, neural profiles, and settings will be permanently destroyed.
+                        </p>
+                        <div className="flex flex-col gap-2.5 pt-2">
+                          <button
+                            disabled={isAuthLoading}
+                            onClick={async () => {
+                              try {
+                                const user = auth.currentUser;
+                                if (user) {
+                                  setIsAuthLoading(true);
+                                  setAuthError(null);
+                                  
+                                  const performDeletion = async (currentUser: any) => {
+                                    // 1. Purge all user chat logs
+                                    const chatsRef = collection(db, `users/${currentUser.uid}/chats`);
+                                    let chatsSnap;
+                                    try {
+                                      chatsSnap = await getDocs(chatsRef);
+                                    } catch (e) {
+                                      console.warn("Chats fetch bypassed or empty:", e);
+                                    }
+                                    if (chatsSnap) {
+                                      const deletePromises = chatsSnap.docs.map(chatDoc => deleteDoc(chatDoc.ref).catch(() => {}));
+                                      await Promise.all(deletePromises);
+                                    }
+
+                                    // 2. Purge all notification logs
+                                    const notifsRef = collection(db, `users/${currentUser.uid}/notifications`);
+                                    let notifsSnap;
+                                    try {
+                                      notifsSnap = await getDocs(notifsRef);
+                                    } catch (e) {
+                                      console.warn("Notifications fetch bypassed or empty:", e);
+                                    }
+                                    if (notifsSnap) {
+                                      const deleteNotifPromises = notifsSnap.docs.map(notifDoc => deleteDoc(notifDoc.ref).catch(() => {}));
+                                      await Promise.all(deleteNotifPromises);
+                                    }
+
+                                    // 3. Purge user shared projects
+                                    try {
+                                      const projectsQuery = query(collection(db, "shared_projects"), where("userId", "==", currentUser.uid));
+                                      const projectsSnap = await getDocs(projectsQuery);
+                                      const projectDeletes = projectsSnap.docs.map(d => deleteDoc(d.ref).catch(() => {}));
+                                      await Promise.all(projectDeletes);
+                                    } catch (e) {
+                                      console.warn("Projects purge bypassed or empty:", e);
+                                    }
+
+                                    // 4. Purge user neural link profiles
+                                    try {
+                                      const npQuery = query(collection(db, "neural_profiles"), where("uid", "==", currentUser.uid));
+                                      const npSnap = await getDocs(npQuery);
+                                      const npDeletes = npSnap.docs.map(d => deleteDoc(d.ref).catch(() => {}));
+                                      await Promise.all(npDeletes);
+                                    } catch (e) {
+                                      console.warn("Neural profiles purge bypassed or empty:", e);
+                                    }
+
+                                    // 5. Release reserved username for creation of new accounts
+                                    if (currentUserInfo?.username) {
+                                      try {
+                                        await deleteDoc(doc(db, "usernames", currentUserInfo.username.toLowerCase()));
+                                      } catch (e) {
+                                        console.warn("Username reservation release skipped:", e);
+                                      }
+                                    }
+
+                                    // 6. Purge user connections and core user settings document
+                                    try {
+                                      await deleteDoc(doc(db, "user_connections", currentUser.uid));
+                                    } catch (e) {
+                                      console.warn("Connections release bypassed:", e);
+                                    }
+
+                                    try {
+                                      await deleteDoc(doc(db, "users", currentUser.uid));
+                                    } catch (e) {
+                                      handleFirestoreError(e, OperationType.DELETE, `users/${currentUser.uid}`);
+                                    }
+
+                                    // 7. Purge Authentication node
+                                    await deleteUser(currentUser);
+                                  };
+
+                                  try {
+                                    await performDeletion(user);
+                                    setCurrentPage("home");
+                                    setCurrentUserInfo(null);
+                                    alert("Your Account and all associated data have been completely erased. You may now register a new identity.");
+                                  } catch (error: any) {
+                                    if (error.code === 'auth/requires-recent-login') {
+                                      const isGoogleUser = user.providerData.some(p => p.providerId === 'google.com');
+                                      if (isGoogleUser) {
+                                        if (confirm("Identity verification required to proceed. Sign in again?")) {
+                                          const provider = new GoogleAuthProvider();
+                                          await signInWithPopup(auth, provider);
+                                          await performDeletion(auth.currentUser);
+                                          setCurrentPage("home");
+                                          setCurrentUserInfo(null);
+                                          alert("Your Account and all associated data have been completely erased. You may now register a new identity.");
+                                        }
+                                      } else {
+                                        throw error;
+                                      }
+                                    } else {
+                                      throw error;
+                                    }
+                                  }
+                                }
+                                setShowDeleteConfirm(false);
+                              } catch (error: any) {
+                                console.error("Deletion error:", error);
+                                if (error.code === 'auth/requires-recent-login') {
+                                  alert("Security Constraint: Please sign out, sign back in, and try deleting your profile again.");
+                                } else {
+                                  alert("Account deletion failed: " + error.message);
+                                }
+                              } finally {
+                                setIsAuthLoading(false);
+                              }
+                            }}
+                            className={`w-full py-3.5 text-white font-extrabold bg-[#ef4444] hover:bg-[#dc2626] rounded-2xl transition-all text-[10px] tracking-widest uppercase cursor-pointer flex items-center justify-center gap-2 ${isAuthLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                          >
+                            {isAuthLoading ? <Loader2 size={12} className="animate-spin" /> : "Confirm Deletion"}
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => setShowDeleteConfirm(false)}
+                            className="w-full py-3.5 text-zinc-600 dark:text-zinc-300 font-extrabold bg-zinc-200/80 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 rounded-2xl transition-all text-[10px] tracking-widest uppercase cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 {showDeleteConfirm && (
@@ -988,25 +7204,19 @@ export default function App() {
     }
 
     return (
-      <div className="min-h-screen bg-white relative flex flex-col items-center justify-center p-6">
-        <div className="absolute top-4 left-4 flex gap-2">
+      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-6">
+        <div className="absolute top-4 left-4">
           <button 
             onClick={() => setCurrentPage("home")}
-            className="p-2 text-zinc-400 hover:text-black transition-colors text-xs font-medium"
+            className="p-2 text-zinc-400 hover:text-black dark:hover:text-white transition-colors text-xs font-bold uppercase tracking-widest"
           >
-            ← Back
-          </button>
-          <button 
-            onClick={() => setCurrentPage("home")}
-            className="p-2 text-zinc-400 hover:text-black transition-colors text-xs font-medium border border-zinc-100 rounded-lg"
-          >
-            Skip
+            ← Back to Home
           </button>
         </div>
 
         <div className="w-full max-w-sm space-y-8">
           <div className="text-center space-y-4">
-            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 mx-auto bg-zinc-50 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800/50 mx-auto bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
               <SafeImage 
                 srcs={secondaryLogoSources} 
                 alt="GPG Logo" 
@@ -1014,34 +7224,37 @@ export default function App() {
                 fallbackIcon={Sparkles}
               />
             </div>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold tracking-tight text-zinc-900">GAMURA LOGIN</h2>
-              <p className="text-sm text-zinc-500">Sign in to save your chat history</p>
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase tracking-widest">GAMURA ID LOGIN</h2>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">ACTIVATE YOUR GAMURA ID SESSION</p>
             </div>
           </div>
 
-          <form className="space-y-4" onSubmit={(e) => {
+          <form className="space-y-4" onSubmit={async (e) => {
             e.preventDefault();
             setAuthError(null);
+            setIsAuthLoading(true);
 
-            const user = registeredUsers.find(u => 
-              u.username.toLowerCase() === username.toLowerCase() && 
-              u.password === password
-            );
-
-            if (user) {
-              setCurrentUserInfo({
-                username: user.username,
-                nickname: user.nickname
-              });
-              setIsLoggedIn(true);
-            } else {
-              const usernameExists = registeredUsers.some(u => u.username.toLowerCase() === username.toLowerCase());
-              if (usernameExists) {
-                setAuthError("Incorrect password. Please try again.");
-              } else {
-                setAuthError("Account not found. Please sign up first.");
+            try {
+              let loginEmail = username;
+              if (!loginEmail.includes('@')) {
+                loginEmail = `${username}@gamura.app`;
               }
+              await signInWithEmailAndPassword(auth, loginEmail, password);
+              setCurrentPage("blank");
+            } catch (error: any) {
+              if (error.code === 'auth/operation-not-allowed') {
+                setAuthError(
+                  <div className="space-y-2">
+                    <p className="font-bold">Auth Not Enabled</p>
+                    <p className="text-[10px] lowercase leading-relaxed opacity-80">Enable Email/Password in Firebase Console &gt; Auth &gt; Sign-in method.</p>
+                  </div>
+                );
+              } else {
+                setAuthError("Invalid Gamura ID or password.");
+              }
+            } finally {
+              setIsAuthLoading(false);
             }
           }}>
             {authError && (
@@ -1054,21 +7267,30 @@ export default function App() {
               </motion.div>
             )}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1">Username</label>
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1">Gamura ID</label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all text-sm"
+                  placeholder="Enter your Gamura ID"
+                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1">Password</label>
+              <div className="flex justify-between items-center ml-1">
+                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Password</label>
+                <button 
+                  type="button" 
+                  onClick={() => setForgotPassword(true)}
+                  className="text-[9px] font-black text-cyan-500 hover:text-cyan-600 uppercase tracking-widest"
+                >
+                  Forgot Password?
+                </button>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
                 <input
@@ -1076,16 +7298,41 @@ export default function App() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black transition-all text-sm"
+                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
                 />
               </div>
             </div>
 
             <button
               type="submit"
-              className="w-full bg-black text-white rounded-xl py-3.5 font-semibold text-sm hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] mt-4"
+              disabled={isAuthLoading}
+              className="w-full bg-black text-white dark:bg-white dark:text-black rounded-xl py-3.5 font-semibold text-sm hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] mt-4 flex items-center justify-center gap-2"
             >
-              Sign In
+              {isAuthLoading ? <Loader2 size={18} className="animate-spin" /> : "Sign In"}
+            </button>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-zinc-100 dark:border-zinc-800/50"></div>
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
+                <span className="bg-white dark:bg-zinc-950 px-2 text-zinc-400">Or continue with</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isAuthLoading}
+              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 transition-all active:scale-[0.98] shadow-sm"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              <span>Continue with Google</span>
             </button>
           </form>
 
@@ -1093,7 +7340,7 @@ export default function App() {
             Don't have an account? <span onClick={() => {
               setAuthError(null);
               setCurrentPage("signup");
-            }} className="text-black font-medium cursor-pointer hover:underline">Sign up</span>
+            }} className="text-black dark:text-white font-medium cursor-pointer hover:underline">Sign up</span>
           </p>
         </div>
       </div>
@@ -1102,10 +7349,10 @@ export default function App() {
 
   if (currentPage === "gg") {
     return (
-      <div className="min-h-screen bg-white relative flex flex-col items-center justify-center p-4 md:p-6">
+      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-4 md:p-6">
         <button 
           onClick={() => setCurrentPage("home")}
-          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black transition-colors text-[10px] md:text-xs font-medium"
+          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black dark:hover:text-white dark:text-white transition-colors text-[10px] md:text-xs font-medium"
         >
           ← Back
         </button>
@@ -1114,7 +7361,7 @@ export default function App() {
             href="https://gamuragalaxy.vercel.app/" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="block w-full max-w-[250px] mx-auto aspect-video rounded-3xl overflow-hidden shadow-2xl border border-zinc-100 bg-zinc-50 flex items-center justify-center hover:scale-105 transition-transform duration-500 cursor-pointer"
+            className="block w-full max-w-[250px] mx-auto aspect-video rounded-3xl overflow-hidden shadow-2xl border border-zinc-100 dark:border-zinc-800/50 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center hover:scale-105 transition-transform duration-500 cursor-pointer"
           >
             <SafeImage 
               srcs={ggImgSources} 
@@ -1129,7 +7376,7 @@ export default function App() {
               <span className="text-blue-600">M</span>
               <span className="text-green-600">UR</span>
               <span className="text-yellow-500">A</span>
-              <span className="text-zinc-900 ml-3">GAMES</span>
+              <span className="text-zinc-900 dark:text-zinc-50 ml-3">GAMES</span>
             </h1>
             <p className="text-zinc-400 text-[10px] font-black uppercase tracking-[0.5em]">Coming Soon</p>
           </div>
@@ -1140,16 +7387,16 @@ export default function App() {
 
   if (currentPage === "about") {
     return (
-      <div className="min-h-screen bg-white relative flex flex-col items-center justify-center p-4 md:p-6">
+      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-4 md:p-6">
         <button 
           onClick={() => setCurrentPage("home")}
-          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black transition-colors text-[10px] md:text-xs font-medium"
+          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black dark:hover:text-white dark:text-white transition-colors text-[10px] md:text-xs font-medium"
         >
           ← Back
         </button>
         <div className="w-full max-w-2xl space-y-6 md:space-y-8">
           <div className="text-center space-y-4">
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-900 uppercase tracking-[0.2em]">
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase tracking-[0.2em]">
               About <span className="text-red-600">GA</span><span className="text-blue-600">M</span><span className="text-green-600">UR</span><span className="text-yellow-500">A</span>
             </h2>
             <div className="h-px w-20 bg-zinc-200 mx-auto"></div>
@@ -1158,7 +7405,7 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-black text-white p-6 md:p-8 rounded-3xl shadow-2xl text-center space-y-4"
+            className="bg-black text-white dark:bg-white dark:text-black p-6 md:p-8 rounded-3xl shadow-2xl text-center space-y-4"
           >
             <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] text-zinc-500">Legacy</p>
             <h3 className="text-lg md:text-2xl font-light tracking-tight leading-tight">
@@ -1177,7 +7424,7 @@ export default function App() {
             </div>
           </motion.div>
 
-          <div className="w-full max-w-[280px] md:max-w-md mx-auto aspect-square rounded-3xl overflow-hidden shadow-2xl border border-zinc-100 bg-zinc-50 flex items-center justify-center">
+          <div className="w-full max-w-[280px] md:max-w-md mx-auto aspect-square rounded-3xl overflow-hidden shadow-2xl border border-zinc-100 dark:border-zinc-800/50 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
             <SafeImage 
               srcs={secondaryLogoSources} 
               alt="Gamura About" 
@@ -1190,11 +7437,498 @@ export default function App() {
     );
   }
 
-  if (currentPage === "gpg") {
+  if (currentPage === "white-page") {
     return (
-      <div className="min-h-screen bg-white relative flex flex-col h-screen overflow-hidden">
+      <SelvaranjanGamura 
+        onBack={() => {
+          // Push State back to Root URL when going back to home page
+          window.history.pushState({}, "", "/");
+          setViewingUsername(undefined);
+          setCurrentPage("home");
+        }} 
+        viewingUsername={viewingUsername}
+      />
+    );
+  }
+
+  if (currentPage === "blank") {
+    if (!isLoggedIn) {
+      alert("⚠️ WARNING: CONNECTION DENIED\n\nYou must first ACTIVATE YOUR GAMURA ID to access the Universe service. Please sign in to establish a secure link.");
+      setCurrentPage("login");
+      return null;
+    }
+
+    return (
+      <div className="min-h-screen bg-white text-zinc-900 relative flex flex-col items-center select-none w-full">
+        {/* Top bar */}
+        <div className="w-full max-w-7xl px-4 md:px-8 py-12 md:py-20 flex items-center border-b border-zinc-100 relative bg-white">
+          {/* Back button on the left */}
+          <button 
+            onClick={() => setCurrentPage("home")}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-800 transition-all font-sans text-xs font-bold uppercase tracking-wider cursor-pointer shadow-sm border border-zinc-200 z-20"
+          >
+            ← Back
+          </button>
+          
+          {/* Centered Image in the middle */}
+          <div className="absolute left-1/2 transform -translate-x-1/2 h-52 w-52 md:h-80 md:w-80 flex items-center justify-center z-10">
+            <SafeImage 
+              srcs={["https://lh3.googleusercontent.com/d/11bcWKdgGYngtK96ERJHGf43jAX-06Cjr"]} 
+              alt="Gamura Universe Logo" 
+              className="max-h-full max-w-full object-contain mix-blend-multiply"
+              fallbackIcon={Sparkles}
+            />
+          </div>
+
+          {/* Sliding bar toggle button on the right */}
+          <button 
+            onClick={() => setIsSlideOpen(!isSlideOpen)}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-950 hover:bg-zinc-800 text-white transition-all font-sans text-[10px] font-bold uppercase tracking-widest cursor-pointer shadow-md border border-zinc-900 z-20 group"
+          >
+            <span>Menu</span>
+            <motion.div
+              animate={{ rotate: isSlideOpen ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <ChevronDown size={12} className="group-hover:translate-y-0.5 transition-transform" />
+            </motion.div>
+          </button>
+        </div>
+
+        {/* Up-to-Down sliding bar/drawer panel */}
+        <AnimatePresence>
+          {isSlideOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full bg-zinc-50 border-b border-zinc-100 overflow-hidden relative z-10 shadow-inner"
+            >
+              <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 md:py-14 flex flex-col md:flex-row gap-6 justify-center items-start text-left">
+                {isLoggedIn ? (
+                  <>
+                    {/* Connected State: Displays only the GAMURA USER ID with no cosmic gravity components */}
+                    <div className="w-full max-w-md p-6 rounded-3xl bg-white border border-zinc-100 shadow-sm hover:shadow-md transition-shadow duration-300 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-mono tracking-wider text-emerald-500 uppercase font-bold">GAMURA USER ID</span>
+                          <span className="text-[9px] font-mono font-bold text-zinc-400">STATUS: ACTIVE</span>
+                        </div>
+                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      </div>
+                      
+                      <div className="space-y-3 pt-1">
+                        <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-2.5">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-zinc-400 font-mono text-[10px] uppercase">username</span>
+                            <span className="font-extrabold text-zinc-950">@{currentUserInfo?.username || "N/A"}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-zinc-400 font-mono text-[10px] uppercase font-bold">nickname</span>
+                            <span className="font-semibold text-zinc-700">{currentUserInfo?.nickname || "N/A"}</span>
+                          </div>
+                          {currentUser?.email && (
+                            <div className="flex justify-between items-center text-xs border-t border-zinc-200/50 pt-2 pb-0.5">
+                              <span className="text-zinc-400 font-mono text-[10px] uppercase">email</span>
+                              <span className="text-zinc-600 truncate max-w-[190px] font-mono text-[10px]">{currentUser.email}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-2 pt-1">
+                        <button 
+                          onClick={() => setShowTelemetry(!showTelemetry)} 
+                          className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
+                            showTelemetry 
+                              ? "bg-emerald-500 border-emerald-500 text-white" 
+                              : "text-zinc-700 bg-zinc-50 hover:bg-zinc-100 border-zinc-200"
+                          }`}
+                        >
+                          {showTelemetry ? "HIDE TELEMETRY" : "VIEW TELEMETRY"}
+                        </button>
+                        <button 
+                          onClick={() => setCurrentPage("login")} 
+                          className="flex-1 py-2 text-[10px] font-bold uppercase tracking-wider text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-all cursor-pointer"
+                        >
+                          MANAGE PROFILE
+                        </button>
+                      </div>
+                    </div>
+
+                    {showTelemetry && (
+                      <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ duration: 0.3 }}
+                        className="w-full max-w-md p-6 rounded-3xl bg-white border border-zinc-100 shadow-sm hover:shadow-md transition-shadow duration-300 space-y-4"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-mono tracking-wider text-violet-500 uppercase font-bold">G-UNIVERSE TELEMETRY</span>
+                            <span className="text-[9px] font-mono font-bold text-zinc-400">DATA STREAM // FEED // RESIDUAL RESONANCE</span>
+                          </div>
+                          <span className="h-2 w-2 rounded-full bg-violet-500 animate-ping" />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2 text-center">
+                          <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
+                            <div className="text-xs font-mono font-bold text-zinc-800">432 Hz</div>
+                            <div className="text-[9px] text-zinc-400 uppercase tracking-widest font-sans font-bold">Resonance Freq</div>
+                          </div>
+                          <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
+                            <div className="text-xs font-mono font-bold text-emerald-600">99.8%</div>
+                            <div className="text-[9px] text-zinc-400 uppercase tracking-widest font-sans font-bold">Sync Quality</div>
+                          </div>
+                          <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
+                            <div className="text-xs font-mono font-bold text-violet-600">12 ms</div>
+                            <div className="text-[9px] text-zinc-400 uppercase tracking-widest font-sans font-bold">Beacon Latency</div>
+                          </div>
+                          <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
+                            <div className="text-xs font-mono font-bold text-zinc-800">0.00 G</div>
+                            <div className="text-[9px] text-zinc-400 uppercase tracking-widest font-sans font-bold">Gravity Drift</div>
+                          </div>
+                        </div>
+
+                        {/* Interactive sparkline graph */}
+                        <div className="p-3 bg-zinc-950 rounded-2xl border border-zinc-900 space-y-2">
+                          <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500">
+                            <span>COSMIC WAVE OSCILLATION</span>
+                            <span className="text-emerald-400 animate-pulse">● STREAMING</span>
+                          </div>
+                          <div className="h-10 flex items-end gap-1 px-1">
+                            {[40, 60, 45, 80, 55, 75, 50, 90, 65, 85, 70, 95, 100].map((h, i) => (
+                              <motion.div 
+                                key={i}
+                                initial={{ height: 0 }}
+                                animate={{ height: `${h}%` }}
+                                transition={{ repeat: Infinity, duration: 1.5, repeatType: "reverse", delay: i * 0.08 }}
+                                className="flex-1 bg-gradient-to-t from-violet-500 to-emerald-500 rounded-t-sm"
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+
+                      </motion.div>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Content area: centered glassmorphism dashboard */}
+        <div className="flex-1 bg-white w-full flex items-center justify-center relative overflow-hidden">
+          {/* Subtle background decoration */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-50/50 rounded-full blur-[120px] pointer-events-none" />
+          
+          <style>{`
+            @keyframes premium-shimmer {
+              0% { transform: translateX(-150%) skewX(-25deg); opacity: 0; }
+              20% { opacity: 0.5; }
+              50% { opacity: 0.8; }
+              80% { opacity: 0.5; }
+              100% { transform: translateX(150%) skewX(-25deg); opacity: 0; }
+            }
+            .luxury-shine {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 60%;
+              height: 100%;
+              background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.8),
+                transparent
+              );
+              animation: premium-shimmer 3s infinite;
+            }
+          `}</style>
+          
+            <motion.button 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            whileHover={{ scale: 1.05, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              setShowUniverseLoader(true);
+              setTimeout(() => setCurrentPage("universe-active"), 100);
+            }}
+            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+            className="z-10 px-8 py-3.5 rounded-full bg-white/70 backdrop-blur-3xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.06)] flex items-center justify-center group hover:bg-white/95 transition-all duration-500 cursor-pointer overflow-hidden relative"
+          >
+            {/* Shimmer effect */}
+            <div className="luxury-shine" />
+            
+            <span className="text-[10px] font-black text-zinc-950 tracking-[0.5em] uppercase transition-all duration-700 group-hover:tracking-[0.7em] leading-none relative z-10 pl-[0.5em]">
+              Dashboard
+            </span>
+          </motion.button>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentPage === "universe-active") {
+    return (
+      <>
+        <AnimatePresence>
+          {showUniverseLoader && <GamuraLoader onFinish={() => setShowUniverseLoader(false)} />}
+        </AnimatePresence>
+        {!showUniverseLoader && (
+          <UniverseDashboard 
+            onBack={() => {
+              setShowUniverseLoader(false);
+              setCurrentPage("blank");
+            }} 
+            isLoggedIn={isLoggedIn}
+            user={currentUser}
+            userInfo={currentUserInfo}
+            setCurrentPage={setCurrentPage}
+            isDark={isDark}
+            setIsDark={setIsDark}
+            loaderImgSources={loaderImgSources}
+            onConnect={() => {
+              if (!isLoggedIn) {
+                setCurrentPage("login");
+              } else {
+                setCurrentPage("home");
+              }
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
+  if (currentPage === "aura") {
+    const AURA_MODULES = [
+      { id: "users", name: "User Directory", ic: "👥", pos: { x: 50, y: 18.5 }, desc: "Coming Soon" },
+      { id: "global", name: "Global Network", ic: "🌐", pos: { x: 72.3, y: 27.7 }, desc: "Coming Soon" },
+      { id: "analytics", name: "Neural Analytics", ic: "📊", pos: { x: 81.5, y: 50 }, desc: "Coming Soon" },
+      { id: "cloud", name: "Cloud Fabric", ic: "☁️", pos: { x: 72.3, y: 72.3 }, desc: "Coming Soon" },
+      { id: "settings", name: "Core Protocols", ic: "⚙️", pos: { x: 50, y: 81.5 }, desc: "Coming Soon" },
+      { id: "security", name: "Shield Systems", ic: "🛡️", pos: { x: 27.7, y: 72.3 }, desc: "Coming Soon" },
+      { id: "signal", name: "Spectral Signal", ic: "📡", pos: { x: 18.5, y: 50 }, desc: "Coming Soon" },
+      { id: "nodes", name: "Node Synapse", ic: "🔗", pos: { x: 27.7, y: 27.7 }, desc: "Coming Soon" },
+    ];
+
+    if (selectedAuraModule) {
+      const activeModule = AURA_MODULES.find(m => m.id === selectedAuraModule);
+      return (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="min-h-screen bg-white flex flex-col items-center justify-center relative select-none p-8"
+        >
+          <div className="absolute top-8 left-8">
+            <button 
+              onClick={() => setSelectedAuraModule(null)}
+              className="flex items-center gap-3 px-4 py-2 rounded-full border border-zinc-100 hover:bg-zinc-50 hover:border-zinc-200 transition-all group cursor-pointer"
+            >
+              <ChevronLeft size={18} className="text-zinc-400 group-hover:text-zinc-900 transition-colors" />
+              <span className="text-[10px] font-bold text-zinc-400 group-hover:text-zinc-900 uppercase tracking-widest">Return to Core</span>
+            </button>
+          </div>
+
+          <div className="max-w-2xl w-full flex flex-col items-center gap-8 text-center">
+            <motion.div 
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.1 }}
+              className="w-24 h-24 rounded-3xl bg-zinc-50 border border-zinc-100 flex items-center justify-center text-4xl shadow-sm"
+            >
+              {activeModule?.ic}
+            </motion.div>
+            
+            <div className="flex flex-col gap-3">
+              <motion.h2 
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.2 }}
+                className="text-4xl md:text-5xl font-black text-zinc-950 uppercase tracking-tighter"
+              >
+                {activeModule?.name}
+              </motion.h2>
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="text-[10px] font-black uppercase tracking-[0.5em] text-zinc-300 mb-2"
+              >
+                Aura System Identification
+              </motion.div>
+            </div>
+
+            {activeModule?.id === "global" && (
+              <motion.button
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.45 }}
+                onClick={() => setCurrentPage("portfolio")}
+                className="px-10 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-3xl text-sm font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3 border border-white/10"
+              >
+                <Briefcase size={20} />
+                Access Developer Portfolio
+              </motion.button>
+            )}
+
+            <motion.p 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-lg text-zinc-500 font-medium leading-relaxed"
+            >
+              {activeModule?.desc}
+            </motion.p>
+
+
+          </div>
+        </motion.div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-white text-zinc-900 relative flex flex-col items-center select-none w-full">
+        {/* Top bar */}
+        <div className="w-full max-w-7xl px-4 md:px-8 py-3 md:py-4 flex items-center border-b border-zinc-50 relative bg-white transition-all">
+          {/* Back button on the left */}
+          <button 
+            onClick={() => setCurrentPage("home")}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-50 hover:bg-zinc-100 text-zinc-800 transition-all font-sans text-[10px] font-bold uppercase tracking-[0.15em] cursor-pointer border border-zinc-200 z-20 shadow-sm"
+          >
+            <ChevronLeft size={14} />
+            Back to Hub
+          </button>
+        </div>
+
+        {/* Content area: centered image on pure white */}
+        <div className="flex-1 bg-white w-full flex items-center justify-center p-12">
+          <div className="relative w-full max-w-[640px] md:max-w-[720px] aspect-square">
+            <img 
+              src="https://lh3.googleusercontent.com/d/1iCaP3BYXSeXCQqsxyHy0dGhqgCfpYgIp" 
+              alt="Aura Logo" 
+              className="w-full h-full object-contain mix-blend-multiply" 
+            />
+            {/* 8 clickable pods positioned in a circle */}
+            {AURA_MODULES.map((mod, idx) => (
+              <motion.button 
+                key={idx}
+                initial={{ scale: 1 }}
+                whileHover={{ scale: 1.15, backgroundColor: "rgba(0,0,0,0.02)" }}
+                whileTap={{ scale: 0.85, backgroundColor: "rgba(0,0,0,0.08)" }}
+                onClick={() => {
+                  setSelectedAuraModule(mod.id);
+                  addActivity(`Explored Aura: ${mod.name}`, mod.ic);
+                }}
+                className="absolute w-[12%] h-[12%] -translate-x-1/2 -translate-y-1/2 rounded-full cursor-pointer z-10 flex items-center justify-center group"
+                style={{ left: `${mod.pos.x}%`, top: `${mod.pos.y}%` }}
+                title={mod.name}
+              >
+                {/* Visual feedback on hover */}
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  whileHover={{ opacity: 1, scale: 1.25 }}
+                  className="absolute inset-0 rounded-full border border-black/5 bg-white/10 backdrop-blur-sm shadow-[0_0_20px_rgba(0,0,0,0.03)]"
+                />
+                <span className="hidden">Click to enter {mod.name}</span>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentPage === "gpg") {
+    if (!isLoggedIn) {
+      return (
+        <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-6 text-center">
+          <button 
+            onClick={() => setCurrentPage("home")}
+            className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black dark:hover:text-white transition-colors text-xs font-medium"
+          >
+            ← Back
+          </button>
+          <div className="max-w-md w-full space-y-8 p-8 border border-zinc-100 dark:border-zinc-800/50 rounded-[2.5rem] bg-zinc-50 dark:bg-zinc-900/50 shadow-2xl">
+            <div className="w-20 h-20 bg-zinc-100 dark:bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <Lock className="text-zinc-400" size={32} />
+            </div>
+            <div className="space-y-3">
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase">Login Required</h2>
+              <p className="text-zinc-500 text-sm">
+                You must be signed in to use the Gamura Prompt Generator and save your history.
+              </p>
+            </div>
+            <div className="pt-6 space-y-3">
+              <button
+                onClick={() => setCurrentPage("login")}
+                className="w-full bg-black text-white dark:bg-white dark:text-black rounded-xl py-4 font-bold text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-black/10"
+              >
+                Sign In Now
+              </button>
+              <button
+                onClick={() => setCurrentPage("signup")}
+                className="w-full bg-transparent text-zinc-500 dark:text-zinc-400 font-bold text-[10px] uppercase tracking-widest hover:text-black dark:hover:text-white transition-colors"
+              >
+                Create an account
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col h-screen overflow-hidden">
+        {/* API Key Warning Overlay */}
+        {!getAi() && (
+          <div className="absolute inset-0 z-50 bg-white dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-6">
+            <div 
+              className="bg-white dark:bg-zinc-950 border border-zinc-200 shadow-2xl rounded-[2.5rem] p-8 max-w-md w-full text-center space-y-6"
+            >
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
+                <Lock className="text-red-600" size={32} />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">Configuration Required</h2>
+                <p className="text-zinc-500 text-sm">
+                  To use the AI Prompt Generator, you need to add your Gemini API Key.
+                </p>
+              </div>
+              <div className="bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl p-4 text-left space-y-3">
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-black text-white dark:bg-white dark:text-black text-[10px] flex items-center justify-center shrink-0">1</div>
+                  <p className="text-[11px] text-zinc-600">Open <b>Settings</b> (gear icon) in the top right.</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-black text-white dark:bg-white dark:text-black text-[10px] flex items-center justify-center shrink-0">2</div>
+                  <p className="text-[11px] text-zinc-600">Go to <b>Secrets</b> and add <b>GAMURA_API_KEY</b> or <b>GEMINI_API_KEY</b>.</p>
+                </div>
+                <div className="flex gap-3">
+                  <div className="w-5 h-5 rounded-full bg-black text-white dark:bg-white dark:text-black text-[10px] flex items-center justify-center shrink-0">3</div>
+                  <p className="text-[11px] text-zinc-600">Paste your key from Google AI Studio.</p>
+                </div>
+              </div>
+              <a 
+                href="https://aistudio.google.com/app/apikey" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="block w-full py-3 bg-black text-white dark:bg-white dark:text-black rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all"
+              >
+                Get API Key
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
-        <div className="pt-4 pb-2 w-full flex justify-center px-4 md:px-16 border-b border-zinc-50 bg-white/80 backdrop-blur-md z-10 relative">
+        <div className="pt-4 pb-2 w-full flex justify-center px-4 md:px-16 border-b border-zinc-50 bg-white dark:bg-zinc-950/80 backdrop-blur-md z-10 relative">
           <span className="text-[9px] md:text-xs font-medium tracking-[0.2em] uppercase">
             <span className="text-red-600">GA</span>
             <span className="text-blue-600">M</span>
@@ -1204,7 +7938,7 @@ export default function App() {
           </span>
           <button 
             onClick={startNewChat}
-            className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 text-[8px] md:text-[10px] font-bold text-black border border-black px-2 md:px-3 py-1 rounded-full hover:bg-black hover:text-white transition-all uppercase tracking-tighter"
+            className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 text-[8px] md:text-[10px] font-bold text-black dark:text-white border border-black dark:border-white px-2 md:px-3 py-1 rounded-full hover:bg-black dark:hover:bg-white hover:text-white transition-all uppercase tracking-tighter"
           >
             New Chat
           </button>
@@ -1212,7 +7946,7 @@ export default function App() {
         
         <button 
           onClick={() => setCurrentPage("home")}
-          className="absolute top-4 left-2 md:left-4 p-2 text-zinc-400 hover:text-black transition-colors text-[10px] md:text-xs font-medium z-20"
+          className="absolute top-4 left-2 md:left-4 p-2 text-zinc-400 hover:text-black dark:hover:text-white dark:text-white transition-colors text-[10px] md:text-xs font-medium z-20"
         >
           ← Back
         </button>
@@ -1224,7 +7958,7 @@ export default function App() {
         >
           {gpgMessages.length === 0 && (
             <div className="h-full flex flex-col items-center justify-center text-center space-y-6 max-w-md mx-auto">
-              <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 bg-zinc-50 flex items-center justify-center">
+              <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800/50 bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
                 <SafeImage 
                   srcs={secondaryLogoSources} 
                   alt="GPG Logo" 
@@ -1233,7 +7967,7 @@ export default function App() {
                 />
               </div>
               <div className="space-y-2">
-                <h3 className="text-zinc-900 font-medium">Ready to generate?</h3>
+                <h3 className="text-zinc-900 dark:text-zinc-50 font-medium">Ready to generate?</h3>
                 <p className="text-zinc-400 text-sm leading-relaxed">
                   Describe what you want to create, and I'll craft the perfect prompt for you.
                 </p>
@@ -1252,8 +7986,8 @@ export default function App() {
                 <div
                   className={`max-w-[90%] md:max-w-[70%] p-3 md:p-4 rounded-2xl relative group ${
                     m.role === "user"
-                      ? "bg-black text-white rounded-tr-none shadow-lg shadow-black/5"
-                      : "bg-zinc-50 text-zinc-800 rounded-tl-none border border-zinc-100"
+                      ? "bg-black text-white dark:bg-white dark:text-black rounded-tr-none shadow-lg shadow-black/5"
+                      : "bg-zinc-50 dark:bg-zinc-900/50 text-zinc-800 dark:text-zinc-200 rounded-tl-none border border-zinc-100 dark:border-zinc-800/50"
                   }`}
                 >
                   <p className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap selection:bg-blue-200 selection:text-blue-900 pr-6">
@@ -1264,8 +7998,8 @@ export default function App() {
                     onClick={() => copyToClipboard(m.role === "model" ? cleanPrompt(m.content) : m.content, i)}
                     className={`absolute right-2 top-2 p-1.5 transition-all rounded-lg backdrop-blur-sm ${
                       m.role === "user"
-                        ? "text-zinc-500 hover:text-white bg-white/10 opacity-40 group-hover:opacity-100"
-                        : "text-zinc-300 hover:text-black bg-white/50 opacity-40 md:opacity-0 group-hover:opacity-100"
+                        ? "text-zinc-500 hover:text-white bg-white dark:bg-zinc-950/10 opacity-40 group-hover:opacity-100"
+                        : "text-zinc-300 hover:text-black dark:hover:text-white dark:text-white bg-white dark:bg-zinc-950/50 opacity-40 md:opacity-0 group-hover:opacity-100"
                     }`}
                     title="Copy"
                   >
@@ -1282,7 +8016,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               className="flex justify-start"
             >
-              <div className="bg-zinc-50 p-4 rounded-2xl rounded-tl-none border border-zinc-100 flex items-center gap-3">
+              <div className="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-2xl rounded-tl-none border border-zinc-100 dark:border-zinc-800/50 flex items-center gap-3">
                 <Loader2 size={16} className="animate-spin text-zinc-400" />
                 <span className="text-xs text-zinc-400 font-medium">Crafting your prompt...</span>
               </div>
@@ -1291,11 +8025,11 @@ export default function App() {
         </div>
 
         {/* Search Bar (Prompt Input) at the Bottom */}
-        <div className="p-3 md:p-8 bg-gradient-to-t from-white via-white to-transparent">
+        <div className="p-3 md:p-8 bg-gradient-to-t selection:bg-zinc-200 dark:selection:bg-zinc-800 from-white via-white/80 to-transparent dark:from-zinc-950 dark:via-zinc-950/80">
           <div className="max-w-3xl mx-auto mb-2 md:mb-4 flex flex-col items-center">
             <button
               onClick={() => setShowTools(!showTools)}
-              className="flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest transition-all border border-zinc-100 hover:border-zinc-300 mb-2 md:mb-4 bg-white shadow-sm"
+              className="flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-widest transition-all border border-zinc-100 dark:border-zinc-800/50 hover:border-zinc-300 mb-2 md:mb-4 bg-white dark:bg-zinc-950 shadow-sm"
             >
               <Sparkles size={12} className={showTools ? "text-yellow-500" : "text-zinc-400"} />
               {showTools ? "Hide Tools" : "Show Tools"}
@@ -1322,8 +8056,8 @@ export default function App() {
                       onClick={() => setSelectedTool(selectedTool === tool.id ? null : tool.id)}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${
                         selectedTool === tool.id 
-                          ? "bg-black text-white border-black shadow-md" 
-                          : "bg-white text-zinc-400 border-zinc-100 hover:border-zinc-300"
+                          ? "bg-black text-white dark:bg-white dark:text-black border-black dark:border-white shadow-md" 
+                          : "bg-white dark:bg-zinc-950 text-zinc-400 border-zinc-100 dark:border-zinc-800/50 hover:border-zinc-300"
                       }`}
                     >
                       {tool.icon}
@@ -1338,48 +8072,51 @@ export default function App() {
             onSubmit={handleGpgSubmit}
             className="max-w-3xl mx-auto relative group"
           >
+            <AnimatePresence>
+              {limitError && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="absolute -top-12 left-0 right-0 py-2 px-4 bg-red-50 text-red-600 text-[10px] font-bold uppercase tracking-widest text-center rounded-xl border border-red-100 shadow-sm z-20"
+                >
+                  {limitError}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="relative flex items-center">
               <input
                 type="text"
                 value={gpgInput}
                 onChange={(e) => setGpgInput(e.target.value)}
-                onMouseDown={() => {
-                  setShowProgressAlert(true);
-                  setTimeout(() => setShowProgressAlert(false), 3000);
-                }}
-                readOnly
-                placeholder="GPG is currently in progress..."
-                className="w-full bg-zinc-100 border border-zinc-200 rounded-2xl py-4 pl-6 pr-14 focus:outline-none text-sm shadow-sm placeholder:text-zinc-400 cursor-not-allowed opacity-60"
+                placeholder="Ask Gamura..."
+                className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-6 pr-14 focus:outline-none focus:ring-2 focus:ring-black/5 dark:focus:ring-white/5 text-sm shadow-sm placeholder:text-zinc-400 group-hover:border-zinc-300 dark:group-hover:border-zinc-700 transition-colors text-zinc-900 dark:text-zinc-100"
               />
               <button
                 type="submit"
-                disabled
-                className="absolute right-3 p-2.5 bg-zinc-300 text-white rounded-xl cursor-not-allowed transition-all shadow-md opacity-50"
+                disabled={!gpgInput.trim() || isGpgLoading || !getAi()}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 bg-black text-white dark:bg-white dark:text-black rounded-xl hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 transition-all shadow-md flex items-center justify-center"
               >
-                <Send size={18} />
+                {isGpgLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
               </button>
             </div>
-            <p className="text-[9px] text-center text-zinc-300 mt-4 tracking-widest uppercase font-medium">
-              Gamura Intelligence • Powered by GAMURA
-            </p>
-          </form>
-
-          {/* Progress Alert */}
-          <AnimatePresence>
-            {showProgressAlert && (
-              <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50 px-6 py-3 bg-black text-white rounded-2xl shadow-2xl border border-white/10 flex items-center gap-3"
-              >
-                <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] whitespace-nowrap">
-                  PROJECT GAMURA IS ON PROGRESS...
+            <div className="text-[9px] text-center text-zinc-400 dark:text-zinc-500 mt-4 tracking-widest uppercase font-medium flex items-center justify-center gap-3">
+              <span className="font-bold">
+                Gamura Intelligence
+              </span>
+              <span className="opacity-30 select-none text-zinc-300">•</span>
+              {currentUserInfo && (
+                <span className={`px-2 py-0.5 rounded-full border transition-colors ${
+                  (currentUserInfo.gpgTimestamps || []).filter(t => Date.now() - t < 24 * 60 * 60 * 1000).length >= 3
+                  ? "border-red-200 text-red-400 bg-red-50/50"
+                  : "border-zinc-100 dark:border-zinc-800 text-zinc-400 bg-zinc-50/10"
+                }`}>
+                  LIMIT: {3 - (currentUserInfo.gpgTimestamps || []).filter(t => Date.now() - t < 24 * 60 * 60 * 1000).length}/3
                 </span>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              )}
+            </div>
+          </form>
         </div>
       </div>
     );
@@ -1387,49 +8124,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-white relative flex flex-col overflow-hidden">
-        {/* API Key Warning Overlay */}
-        {!getAi() && currentPage === "gpg" && (
-          <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white border border-zinc-200 shadow-2xl rounded-[2.5rem] p-8 max-w-md w-full text-center space-y-6"
-            >
-              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
-                <Lock className="text-red-600" size={32} />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-xl font-bold text-zinc-900">Configuration Required</h2>
-                <p className="text-zinc-500 text-sm">
-                  To use the AI Prompt Generator, you need to add your Gemini API Key.
-                </p>
-              </div>
-              <div className="bg-zinc-50 rounded-2xl p-4 text-left space-y-3">
-                <div className="flex gap-3">
-                  <div className="w-5 h-5 rounded-full bg-black text-white text-[10px] flex items-center justify-center shrink-0">1</div>
-                  <p className="text-[11px] text-zinc-600">Open <b>Settings</b> (gear icon) in the top right.</p>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-5 h-5 rounded-full bg-black text-white text-[10px] flex items-center justify-center shrink-0">2</div>
-                  <p className="text-[11px] text-zinc-600">Go to <b>Secrets</b> and add <b>GEMINI_API_KEY</b>.</p>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-5 h-5 rounded-full bg-black text-white text-[10px] flex items-center justify-center shrink-0">3</div>
-                  <p className="text-[11px] text-zinc-600">Paste your key from Google AI Studio.</p>
-                </div>
-              </div>
-              <a 
-                href="https://aistudio.google.com/app/apikey" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="block w-full py-3 bg-black text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all"
-              >
-                Get API Key
-              </a>
-            </motion.div>
-          </div>
-        )}
+      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col overflow-hidden">
       {/* Sidebar Menu */}
       <AnimatePresence>
         {isMenuOpen && (
@@ -1458,84 +8153,79 @@ export default function App() {
                   <X size={24} />
                 </button>
               </div>
-              <div className="flex-1 px-6 flex flex-col items-center justify-center">
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
+              <div className="flex-1 px-6 flex flex-col items-center justify-center space-y-6">
+                <button
                   onClick={() => {
                     setCurrentPage("gpg");
                     setIsMenuOpen(false);
                   }}
-                  className="text-4xl font-bold tracking-widest font-sans transition-colors mb-8"
+                  className="group relative flex items-center gap-3 text-4xl font-bold tracking-widest font-sans transition-all hover:scale-105 active:scale-95"
                 >
-                  <span className="text-red-600">G</span>
-                  <span className="text-yellow-500">P</span>
-                  <span className="text-green-600">G</span>
-                </motion.button>
+                  <MessageSquarePlus size={32} className="text-white" />
+                  <div>
+                    <span className="text-red-600">G</span>
+                    <span className="text-yellow-500">P</span>
+                    <span className="text-green-600">G</span>
+                  </div>
+                  <span className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 text-white border border-zinc-700 text-xs font-medium px-3 py-1.5 rounded-lg whitespace-nowrap pointer-events-none z-50 font-bold uppercase tracking-widest">
+                    Start a New Chat
+                  </span>
+                </button>
 
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                <button
                   onClick={() => {
                     setCurrentPage("login");
                     setIsMenuOpen(false);
                   }}
-                  className="text-white text-sm font-semibold tracking-[0.2em] uppercase hover:text-zinc-400 transition-colors mb-4"
+                  className="group relative flex items-center gap-3 text-white text-sm font-semibold tracking-[0.25em] uppercase hover:text-zinc-400 transition-all hover:translate-x-1"
                 >
-                  GAMURA LOGIN
-                </motion.button>
+                  {isLoggedIn ? <User size={20} /> : <LogIn size={20} />}
+                  <span>{isLoggedIn ? "GAMURA PROFILE" : "GAMURA LOGIN"}</span>
+                </button>
 
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                <button
                   onClick={() => {
                     setCurrentPage("history");
                     setIsMenuOpen(false);
                   }}
-                  className="text-white text-sm font-semibold tracking-[0.2em] uppercase hover:text-zinc-400 transition-colors mb-4"
+                  className="group relative flex items-center gap-3 text-white text-sm font-semibold tracking-[0.25em] uppercase hover:text-zinc-400 transition-all hover:translate-x-1"
                 >
-                  HISTORY
-                </motion.button>
+                  <History size={20} />
+                  <span>HISTORY</span>
+                </button>
 
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                <button
                   onClick={() => {
                     setCurrentPage("about");
                     setIsMenuOpen(false);
                   }}
-                  className="text-white text-sm font-semibold tracking-[0.2em] uppercase hover:text-zinc-400 transition-colors mb-4"
+                  className="group relative flex items-center gap-3 text-white text-sm font-semibold tracking-[0.25em] uppercase hover:text-zinc-400 transition-all hover:translate-x-1"
                 >
-                  ABOUT
-                </motion.button>
+                  <Info size={20} />
+                  <span>ABOUT</span>
+                </button>
 
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                <button
                   onClick={() => {
                     setCurrentPage("gg");
                     setIsMenuOpen(false);
                   }}
-                  className="text-white text-sm font-semibold tracking-[0.2em] uppercase hover:text-zinc-400 transition-colors"
+                  className="group relative flex items-center gap-3 text-white text-sm font-semibold tracking-[0.25em] uppercase hover:text-zinc-400 transition-all hover:translate-x-1"
                 >
-                  GG
-                </motion.button>
+                  <Gamepad2 size={20} />
+                  <span>GG</span>
+                </button>
               </div>
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
-      {/* Top Left Logo (Clickable) */}
-      <div className="p-3 md:p-4 absolute top-0 left-0 z-10">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+      {/* Bottom Middle Logo (Clickable) */}
+      <div className="p-3 md:p-6 absolute bottom-0 left-1/2 -translate-x-1/2 z-20">
+        <button
           onClick={() => setIsMenuOpen(true)}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-          className="w-12 h-12 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-black/10 shadow-lg focus:outline-none focus:ring-2 focus:ring-black/5 bg-white flex items-center justify-center"
+          className="w-12 h-12 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-black dark:border-white/10 shadow-lg focus:outline-none focus:ring-2 focus:ring-black/5 bg-white dark:bg-zinc-950 flex items-center justify-center hover:opacity-90 transition-opacity"
         >
           <SafeImage 
             srcs={logoSources} 
@@ -1544,34 +8234,87 @@ export default function App() {
             fallbackIcon={Sparkles}
             fallbackText="GAMURA"
           />
-        </motion.button>
-      </div>
-
-      {/* Top Right Portfolio Button */}
-      <div className="p-3 md:p-4 absolute top-0 right-0 z-10">
-        <button
-          onClick={() => setCurrentPage("portfolio")}
-          className="bg-black text-white px-4 md:px-6 py-2 md:py-2.5 rounded-full text-[9px] md:text-[10px] font-bold uppercase tracking-[0.2em] shadow-lg hover:bg-zinc-800 transition-all border border-black"
-        >
-          Portfolio
         </button>
       </div>
 
-          <div className="flex-1 flex items-center justify-center p-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-          className="max-w-4xl w-full"
+      {/* Top Right Actions */}
+      <div className="p-3 md:p-4 absolute top-0 right-0 z-10 flex gap-4">
+        {/* Removed Portfolio button as requested */}
+      </div>
+
+      {/* Top Middle Logo / Image */}
+      <button 
+        onClick={() => setCurrentPage("white-page")}
+        className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex justify-center w-full max-w-[280px] sm:max-w-[420px] md:max-w-[580px] hover:opacity-90 active:scale-[0.98] transition-all bg-transparent border-none outline-none cursor-pointer focus:outline-none"
+      >
+        <SafeImage 
+          srcs={["https://lh3.googleusercontent.com/d/1964MBWOG-tkUyeooBmLizw5Bol97oe1U"]} 
+          alt="Gamura Top Logo" 
+          className="w-full h-auto object-contain bg-transparent mix-blend-multiply dark:mix-blend-normal"
+          fallbackIcon={Sparkles}
+        />
+      </button>
+
+      <div className="flex-1 flex flex-col items-center justify-center w-full h-full p-4 md:p-8 mt-16 md:mt-0 relative z-0">
+        <div
+          className="w-full max-w-5xl flex items-center justify-center mx-auto"
         >
           <SafeImage 
             srcs={mainImgSources} 
             alt="Gamura Main" 
-            className="w-full h-auto object-contain drop-shadow-2xl"
+            className="w-full max-h-[70vh] object-contain bg-white dark:bg-zinc-950 mix-blend-multiply dark:mix-blend-normal"
             fallbackIcon={Sparkles}
             fallbackText="Intelligence Redefined"
           />
-        </motion.div>
+        </div>
+        
+        <div
+          className="w-full max-w-5xl flex justify-between mx-auto mt-4 px-4 md:px-8"
+        >
+          <div className="flex flex-col items-center gap-2">
+            <button 
+              onClick={() => {
+                if (isLoggedIn) {
+                  setShowUniverseLoader(true);
+                  setTimeout(() => setCurrentPage("universe-active"), 100);
+                } else {
+                  alert("⚠️ WARNING: CONNECTION DENIED\n\nYou must first ACTIVATE YOUR GAMURA ID to access the Universe service. Please sign in to establish a secure link.");
+                  setCurrentPage("login");
+                }
+              }}
+              className="w-16 h-16 md:w-24 md:h-24 rounded-full overflow-hidden shadow-xl border border-zinc-200 bg-white flex items-center justify-center p-2 hover:opacity-80 transition-opacity cursor-pointer shadow-black/10 dark:shadow-white/5"
+            >
+              <SafeImage 
+                srcs={roundImgSources} 
+                alt="Gamura Extra Details Left" 
+                className="w-full h-full object-contain bg-white"
+                fallbackIcon={Sparkles}
+              />
+            </button>
+            <span className="text-[10px] md:text-[11px] font-extrabold tracking-[0.25em] text-zinc-500 dark:text-zinc-400 font-sans uppercase">
+              UNIVERSE
+            </span>
+          </div>
+
+          <div className="flex flex-col items-center gap-2">
+            <button 
+              onClick={() => {
+                setCurrentPage("aura");
+              }}
+              className="w-16 h-16 md:w-24 md:h-24 rounded-full overflow-hidden shadow-xl border border-zinc-200 bg-white flex items-center justify-center p-2 hover:opacity-80 transition-opacity cursor-pointer shadow-black/10 dark:shadow-white/5"
+            >
+              <SafeImage 
+                srcs={rightRoundImgSources} 
+                alt="Gamura Extra Details Right" 
+                className="w-full h-full object-contain bg-white"
+                fallbackIcon={Sparkles}
+              />
+            </button>
+            <span className="text-[10px] md:text-[11px] font-extrabold tracking-[0.25em] text-zinc-500 dark:text-zinc-400 font-sans uppercase">
+              AURA
+            </span>
+          </div>
+        </div>
       </div>
     </div>
     </ErrorBoundary>

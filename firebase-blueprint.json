@@ -1,0 +1,167 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "nickname": { "type": "string" },
+        "username": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["uid", "email", "nickname", "createdAt"]
+    },
+    "SharedProject": {
+      "title": "SharedProject",
+      "description": "Project shared by a user",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "link": { "type": "string" },
+        "image": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "timestamp": { "type": "object" }
+      },
+      "required": ["title", "link", "userId", "userName", "timestamp"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "A conversation with AI",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "messages": { 
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["userId", "title", "messages", "timestamp"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "Global system activity",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "ic": { "type": "string" },
+        "timestamp": { "type": "object" },
+        "user": { "type": "string" },
+        "userId": { "type": "string" },
+        "priority": { "type": "string" },
+        "dueDate": { "type": "string" }
+      }
+    },
+    "NeuralProfile": {
+      "title": "NeuralProfile",
+      "description": "Unique nickname for Neural Link",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "nickname": { "type": "string" },
+        "avatarUrl": { "type": "string" }
+      },
+      "required": ["uid", "nickname"]
+    },
+    "NeuralChat": {
+      "title": "NeuralChat",
+      "description": "Ephemeral group or 1:1 chat",
+      "type": "object",
+      "properties": {
+        "members": { "type": "array", "items": { "type": "string" } },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "timestamp": { "type": "object" }
+      }
+    },
+    "NeuralMessage": {
+      "title": "NeuralMessage",
+      "description": "Temporary message",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "object" }
+      }
+    },
+    "Feature": {
+      "title": "Feature",
+      "description": "Feature tracking entry",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "status": { "type": "string" },
+        "progress": { "type": "number" },
+        "color": { "type": "string" },
+        "order": { "type": "number" }
+      }
+    },
+    "GamuraDeveloper": {
+      "title": "GamuraDeveloper",
+      "description": "Gamura Developer claimed hubs and metrics",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "blocks": { "type": "array", "items": { "type": "object" } },
+        "published": { "type": "boolean" },
+        "plan": { "type": "string" },
+        "clicks": { "type": "number" },
+        "views": { "type": "number" },
+        "visitors": { "type": "number" },
+        "engagements": { "type": "number" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["username"]
+    }
+  },
+  "firestore": {
+    "/gamura_developers/{username}": {
+      "schema": { "$ref": "#/entities/GamuraDeveloper" },
+      "description": "Store developer accounts and public urls"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Store user profiles"
+    },
+    "/neural_profiles/{nickname}": {
+      "schema": { "$ref": "#/entities/NeuralProfile" },
+      "description": "Lookup users by unique nickname"
+    },
+    "/neural_chats/{chatId}": {
+      "schema": { "$ref": "#/entities/NeuralChat" },
+      "description": "Group and 1:1 chats"
+    },
+    "/neural_chats/{chatId}/messages/{msgId}": {
+      "schema": { "$ref": "#/entities/NeuralMessage" },
+      "description": "Ephemeral messages"
+    },
+    "/users/{userId}/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/Chat" },
+      "description": "Store chats belonging to user"
+    },
+    "/activities/{activityId}": {
+      "schema": { "$ref": "#/entities/Activity" },
+      "description": "Global system activities"
+    },
+    "/features/{featureName}": {
+      "schema": { "$ref": "#/entities/Feature" },
+      "description": "Platform feature tracker"
+    },
+    "/shared_projects/{projectId}": {
+      "schema": { "$ref": "#/entities/SharedProject" },
+      "description": "Store shared universe projects"
+    },
+    "/system/stats": {
+      "schema": "object",
+      "description": "Global system statistics"
+    }
+  }
+}

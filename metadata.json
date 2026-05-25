@@ -1,5 +1,8 @@
 {
   "name": "GAMURA",
-  "description": "The Official GAMURA App - Founder: Selvaranjan G",
-  "requestFramePermissions": []
+  "description": "The Official GAMURA App - SELVARANJAN G's Edition",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
