@@ -211,7 +211,15 @@ service cloud.firestore {
     match /gamura_developers/{username} {
       allow read, list: if true;
       allow create, update: if isValidId(username) && isValidGamuraDeveloper(incoming());
-      allow delete: if isAdmin();
+      allow delete: if isSignedIn() && (
+        isAdmin() ||
+        (resource != null && (
+          (request.auth.uid == username) ||
+          ( 'uid' in resource.data && resource.data.uid == request.auth.uid ) ||
+          resource.data.email == request.auth.token.email ||
+          (exists(/databases/$(database)/documents/usernames/$(username)) && get(/databases/$(database)/documents/usernames/$(username)).data.uid == request.auth.uid)
+        ))
+      );
     }
   }
 }
