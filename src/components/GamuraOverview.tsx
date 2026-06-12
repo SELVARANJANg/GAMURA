@@ -534,12 +534,21 @@ export const GamuraOverview: React.FC<GamuraProps> = ({ activeTab }) => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h2 className="font-orbitron font-extrabold text-base text-white">BuBuBai Cognitive Core</h2>
-              <p className="font-rajdhani font-semibold text-xs text-gamura-accent tracking-widest uppercase">NODE ACTIVE & SHIELDED</p>
-              <p className="text-xs text-gamura-muted max-w-xs leading-relaxed">
-                Harnessing quantum prediction weights to resolve layout anomalies, compile aerospace typography states, and sync spatial modules.
-              </p>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <h2 className="font-orbitron font-extrabold text-base text-white">BuBuBai Cognitive Core</h2>
+                <p className="font-rajdhani font-semibold text-xs text-gamura-accent tracking-widest uppercase">NODE ACTIVE & SHIELDED</p>
+                <p className="text-xs text-gamura-muted max-w-xs leading-relaxed mx-auto">
+                  Harnessing quantum prediction weights to resolve layout anomalies, compile aerospace typography states, and sync spatial modules.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => window.open('https://bububai.vercel.app/', '_blank')}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_15px_rgba(139,92,246,0.35)] hover:shadow-[0_0_25px_rgba(139,92,246,0.55)] transform hover:-translate-y-0.5 cursor-pointer"
+              >
+                🚀 LAUNCH BUBUBAI PLATFORM
+              </button>
             </div>
 
             {/* Simulated Live Telemetry Wave */}

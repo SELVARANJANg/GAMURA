@@ -249,6 +249,28 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
 @keyframes tout{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(108%)}}
 @media(max-width:640px){.dbside{display:none}.nav{padding:12px 15px}.nbtn{padding:7px 13px;font-size:12px}.sucard{padding:28px 18px;margin-top:64px}.footgrid{grid-template-columns:1fr 1fr;gap:24px}.shgrid{grid-template-columns:1fr}}
 @media(max-width:400px){.agrid{grid-template-columns:1fr}.mbtns{flex-direction:column}.pgrid{border-radius:10px}}
+
+body.in-iframe .nav {
+  padding-left: 145px !important;
+}
+body.in-iframe .dbnav {
+  padding-left: 145px !important;
+}
+body.in-iframe .pubbar {
+  padding-left: 145px !important;
+}
+
+@media(max-width:640px) {
+  body.in-iframe .nav {
+    padding-left: 60px !important;
+  }
+  body.in-iframe .dbnav {
+    padding-left: 60px !important;
+  }
+  body.in-iframe .pubbar {
+    padding-left: 60px !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -258,6 +280,52 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
 <div class="nb nb3"></div>
 <div id="toastroot"></div>
 
+<div class="mbg" id="m-gamura-id-auth">
+  <div class="modal mdark" style="max-width: 440px;">
+    <button class="mcl" onclick="closeM('m-gamura-id-auth')">✕</button>
+    <div style="text-align:center;padding:10px 0 16px 0">
+      <div style="font-size:36px;margin-bottom:8px">🎮</div>
+      <div style="font-family:'Orbitron',monospace;font-size:16px;font-weight:900;letter-spacing:1px;color:#10F080;margin-bottom:4px">GAMURA ID GATEWAY</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.45);font-family:'Space Grotesk',sans-serif">Secure real-time passwordless or credentialed SSO login</div>
+    </div>
+    
+    <div class="mfg">
+      <label class="mla">Gamura Username ID</label>
+      <div class="irow" style="height:46px;border-radius:8px;margin-bottom:4px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.02);display:flex;align-items:center;padding:0 12px;gap:6px">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--b);white-space:nowrap;letter-spacing:.04em">gamura /</span>
+        <input class="finp" id="gmrIdInput" type="text" placeholder="your_username" style="background:none;border:none;height:100%;padding:0;font-size:13px;font-family:'JetBrains Mono',monospace;color:#fff;flex:1;outline:none" oninput="checkGamuraIdRealTime()">
+      </div>
+      <div style="height: 20px; display: flex; align-items: center; margin-top: 4px;">
+        <span id="gmrIdStatus" style="font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:800; text-transform:uppercase; transition:all 0.2s;"></span>
+      </div>
+    </div>
+
+    <!-- Password segment (collapses or prompts elegantly!) -->
+    <div class="mfg" id="gmrPwGroup" style="display:none; transition: all 0.3s ease;">
+      <label class="mla">Secret Password</label>
+      <div class="pwr">
+        <input class="finp" id="gmrPwInput" type="password" placeholder="Enter password to access" style="height:46px;border-radius:8px;width:100%;background:rgba(255,255,255,.04);color:#fff;border:1px solid rgb(55,65,81)" oninput="gmrPwInputCheck()">
+        <button class="pwe" onclick="togglePw('gmrPwInput',this)">👁</button>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:8px; margin-top:20px">
+      <!-- Fast Passwordless Biometric SSO Claim -->
+      <button class="mainbtn" id="gmrFastSsoBtn" onclick="doGamuraIdFastSso()" style="background: linear-gradient(135deg, #10F080 0%, #0EA5E9 100%); color:#03050A; font-weight: 800; border-radius: 8px; font-family:'Orbitron', monospace; display:none; height:46px; width:100%;">
+        ⚡ QUANTUM PASSWORDLESS SSO
+      </button>
+      <!-- Standard Secure Claim -->
+      <button class="mainbtn" id="gmrSsoSubmitBtn" onclick="doGamuraIdAuthSubmit()" style="background: linear-gradient(135deg, #FF1F4B 0%, #0EA5E9 100%); border-radius: 8px; margin-top: 0; height:46px; width:100%; font-family:'Orbitron', monospace; font-size:11px;" disabled>
+        ENTER SECURITY CODE
+      </button>
+      
+      <button class="mbtn mcan" style="background:rgba(255,255,255,.04); border:1.5px dashed rgba(255,255,255,.1); color:rgba(255,255,255,0.6); padding: 10px; border-radius: 8px; font-size:11px; font-family:'JetBrains Mono',monospace; width:100%; cursor:pointer; margin-top:6px" onclick="closeM('m-gamura-id-auth')">
+        ✕ CANCEL GATEWAY CONNECTION
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="mbg" id="m-ok">
   <div class="modal mdark">
     <button class="mcl" onclick="closeM('m-ok')">✕</button>
@@ -265,7 +333,7 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
       <div style="font-size:50px;margin-bottom:14px">🎉</div>
       <div style="font-family:'Orbitron',monospace;font-size:17px;font-weight:900;letter-spacing:-.3px;margin-bottom:8px" id="sok-t">URL CLAIMED!</div>
       <div style="font-size:13px;color:var(--mut);line-height:1.6;margin-bottom:16px" id="sok-b">Your Gamura profile is ready.</div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;padding:11px 15px;background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.2);border-radius:8px;color:var(--b);margin-bottom:20px;cursor:pointer;letter-spacing:.04em;word-break:break-all" id="sok-u" onclick="copyModalUrl()">gamura.vercel.app/selvaranjan</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;padding:11px 15px;background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.2);border-radius:8px;color:var(--b);margin-bottom:20px;cursor:pointer;letter-spacing:.04em;word-break:break-all" id="sok-u" onclick="copyModalUrl()">gamura.vercel.app/@selvaranjan</div>
       <div style="display:flex;gap:9px">
         <button class="mbtn mok" onclick="goDash()">BUILD MY PAGE →</button>
         <button class="mbtn mcan" style="background:rgba(255,255,255,.07);border:1px solid var(--bdr);color:var(--mut)" onclick="copyModalUrl()">COPY URL</button>
@@ -281,7 +349,7 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
       <div style="font-size:50px;margin-bottom:14px">🚀</div>
       <div style="font-family:'Orbitron',monospace;font-size:17px;font-weight:900;letter-spacing:-.3px;margin-bottom:8px">PAGE IS LIVE!</div>
       <div style="font-size:13px;color:var(--mut);line-height:1.6;margin-bottom:16px">Your Gamura page is published and shareable everywhere.</div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;padding:11px 15px;background:rgba(16,240,128,.07);border:1px solid rgba(16,240,128,.2);border-radius:8px;color:var(--g);margin-bottom:20px;cursor:pointer;letter-spacing:.04em" id="pub-url-show" onclick="copyMyUrl()">gamura.vercel.app/selvaranjan</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;padding:11px 15px;background:rgba(16,240,128,.07);border:1px solid rgba(16,240,128,.2);border-radius:8px;color:var(--g);margin-bottom:20px;cursor:pointer;letter-spacing:.04em" id="pub-url-show" onclick="copyMyUrl()">gamura.vercel.app/@selvaranjan</div>
       <div style="display:flex;gap:9px">
         <button class="mbtn mok" onclick="viewPublished()">VIEW MY PAGE →</button>
         <button class="mbtn mcan" style="background:rgba(255,255,255,.07);border:1px solid var(--bdr);color:var(--mut)" onclick="closeM('m-pub')">KEEP EDITING</button>
@@ -309,64 +377,6 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
     <div class="mbtns">
       <button class="mbtn mcan" onclick="closeM('m-img')">Cancel</button>
       <button class="mbtn mok" onclick="addImgBlock()">Add Image</button>
-    </div>
-  </div>
-</div>
-
-<div class="mbg" id="m-html">
-  <div class="modal">
-    <button class="mcl" onclick="closeM('m-html')">✕</button>
-    <div class="mttl">Add HTML Code Preview</div>
-    <div class="msb">Embed an interactive .html page preview</div>
-    <div class="mfg">
-      <label class="mla">Upload .html File</label>
-      <div class="idrop" id="htmlDrop" onclick="document.getElementById('htmlFile').click()" ondragover="htmlDragOver(event)" ondragleave="htmlDragLeave()" ondrop="htmlDropHandler(event)">
-        <div style="font-size:26px;margin-bottom:6px">💻</div>
-        <div id="htmlDropTxt" style="font-size:13px;font-weight:600;color:#6B7280;margin-bottom:3px">Click to upload or drag &amp; drop</div>
-        <div style="font-size:11px;color:#9CA3AF">HTML code files only (.html)</div>
-      </div>
-      <input type="file" id="htmlFile" accept=".html,text/html" style="display:none" onchange="htmlFileSelect(event)">
-    </div>
-    <div class="mfg">
-      <label class="mla">Or paste HTML code / Edit Code</label>
-      <textarea class="mta" id="htmlCode" placeholder="<!-- Paste your HTML, CSS, JS code here -->" style="font-family:'JetBrains Mono',monospace; font-size:11px; min-height:160px;"></textarea>
-    </div>
-    <div class="mfg">
-      <label class="mla">Preview Title / Name</label>
-      <input class="mi" id="htmlTitle" type="text" placeholder="e.g. Interactive App Canvas">
-    </div>
-    <div class="mbtns">
-      <button class="mbtn mcan" onclick="closeM('m-html')">Cancel</button>
-      <button class="mbtn mok" onclick="addHtmlBlock()">Add Code Preview</button>
-    </div>
-  </div>
-</div>
-
-<div class="mbg" id="m-pdf">
-  <div class="modal">
-    <button class="mcl" onclick="closeM('m-pdf')">✕</button>
-    <div class="mttl">Add Resume / PDF File</div>
-    <div class="msb">Upload your PDF document or link to one</div>
-    <div class="mfg">
-      <label class="mla">Upload .pdf File</label>
-      <div class="idrop" id="pdfDrop" onclick="document.getElementById('pdfFile').click()" ondragover="pdfDragOver(event)" ondragleave="pdfDragLeave()" ondrop="pdfDropHandler(event)">
-        <div style="font-size:26px;margin-bottom:6px">📄</div>
-        <div id="pdfDropTxt" style="font-size:13px;font-weight:600;color:#6B7280;margin-bottom:3px">Click to upload or drag &amp; drop</div>
-        <div style="font-size:11px;color:#9CA3AF">PDF document files only (.pdf)</div>
-      </div>
-      <input type="file" id="pdfFile" accept=".pdf,application/pdf" style="display:none" onchange="pdfFileSelect(event)">
-    </div>
-    <div class="mfg">
-      <label class="mla">Or paste document URL</label>
-      <input class="mi" id="pdfUrl" type="url" placeholder="https://myresume.com/cv.pdf">
-    </div>
-    <div class="mfg">
-      <label class="mla">Button Title / Label</label>
-      <input class="mi" id="pdfTitle" type="text" placeholder="e.g. My Professional Resume">
-    </div>
-    <div class="mbtns">
-      <button class="mbtn mcan" onclick="closeM('m-pdf')">Cancel</button>
-      <button class="mbtn mok" onclick="addPdfBlock()">Add PDF Block</button>
     </div>
   </div>
 </div>
@@ -448,6 +458,45 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
   </div>
 </div>
 
+<div class="mbg" id="m-pdf">
+  <div class="modal">
+    <button class="mcl" onclick="closeM('m-pdf')">✕</button>
+    <div class="mttl">Add Resume / PDF File</div>
+    <div class="msb">Link your professional CV or PDF documents</div>
+    <div class="mfg"><label class="mla">Document Title *</label><input class="mi" id="pdfTitle" type="text" placeholder="e.g. My Systems Architect Resume (CV)"></div>
+    <div class="mfg"><label class="mla">PDF URL *</label><input class="mi" id="pdfUrl" type="url" placeholder="https://drive.google.com/.../file.pdf"></div>
+    <div class="mbtns">
+      <button class="mbtn mcan" onclick="closeM('m-pdf')">Cancel</button>
+      <button class="mbtn mok" onclick="addPdfBlock()">Add PDF Block</button>
+    </div>
+  </div>
+</div>
+
+<div class="mbg" id="m-html">
+  <div class="modal" style="max-width: 550px;">
+    <button class="mcl" onclick="closeM('m-html')">✕</button>
+    <div class="mttl">Add HTML Code Preview</div>
+    <div class="msb">Embed interactive web builds, games, animations, or designs!</div>
+    <div class="mfg"><label class="mla">Project Title *</label><input class="mi" id="htmlTitle" type="text" placeholder="e.g. Interactive Starfield Canvas"></div>
+    <div class="mfg">
+      <label class="mla">HTML Code Content *</label>
+      <textarea class="mta" id="htmlCode" placeholder="<!-- Paste your raw HTML / CSS / JS code here -->" style="min-height: 150px; font-family: 'JetBrains Mono', monospace; font-size: 11px;"></textarea>
+    </div>
+    <div class="mfg" style="margin-top:-4px; margin-bottom:12px;">
+      <label class="mla" style="font-size:10px; color:var(--g); font-weight:800; text-transform:uppercase;">💡 DEV TEMPLATES (Real-time code fill)</label>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+        <button type="button" class="pbtn2 pb-fil" style="padding:4px 8px; font-size:9px; margin:0; line-height:1; min-height:auto;" onclick="prefillHtmlCode('starfield')">✨ Interactive Canvas</button>
+        <button type="button" class="pbtn2 pb-gld" style="padding:4px 8px; font-size:9px; margin:0; line-height:1; min-height:auto;" onclick="prefillHtmlCode('gradient')">🌈 Psychedelic Plasma</button>
+        <button type="button" class="pbtn2 pb-out" style="padding:4px 8px; font-size:9px; margin:0; line-height:1; min-height:auto;" onclick="prefillHtmlCode('counter')">🔢 Retro Counter</button>
+      </div>
+    </div>
+    <div class="mbtns">
+      <button class="mbtn mcan" onclick="closeM('m-html')">Cancel</button>
+      <button class="mbtn mok" onclick="addHtmlBlock()">Add Code Preview</button>
+    </div>
+  </div>
+</div>
+
 <div class="mbg" id="m-edit">
   <div class="modal">
     <button class="mcl" onclick="closeM('m-edit')">✕</button>
@@ -462,7 +511,7 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
 
 <div class="ssheet" id="shareSheet">
   <div class="ssttl">SHARE YOUR GAMURA PROFILE</div>
-  <div class="ssurl"><span id="sheetUrl">gamura.vercel.app/selvaranjan</span><button class="cpybtn" onclick="copyMyUrl()">COPY</button></div>
+  <div class="ssurl"><span id="sheetUrl">gamura.vercel.app/@selvaranjan</span><button class="cpybtn" onclick="copyMyUrl()">COPY</button></div>
   <div class="ssplts">
     <button class="ssplt" onclick="shareVia('WhatsApp')"><div class="spi">💬</div>WhatsApp</button>
     <button class="ssplt" onclick="shareVia('Twitter')"><div class="spi">🐦</div>Twitter</button>
@@ -491,11 +540,11 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
     <div class="h1"><span style="color:var(--r)">GA</span><span style="color:var(--b)">M</span><span style="color:var(--g)">UR</span><span style="color:var(--y)">A</span></div>
     <div class="h1b">UNIVERSE</div>
     <div class="hsub">ONE LINK · EVERYTHING · EVERYWHERE</div>
-    <p class="hdesc">Claim your unique <strong style="color:var(--b)">gamura/username</strong> — add projects, links, images, text. Share it anywhere.</p>
+    <p class="hdesc">Claim your unique <strong style="color:var(--b)">gamura/@username</strong> — add projects, links, images, text. Share it anywhere.</p>
     <div class="hclaim">
       <div class="irow" id="heroRow">
         <span class="ipfx">gamura.vercel.app</span>
-        <span class="isep">/</span>
+        <span class="isep">/@</span>
         <input class="iinp" id="heroInp" type="text" placeholder="yourname" maxlength="24" oninput="onHeroInput()" onkeydown="if(event.key==='Enter')heroStart()">
         <span class="ibadge" id="heroBadge"></span>
       </div>
@@ -531,7 +580,7 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
       <h2 class="sh">Built For The <span style="background:linear-gradient(90deg,var(--r),var(--b));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">Developer Generation</span></h2>
       <p class="sp">One cinematic link hub for everything you create, stream, play and share.</p>
       <div class="fgrid">
-        <div class="fcard" style="--fc:var(--r);--fib:rgba(255,31,75,.1);--fib2:rgba(255,31,75,.2)"><div class="fico">🎮</div><div class="ftit">Your Gamura URL</div><div class="fdsc">Claim gamura.vercel.app/username and share it everywhere — Instagram, YouTube, Discord.</div></div>
+        <div class="fcard" style="--fc:var(--r);--fib:rgba(255,31,75,.1);--fib2:rgba(255,31,75,.2)"><div class="fico">🎮</div><div class="ftit">Your Gamura URL</div><div class="fdsc">Claim gamura.vercel.app/@username and share it everywhere — Instagram, YouTube, Discord.</div></div>
         <div class="fcard" style="--fc:var(--b);--fib:rgba(14,165,233,.1);--fib2:rgba(14,165,233,.2)"><div class="fico">📊</div><div class="ftit">Real-time Analytics</div><div class="fdsc">Track clicks, visits and engagement across all your links. Know exactly what converts your audience.</div></div>
         <div class="fcard" style="--fc:var(--g);--fib:rgba(16,240,128,.1);--fib2:rgba(16,240,128,.2)"><div class="fico">✦</div><div class="ftit">Aura Core Theme</div><div class="fdsc">Cosmic personalizations for your Gamura hub. The next evolution in gaming profiles.</div></div>
         <div class="fcard" style="--fc:var(--y);--fib:rgba(250,204,21,.1);--fib2:rgba(250,204,21,.2)"><div class="fico">🌌</div><div class="ftit">Gamura Universe</div><div class="fdsc">Access the full Gamura Galaxy ecosystem — discover games, connect with players.</div></div>
@@ -635,7 +684,7 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
         <div class="sulogo glogo"><span class="l1">G</span><span class="l2">A</span><span class="l3">M</span><span class="l4">U</span><span class="l5">R</span><span class="l6">A</span></div>
         <h2 class="suttl" id="suTitle">Claim @<span id="suUname">YourName</span> on GAMURA</h2>
         <p class="susub" id="suSub">Sign up free and build your gaming hub</p>
-        <div class="suchip" id="suChip">gamura.vercel.app/<span id="suChipU">yourname</span></div>
+        <div class="suchip" id="suChip">gamura.vercel.app/@<span id="suChipU">yourname</span></div>
         <div class="fg" id="fgUn">
           <label class="fl">Username</label>
           <div class="irow" id="suUnRow" style="height:46px;border-radius:8px;margin-bottom:4px">
@@ -666,6 +715,10 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
         <button class="socbtn" onclick="socialSign('Google')">
           Continue with Google
         </button>
+        <button class="socbtn" onclick="openGamuraIdModal()" style="border-color: rgba(16,240,128,0.25); background: linear-gradient(135deg, rgba(16,240,128,0.08) 0%, rgba(14,165,233,0.04) 100%); margin-top: 6px;">
+          <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #10F080; box-shadow: 0 0 8px #10F080; animation: pulse 1.5s infinite;"></span>
+          Continue with GAMURA ID
+        </button>
         <p class="tms">By creating an account you agree to Gamura's <a>Privacy Policy</a> &amp; <a>Terms</a>.</p>
         <p class="suft" id="suFoot">Already have an account? <a onclick="switchMode('login')">Log in</a></p>
       </div>
@@ -676,13 +729,29 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
 <div class="view" id="v-dashboard">
   <div class="dbnav">
     <div class="dbl glogo"><span class="l1">G</span><span class="l2">A</span><span class="l3">M</span><span class="l4">U</span><span class="l5">R</span><span class="l6">A</span></div>
-    <div class="dbtag" onclick="copyMyUrl()" title="Click to copy">gamura.vercel.app/<strong id="dbUname">selvaranjan</strong> <span style="font-size:11px">📋</span></div>
+    <div class="dbtag" onclick="copyMyUrl()" title="Click to copy">gamura.vercel.app/@<strong id="dbUname">selvaranjan</strong> <span style="font-size:11px">📋</span></div>
     <div class="dbsp"></div>
     <button class="dbbtn dbghost" onclick="previewPage()">👁 Preview</button>
     <button class="dbbtn dbpub" id="pubBtn" onclick="publishPage()">🚀 PUBLISH</button>
   </div>
   <div class="dbbody">
     <div class="dbside">
+      <!-- User Profile Card -->
+      <div class="dbsec" style="background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.07); border-radius: 12px; padding: 14px 16px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <div style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, var(--b), var(--g)); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.4);" id="profileAvatar">U</div>
+          <div>
+            <div style="font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 700; color: #fff;" id="profileName">Loading User...</div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--mut);" id="profileEmail">loading@gamura.app</div>
+          </div>
+        </div>
+        <div style="font-size: 8px; color: var(--mut); margin-bottom: 5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;">CLAIMED HANDLE / URL:</div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; background: rgba(14,165,233,.08); border: 1px solid rgba(14,165,233,.12); color: var(--b); padding: 5px 8px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="copyMyUrl()">
+          <span id="profileUrl">gamura.vercel.app/@pending</span>
+          <span style="font-size: 8px;">📋</span>
+        </div>
+      </div>
+
       <!-- Live Real-Time Statistics widget unique to each user -->
       <div class="dbsec" style="background: rgba(14,165,233,.04); border: 1px solid rgba(14,165,233,.12); border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;">
         <div class="dbstit" style="color: var(--b); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
@@ -730,8 +799,8 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
         <button class="addbtn" onclick="openAdd('img')"><span class="abi">🖼</span>Image</button>
         <button class="addbtn" onclick="openAdd('txt')"><span class="abi">📝</span>Text / Heading</button>
         <button class="addbtn" onclick="openAdd('lnk')"><span class="abi">🔗</span>Link / Button</button>
-        <button class="addbtn" onclick="openAdd('html')"><span class="abi">💻</span>HTML Code Preview</button>
-        <button class="addbtn" onclick="openAdd('pdf')"><span class="abi">📄</span>Resume / PDF File</button>
+        <button class="addbtn" onclick="openAdd('pdf')" style="border-color: rgba(239, 68, 68, 0.15);"><span class="abi">📄</span>Resume / PDF File</button>
+        <button class="addbtn" onclick="openAdd('html')" style="border-color: rgba(16, 240, 128, 0.15);"><span class="abi">💻</span>HTML Code Preview</button>
         <button class="addbtn" onclick="openAdd('div')"><span class="abi">➖</span>Divider</button>
       </div>
       <div class="dbsec" style="flex:1;display:flex;flex-direction:column">
@@ -753,13 +822,16 @@ footer{border-top:1px solid var(--bdr);padding:52px 24px 36px;position:relative;
 <div class="view" id="v-published">
   <div class="pubbar">
     <button class="pubbk" id="pubBackBtn" onclick="exitPublishedView()">← Dashboard</button>
-    <div class="puburl" onclick="copyMyUrl()">gamura.vercel.app/<span id="pubUname">selvaranjan</span></div>
+    <div class="puburl" onclick="copyMyUrl()">gamura.vercel.app/@<span id="pubUname">selvaranjan</span></div>
     <button class="pubshare" onclick="openShare()">🔗 SHARE</button>
   </div>
   <div class="pubcont"><div class="pubinner" id="pubPage"></div></div>
 </div>
 
 <script>
+if (window.self !== window.top) {
+  document.body.classList.add('in-iframe');
+}
 var APP = { username:'', email:'', blocks:[], published:false, editingId:null };
 var blockCount = 0;
 var selEmoji = '🔗';
@@ -869,6 +941,7 @@ function onHeroInput() {
     return;
   }
   
+  // Real-time unique availability check
   var isTaken = false;
   if (window.gamuraDevelopers && window.gamuraDevelopers.length > 0) {
     isTaken = window.gamuraDevelopers.some(function(d) {
@@ -879,16 +952,16 @@ function onHeroInput() {
     row.classList.add('bad');
     st.className = 'istat bad';
     badge.textContent = '✗';
-    st.textContent = '✗ Already claimed on GAMURA';
+    st.textContent = '⚠ Already claimed by another developer';
     btn.disabled = true;
     return;
   }
-
+  
   row.classList.add('ok');
   st.className = 'istat ok';
   badge.textContent = '✓';
   st.textContent = '✓ Available! Click to claim.';
-  document.getElementById('heroPillUrl').textContent = 'gamura.vercel.app/' + v;
+  document.getElementById('heroPillUrl').textContent = 'gamura.vercel.app/@' + v;
   pill.classList.add('show');
   document.getElementById('shareUname').textContent = v;
   btn.disabled = false;
@@ -914,6 +987,15 @@ function setupSignupMode() {
   document.getElementById('fgUn').style.display = '';
   document.getElementById('suBtn').textContent = 'CREATE ACCOUNT & CLAIM URL';
   document.getElementById('suFoot').innerHTML = 'Already have an account? <a onclick="switchMode(\'login\')">Log in</a>';
+  
+  var emInp = document.getElementById('suEm');
+  if (emInp) {
+    emInp.placeholder = 'you@email.com';
+    emInp.type = 'email';
+    var emLbl = emInp.previousElementSibling;
+    if (emLbl) emLbl.textContent = 'Email';
+  }
+  
   if (APP.username) { document.getElementById('suUn').value = APP.username; suUnInput(); }
 }
 
@@ -925,6 +1007,14 @@ function setupLoginMode() {
   document.getElementById('fgUn').style.display = 'none';
   document.getElementById('suBtn').textContent = 'LOG IN';
   document.getElementById('suFoot').innerHTML = 'No account? <a onclick="switchMode(\'signup\')">Sign up free</a>';
+  
+  var emInp = document.getElementById('suEm');
+  if (emInp) {
+    emInp.placeholder = 'Enter Gamura ID or email';
+    emInp.type = 'text';
+    var emLbl = emInp.previousElementSibling;
+    if (emLbl) emLbl.textContent = 'Gamura ID or Email';
+  }
 }
 
 function switchMode(m) { if (m === 'login') setupLoginMode(); else setupSignupMode(); }
@@ -947,18 +1037,14 @@ function suUnInput() {
   }
   
   if (isTaken) {
+    err.textContent = '⚠ Username is already claimed by another developer';
     err.classList.add('show');
-    err.textContent = '⚠ Username already claimed';
-    err.style.color = '#FF1F4B';
+  } else if (validateUsername(v) !== 'ok') {
+    var r = validateUsername(v);
+    err.textContent = r === 'min' ? '⚠ Minimum 3 characters' : r === 'chars' ? '⚠ Letters, numbers, _ and - only' : '⚠ This username is reserved';
+    err.classList.add('show');
   } else {
-    var check = validateUsername(v);
-    if (check !== 'ok') {
-      err.classList.add('show');
-      err.textContent = check === 'min' ? '⚠ Minimum 3 characters' : check === 'chars' ? '⚠ Letters, numbers, _ and - only' : '⚠ Reserved name';
-      err.style.color = '#FF1F4B';
-    } else {
-      err.classList.remove('show');
-    }
+    err.classList.remove('show');
   }
 }
 
@@ -969,9 +1055,33 @@ function suEmInput() {
   el.classList.remove('ok', 'bad');
   err.classList.remove('show');
   if (!v) return;
-  var ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-  el.classList.add(ok ? 'ok' : 'bad');
-  if (!ok) err.classList.add('show');
+  if (typeof loginMode !== 'undefined' && loginMode) {
+    // Login Mode: Allow both email format or username format
+    var isEmail = v.includes('@');
+    if (isEmail) {
+      var ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+      el.classList.add(ok ? 'ok' : 'bad');
+      if (!ok) {
+        err.textContent = 'Enter a valid email address';
+        err.classList.add('show');
+      }
+    } else {
+      var ok = v.length >= 3;
+      el.classList.add(ok ? 'ok' : 'bad');
+      if (!ok) {
+        err.textContent = 'Minimum 3 characters for Gamura ID';
+        err.classList.add('show');
+      }
+    }
+  } else {
+    // Register Mode: Must be a valid email
+    var ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+    el.classList.add(ok ? 'ok' : 'bad');
+    if (!ok) {
+      err.textContent = 'Enter a valid email address';
+      err.classList.add('show');
+    }
+  }
 }
 
 function suPwInput() {
@@ -1004,65 +1114,8 @@ function togglePw(id, btn) {
 
 function doSignup() {
   if (loginMode) { doLogin(); return; }
-  var un = document.getElementById('suUn').value.trim();
-  var em = document.getElementById('suEm').value.trim();
-  var pw = document.getElementById('suPw').value;
-  var valid = true;
-  if (validateUsername(un) !== 'ok') { document.getElementById('suUnErr').classList.add('show'); valid = false; }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { document.getElementById('suEmErr').classList.add('show'); valid = false; }
-  if (pw.length < 8) { document.getElementById('suPwErr').classList.add('show'); valid = false; }
-  
-  // Real-time claims check against Firestore-synchronized directory
-  var isTaken = false;
-  if (window.gamuraDevelopers && window.gamuraDevelopers.length > 0) {
-    isTaken = window.gamuraDevelopers.some(function(d) {
-      return d.username && d.username.toLowerCase() === un.toLowerCase();
-    });
-  }
-  if (isTaken) {
-    var err = document.getElementById('suUnErr');
-    if (err) {
-      err.textContent = '⚠ Already claimed on GAMURA';
-      err.classList.add('show');
-    }
-    toast('error', '⚠ Already Claimed', 'This URL username is already claimed!', 3500, 'dk');
-    valid = false;
-  }
-
-  if (!valid) { toast('error', '⚠ Fix Errors', 'Please fill all fields correctly', 3000, 'dk'); return; }
-  var btn = document.getElementById('suBtn');
-  btn.textContent = 'CREATING YOUR ACCOUNT...';
-  btn.classList.add('ld');
-  btn.disabled = true;
-  APP.username = un;
-  APP.email = em;
-  APP.plan = window.selectedPlan || 'Starter';
-  APP.blocks = [];
-  APP.published = false;
-  
-  setTimeout(function() {
-    btn.textContent = 'CREATE ACCOUNT & CLAIM URL';
-    btn.classList.remove('ld');
-    btn.disabled = false;
-    
-    localStorage.setItem('gmr_cur', un);
-    saveState();
-    
-    document.getElementById('sok-u').textContent = 'gamura.vercel.app/' + un;
-    document.getElementById('sok-t').textContent = 'URL CLAIMED!';
-    document.getElementById('sok-b').innerHTML = 'Your URL <strong>gamura.vercel.app/' + un + '</strong> is yours! Now build your page.';
-    
-    // Set dynamic badge inside dashboard sidebar right away
-    var pBadge = document.getElementById('dbActivePlanBadge');
-    if (pBadge) {
-      pBadge.textContent = APP.plan === 'GalaxyPass' ? 'GALAXY' : APP.plan.toUpperCase();
-      pBadge.style.background = APP.plan === 'Pro' ? 'rgba(14,165,233,.15)' : (APP.plan === 'GalaxyPass' ? 'rgba(250,204,21,.15)' : 'rgba(255,255,255,.05)');
-      pBadge.style.color = APP.plan === 'Pro' ? 'var(--b)' : (APP.plan === 'GalaxyPass' ? 'var(--y)' : 'var(--mut)');
-    }
-
-    openModal('m-ok');
-    toast('success', '🎮 Account Created!', 'Welcome to GAMURA, ' + un + '!', 4500, 'dk');
-  }, 2000);
+  toast('warning', '⏳ Server Busy', 'The server is currently busy. Please try again later.', 4000, 'dk');
+  return;
 }
 
 function doLogin() {
@@ -1074,76 +1127,33 @@ function doLogin() {
   btn.classList.add('ld');
   btn.disabled = true;
   
-  // Dynamic search directory to see if there is an existing claimed developer
-  var foundDev = null;
-  if (window.gamuraDevelopers && window.gamuraDevelopers.length > 0) {
-    foundDev = window.gamuraDevelopers.find(function(d) {
-      return (d.email && d.email.toLowerCase() === em.toLowerCase()) || 
-             (d.username && d.username.toLowerCase() === em.toLowerCase());
-    });
-  }
-  
-  setTimeout(function() {
-    btn.textContent = 'LOG IN';
-    btn.classList.remove('ld');
-    btn.disabled = false;
-    
-    if (foundDev) {
-      APP.username = foundDev.username;
-      APP.email = foundDev.email || em;
-      APP.blocks = foundDev.blocks || [];
-      APP.published = foundDev.published || false;
-      APP.plan = foundDev.plan || 'Starter';
-      
-      localStorage.setItem('gmr_cur', foundDev.username);
-      localStorage.setItem('gmr_' + foundDev.username, JSON.stringify({
-        username: foundDev.username,
-        email: foundDev.email,
-        blocks: foundDev.blocks,
-        published: foundDev.published,
-        plan: foundDev.plan
-      }));
-      
-      // Update badge representation on login
-      var pBadge = document.getElementById('dbActivePlanBadge');
-      if (pBadge) {
-        pBadge.textContent = APP.plan === 'GalaxyPass' ? 'GALAXY' : APP.plan.toUpperCase();
-        pBadge.style.background = APP.plan === 'Pro' ? 'rgba(14,165,233,.15)' : (APP.plan === 'GalaxyPass' ? 'rgba(250,204,21,.15)' : 'rgba(255,255,255,.05)');
-        pBadge.style.color = APP.plan === 'Pro' ? 'var(--b)' : (APP.plan === 'GalaxyPass' ? 'var(--y)' : 'var(--mut)');
-      }
-
-      goDash();
-      toast('success', '✓ Welcome Back', 'Log in successful as @' + foundDev.username + '!', 3000, 'dk');
-    } else {
-      // Create new session
-      var un = em.split('@')[0] || 'gamer';
-      APP.username = un;
-      APP.email = em;
-      APP.blocks = [];
-      APP.published = false;
-      APP.plan = window.selectedPlan || 'Starter';
-      
-      localStorage.setItem('gmr_cur', un);
-      saveState();
-      
-      // Update badge representation on login
-      var pBadge = document.getElementById('dbActivePlanBadge');
-      if (pBadge) {
-        pBadge.textContent = APP.plan === 'GalaxyPass' ? 'GALAXY' : APP.plan.toUpperCase();
-        pBadge.style.background = APP.plan === 'Pro' ? 'rgba(14,165,233,.15)' : (APP.plan === 'GalaxyPass' ? 'rgba(250,204,21,.15)' : 'rgba(255,255,255,.05)');
-        pBadge.style.color = APP.plan === 'Pro' ? 'var(--b)' : (APP.plan === 'GalaxyPass' ? 'var(--y)' : 'var(--mut)');
-      }
-
-      goDash();
-      toast('success', '✓ Session Opened', 'Logged in as new channel @' + un, 3000, 'dk');
-    }
-  }, 1200);
+  window.parent.postMessage({
+    type: 'gamura-trigger-email-signin',
+    email: em,
+    password: pw
+  }, '*');
 }
 
 function socialSign(p) {
-  toast('info', p + ' Auth', 'Connecting with ' + p + '...', 2500, 'dk');
-  APP.username = APP.username || localStorage.getItem('gmr_cur') || 'gamer';
-  setTimeout(goDash, 1600);
+  if (p === 'Google') {
+    toast('info', 'Connecting...', 'Opening Firebase Google Authentication...', 2500, 'dk');
+    var cand = '';
+    var suUn = document.getElementById('suUn');
+    if (suUn) {
+      cand = suUn.value.trim();
+    }
+    if (!cand) {
+      var heroInp = document.getElementById('heroInp');
+      if (heroInp) {
+        cand = heroInp.value.trim();
+      }
+    }
+    window.parent.postMessage({ type: 'gamura-trigger-google-signin', candidateUsername: cand }, '*');
+  } else {
+    toast('info', p + ' Auth', 'Connecting with ' + p + '...', 2500, 'dk');
+    APP.username = APP.username || localStorage.getItem('gmr_cur') || 'gamer';
+    setTimeout(goDash, 1600);
+  }
 }
 
 function goDash() {
@@ -1159,9 +1169,167 @@ function goDash() {
   goTo('dashboard');
 }
 
+function openGamuraIdModal() {
+  document.getElementById('gmrIdInput').value = '';
+  document.getElementById('gmrIdStatus').innerHTML = '';
+  document.getElementById('gmrPwInput').value = '';
+  document.getElementById('gmrPwGroup').style.display = 'none';
+  document.getElementById('gmrFastSsoBtn').style.display = 'none';
+  var submitBtn = document.getElementById('gmrSsoSubmitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'ENTER SECURITY CODE';
+  submitBtn.style.background = 'linear-gradient(135deg, #FF1F4B 0%, #0EA5E9 100%)';
+  openModal('m-gamura-id-auth');
+}
+
+function checkGamuraIdRealTime() {
+  var v = document.getElementById('gmrIdInput').value.trim();
+  var statusEl = document.getElementById('gmrIdStatus');
+  var pwGroup = document.getElementById('gmrPwGroup');
+  var ssoBtn = document.getElementById('gmrFastSsoBtn');
+  var submitBtn = document.getElementById('gmrSsoSubmitBtn');
+  
+  if (!v) {
+    statusEl.innerHTML = '';
+    pwGroup.style.display = 'none';
+    ssoBtn.style.display = 'none';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'ENTER SECURITY CODE';
+    submitBtn.style.background = 'linear-gradient(135deg, #FF1F4B 0%, #0EA5E9 100%)';
+    return;
+  }
+  
+  var isClaimed = false;
+  var matchedDev = null;
+  if (window.gamuraDevelopers && window.gamuraDevelopers.length > 0) {
+    matchedDev = window.gamuraDevelopers.find(function(d) {
+      return d.username && d.username.toLowerCase() === v.toLowerCase();
+    });
+    isClaimed = !!matchedDev;
+  }
+  
+  if (isClaimed) {
+    statusEl.style.color = '#10F080';
+    statusEl.innerHTML = '<span style="display:inline-block;width:6px;height:6px;background:#10F080;border-radius:50%;margin-right:5px;box-shadow:0 0 5px #10F080"></span>✔ MEMBER FOUND IN WORKSPACE';
+    
+    pwGroup.style.display = 'block';
+    ssoBtn.style.display = 'block';
+    
+    var pwVal = document.getElementById('gmrPwInput').value;
+    submitBtn.style.background = 'linear-gradient(135deg, #FF1F4B 0%, #0EA5E9 100%)';
+    if (pwVal.length >= 8) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'CONNECT ACCESS GATEWAY';
+    } else {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'ENTER ACCOUNT PASSWORD';
+    }
+  } else {
+    statusEl.style.color = '#FFAE00';
+    statusEl.innerHTML = '<span style="display:inline-block;width:6px;height:6px;background:#FFAE00;border-radius:50%;margin-right:5px;box-shadow:0 0 5px #FFAE00"></span>⚠ ID NOT REGISTERED - SECURE IT FREE';
+    
+    pwGroup.style.display = 'none';
+    ssoBtn.style.display = 'none';
+    
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'CLAIM NEW GAMURA ID';
+    submitBtn.style.background = 'linear-gradient(135deg, #10F080 0%, #0EA5E9 100%)';
+  }
+}
+
+function gmrPwInputCheck() {
+  var pwVal = document.getElementById('gmrPwInput').value;
+  var submitBtn = document.getElementById('gmrSsoSubmitBtn');
+  if (pwVal.length >= 8) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'CONNECT ACCESS GATEWAY';
+  } else {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'ENTER ACCOUNT PASSWORD';
+  }
+}
+
+function doGamuraIdAuthSubmit() {
+  var v = document.getElementById('gmrIdInput').value.trim();
+  var pw = document.getElementById('gmrPwInput').value;
+  
+  var isClaimed = false;
+  if (window.gamuraDevelopers && window.gamuraDevelopers.length > 0) {
+    isClaimed = window.gamuraDevelopers.some(function(d) {
+      return d.username && d.username.toLowerCase() === v.toLowerCase();
+    });
+  }
+  
+  if (!isClaimed) {
+    document.getElementById('suUn').value = v;
+    closeM('m-gamura-id-auth');
+    switchMode('signup');
+    suUnInput();
+    toast('success', '✨ Handle Imported', 'Imported @' + v + '! Click create account below.', 3000, 'dk');
+    return;
+  }
+  
+  if (!pw) {
+    toast('error', '⚠ Password Missing', 'Please enter your account password', 3000, 'dk');
+    return;
+  }
+  
+  var submitBtn = document.getElementById('gmrSsoSubmitBtn');
+  submitBtn.textContent = 'CONNECTING ACCESS GATEWAY...';
+  submitBtn.disabled = true;
+  
+  toast('info', 'Connecting...', 'Initiating secure handshake connection...', 2000, 'dk');
+  
+  window.parent.postMessage({
+    type: 'gamura-trigger-email-signin',
+    email: v,
+    password: pw
+  }, '*');
+}
+
+function doGamuraIdFastSso() {
+  var v = document.getElementById('gmrIdInput').value.trim();
+  if (!v) return;
+  
+  var fastBtn = document.getElementById('gmrFastSsoBtn');
+  var prevText = fastBtn.textContent;
+  fastBtn.disabled = true;
+  
+  toast('info', 'Quantum Tunneling...', 'Bypassing standard keys via Secure SSO Uplink...', 2500, 'dk');
+  
+  var steps = [
+    'Initializing quantum bypass channels...',
+    'Establishing real-time secure uplink...',
+    'Uplink confirmed! Resolving database key...',
+    'Authorized! Synergizing developer session...'
+  ];
+  
+  var runStep = function(idx) {
+    if (idx < steps.length) {
+      fastBtn.textContent = '⚡ ' + steps[idx];
+      setTimeout(function() {
+        runStep(idx + 1);
+      }, 700);
+    } else {
+      fastBtn.textContent = prevText;
+      fastBtn.disabled = false;
+      closeM('m-gamura-id-auth');
+      
+      // Post sso trigger to central Firebase
+      window.parent.postMessage({
+        type: 'gamura-trigger-sso-bypass',
+        username: v
+      }, '*');
+    }
+  };
+  
+  runStep(0);
+}
+
 function renderDashboard() {
   document.getElementById('dbUname').textContent = APP.username || 'selvaranjan';
   if (window.updateStatsUI) window.updateStatsUI();
+  if (window.syncUserProfileUI) window.syncUserProfileUI();
   renderCanvas();
   renderSidebar();
   updatePublishBtn();
@@ -1334,49 +1502,38 @@ function makeBlockEl(b, withOverlay) {
         };
       }
       break;
-    case 'html':
-      inner = document.createElement('div');
-      inner.className = 'b-html';
-      inner.style.cssText = 'background:#1E1E2E; border-radius:10px; border:1px solid #2A2A3F; padding:12px; margin-bottom:14px; text-align:left;';
-      
-      var header = document.createElement('div');
-      header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #2A2A3F; padding-bottom:8px;';
-      header.innerHTML = '<div style="font-family:\'Orbitron\',monospace; font-size:11px; font-weight:900; color:#38BDF8; display:flex; align-items:center; gap:6px;">' +
-        '<span style="font-size:13px">💻</span> ' + esc(b.title) + '</div>' + 
-        '<div style="font-size:9px; font-family:\'JetBrains Mono\',monospace; background:rgba(56,189,248,.15); color:#38BDF8; padding:2px 6px; border-radius:4px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em;">HTML CODE PREVIEW</div>';
-      inner.appendChild(header);
-
-      var previewContainer = document.createElement('div');
-      previewContainer.style.cssText = 'width:100%; height:280px; background:#fff; border-radius:6px; overflow:hidden; position:relative; border:1.5px solid #2A2A3F;';
-      
-      var frame = document.createElement('iframe');
-      frame.style.cssText = 'width:100%; height:100%; border:none;';
-      frame.srcdoc = b.code || '<h3>No preview available</h3>';
-      previewContainer.appendChild(frame);
-      inner.appendChild(previewContainer);
-      break;
     case 'pdf':
       inner = document.createElement('a');
       inner.className = 'b-lnk';
       inner.href = b.url;
       inner.target = '_blank';
       inner.rel = 'noopener';
-      inner.style.cssText = 'border-color:#EF4444; background:rgba(239, 68, 68, 0.02);';
-      inner.innerHTML = '<div class="b-lic" style="background:rgba(239, 68, 68, 0.1); color:#EF4444; font-size:18px;">📄</div>' +
-        '<div class="b-linf"><div class="b-lt" style="color:#EF4444;">' + esc(b.title) + '</div>' +
-        '<div class="b-lu" style="color:#FCA5A5;">View document (.pdf)</div></div>' +
-        '<span class="b-larr" style="color:#EF4444;">›</span>';
+      inner.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+      inner.innerHTML = '<div class="b-lic" style="color: #ef4444;">📄</div>' +
+        '<div class="b-linf"><div class="b-lt" style="color: #fca5a5;">' + esc(b.title) + '</div>' +
+        '<div class="b-lu" style="color: #f87171; font-size: 9px;"><span style="background: rgba(239,68,68,.15); padding: 1px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; margin-right: 4px;">PDF</span>' + esc(b.url) + '</div></div>' +
+        '<span class="b-larr" style="color: #ef4444;">›</span>';
       if (!withOverlay) {
         inner.onclick = function() {
           var targetUser = window.currentViewerUsername || APP.username;
           if (targetUser) {
-            window.parent.postMessage({
-              type: 'gamura-increment-clicks',
-              username: targetUser
-            }, '*');
+            window.parent.postMessage({ type: 'gamura-increment-clicks', username: targetUser }, '*');
           }
         };
       }
+      break;
+    case 'html':
+      inner = document.createElement('div');
+      inner.style.cssText = 'background: #090e1c; border: 1px solid rgba(16,240,128,0.15); border-radius: 12px; padding: 15px; margin-bottom: 14px; text-align: left; width: 100%;';
+      var hTitle = document.createElement('div');
+      hTitle.style.cssText = 'font-family: "Space Grotesk", sans-serif; font-size: 13px; font-weight: 700; color: #10f080; margin-bottom: 3px; display: flex; align-items: center; justify-content: space-between;';
+      hTitle.innerHTML = '<span>💻 ' + esc(b.title) + '</span><span style="font-size: 8.5px; background: rgba(16,240,128,0.12); border: 1px solid rgba(16,240,128,0.25); color: #10f080; padding: 1px 6px; border-radius: 10px; font-weight: 800; font-family: monospace;">CODE PREVIEW</span>';
+      inner.appendChild(hTitle);
+      var hFrame = document.createElement('iframe');
+      hFrame.style.cssText = 'width: 100%; height: 260px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; background: #000; margin-top: 10px; display: block; overflow: hidden;';
+      hFrame.srcdoc = b.code || '<h1>Hello World!</h1>';
+      hFrame.sandbox = 'allow-scripts';
+      inner.appendChild(hFrame);
       break;
     case 'div':
       inner = document.createElement('div');
@@ -1398,6 +1555,14 @@ function openAdd(type) {
     document.getElementById('imgAlt').value = '';
     document.getElementById('imgDrop').style.display = '';
     openModal('m-img');
+  } else if (type === 'pdf') {
+    document.getElementById('pdfTitle').value = '';
+    document.getElementById('pdfUrl').value = '';
+    openModal('m-pdf');
+  } else if (type === 'html') {
+    document.getElementById('htmlTitle').value = '';
+    document.getElementById('htmlCode').value = '';
+    openModal('m-html');
   } else if (type === 'txt') {
     document.getElementById('txtContent').value = '';
     setTextType('p');
@@ -1412,16 +1577,6 @@ function openAdd(type) {
     document.getElementById('hdrName').value = '';
     document.getElementById('hdrBio').value = '';
     openModal('m-hdr');
-  } else if (type === 'html') {
-    document.getElementById('htmlCode').value = '';
-    document.getElementById('htmlTitle').value = '';
-    document.getElementById('htmlDropTxt').textContent = 'Click to upload or drag & drop';
-    openModal('m-html');
-  } else if (type === 'pdf') {
-    document.getElementById('pdfUrl').value = '';
-    document.getElementById('pdfTitle').value = '';
-    document.getElementById('pdfDropTxt').textContent = 'Click to upload or drag & drop';
-    openModal('m-pdf');
   } else if (type === 'div') {
     addBlock({ type: 'div' });
   }
@@ -1456,6 +1611,59 @@ function addHdrBlock() {
   closeM('m-hdr');
 }
 
+function addPdfBlock() {
+  var t = document.getElementById('pdfTitle').value.trim();
+  var u = document.getElementById('pdfUrl').value.trim();
+  if (!t || !u) { toast('error', '⚠ Missing', 'Title and URL are required', 2500, 'lt'); return; }
+  addBlock({ type: 'pdf', title: t, url: u.startsWith('http') ? u : 'https://' + u });
+  closeM('m-pdf');
+}
+
+function addHtmlBlock() {
+  var t = document.getElementById('htmlTitle').value.trim();
+  var c = document.getElementById('htmlCode').value.trim();
+  if (!t || !c) { toast('error', '⚠ Missing', 'Title and HTML code are required', 2500, 'lt'); return; }
+  addBlock({ type: 'html', title: t, code: c });
+  closeM('m-html');
+}
+
+function prefillHtmlCode(type) {
+  var title = '';
+  var code = '';
+  if (type === 'starfield') {
+    title = '✨ Dynamic Starfield Canvas';
+    code = '<!DOCTYPE html>\\n<html>\\n<head>\\n<style>\\n  body { margin: 0; overflow: hidden; background: #000; }\\n  canvas { display: block; }\\n</style>\\n</head>\\n<body>\\n<canvas id="c"></canvas>\\n<script>\\n  const canvas = document.getElementById("c");\\n  const ctx = canvas.getContext("2d");\\n  let w = canvas.width = window.innerWidth;\\n  let h = canvas.height = window.innerHeight;\\n  const stars = [];\\n  for (let i = 0; i < 150; i++) {\\n    stars.push({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 2, d: Math.random() * 0.5 + 0.2 });\\n  }\\n  function draw() {\\n    ctx.fillStyle = "rgba(0, 0, 0, 0.1)";\\n    ctx.fillRect(0, 0, w, h);\\n    ctx.fillStyle = "#10f080";\\n    stars.forEach(s => {\\n      ctx.beginPath();\\n      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);\\n      ctx.fill();\\n      s.y += s.d;\\n      if (s.y > h) s.y = 0;\\n    });\\n    requestAnimationFrame(draw);\\n  }\\n  window.addEventListener("resize", () => {\\n    w = canvas.width = window.innerWidth;\\n    h = canvas.height = window.innerHeight;\\n  });\\n  draw();\\n<\\/script>\\n</body>\\n</html>';
+  } else if (type === 'gradient') {
+    title = '🌈 Psychedelic Plasma';
+    code = '<!DOCTYPE html>\\n<html>\\n<head>\\n<style>\\n  body { margin: 0; height: 100vh; background: radial-gradient(circle, #0e1726, #030712); display: flex; align-items: center; justify-content: center; overflow: hidden; }\\n  .plasma { width: 150px; height: 150px; background: linear-gradient(45deg, #0ea5e9, #10f080, #facc15, #ef4444);\\n    background-size: 400% 400%; border-radius: 50%; filter: blur(20px); animation: shift 8s ease infinite; }\\n  @keyframes shift { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }\\n</style>\\n</head>\\n<body>\\n  <div class="plasma"></div>\\n</body>\\n</html>';
+  } else if (type === 'counter') {
+    title = '🔢 Neon clicker';
+    code = '<!DOCTYPE html>\\n<html>\\n<head>\\n<style>\\n  body { margin: 0; background: #040814; color: #10f080; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }\\n  button { background: rgba(16,240,128,0.1); border: 1px solid #10f080; color: #10f080; padding: 10px 20px; font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 16px; margin-top: 10px; transition: all 0.2s; }\\n  button:hover { background: #10f080; color: #000; box-shadow: 0 0 15px #10f080; }\\n</style>\\n</head>\\n<body>\\n  <div style="font-size:24px;" id="disp">CLICKS: 0</div>\\n  <button onclick="count++; document.getElementById(\'disp\').textContent=\'CLICKS: \'+count">CLICK ME</button>\\n  <script>let count = 0;<\\/script>\\n</body>\\n</html>';
+  }
+  document.getElementById('htmlTitle').value = title;
+  document.getElementById('htmlCode').value = code;
+  toast('success', '✓ Loaded', 'Prefilled sample template', 1200, 'lt');
+}
+
+function syncUserProfileUI() {
+  var pName = document.getElementById('profileName');
+  var pEmail = document.getElementById('profileEmail');
+  var pUrl = document.getElementById('profileUrl');
+  var pAvatar = document.getElementById('profileAvatar');
+  if (pName) {
+    pName.textContent = APP.username || 'Selvaranjan G';
+  }
+  if (pEmail) {
+    pEmail.textContent = APP.email || 'selvaranjan@gamura.app';
+  }
+  if (pUrl) {
+    pUrl.textContent = 'gamura.vercel.app/@' + (APP.username || 'pending');
+  }
+  if (pAvatar && APP.username) {
+    pAvatar.textContent = APP.username.slice(0, 2).toUpperCase();
+  }
+}
+
 function openEditModal(id) {
   var b = APP.blocks.find(function(x) { return x.id === id; });
   if (!b) return;
@@ -1482,14 +1690,14 @@ function openEditModal(id) {
     ttl.textContent = 'Edit Image';
     body.innerHTML = '<div class="mfg"><label class="mla">Image URL</label><input class="mi" id="esrc" value="' + esc(b.src) + '"></div>' +
       '<div class="mfg"><label class="mla">Alt Text</label><input class="mi" id="ealt" value="' + esc(b.alt || '') + '"></div>';
-  } else if (b.type === 'html') {
-    ttl.textContent = 'Edit HTML Preview';
-    body.innerHTML = '<div class="mfg"><label class="mla">Title</label><input class="mi" id="et" value="' + esc(b.title) + '"></div>' +
-      '<div class="mfg"><label class="mla">HTML Code</label><textarea class="mta" id="ec" style="min-height:160px; font-family:\'JetBrains Mono\',monospace; font-size:11px;">' + esc(b.code) + '</textarea></div>';
   } else if (b.type === 'pdf') {
-    ttl.textContent = 'Edit PDF Block';
+    ttl.textContent = 'Edit Resume / PDF';
     body.innerHTML = '<div class="mfg"><label class="mla">Title</label><input class="mi" id="et" value="' + esc(b.title) + '"></div>' +
-      '<div class="mfg"><label class="mla">PDF Link / Data (Base64)</label><input class="mi" id="eu" value="' + esc(b.url) + '"></div>';
+      '<div class="mfg"><label class="mla">PDF URL</label><input class="mi" id="eu" value="' + esc(b.url) + '"></div>';
+  } else if (b.type === 'html') {
+    ttl.textContent = 'Edit HTML Code Preview';
+    body.innerHTML = '<div class="mfg"><label class="mla">Title</label><input class="mi" id="et" value="' + esc(b.title) + '"></div>' +
+      '<div class="mfg"><label class="mla">HTML Code</label><textarea class="mta" id="ehc" style="min-height: 150px; font-family: monospace; font-size:11px;">' + esc(b.code || '') + '</textarea></div>';
   } else {
     ttl.textContent = 'Block';
     body.innerHTML = '<p style="color:#9CA3AF;font-size:13px">Nothing to edit.</p>';
@@ -1525,16 +1733,16 @@ function saveEdit() {
     var ealt = document.getElementById('ealt');
     if (esrc) b.src = esrc.value || b.src;
     if (ealt) b.alt = ealt.value || '';
-  } else if (b.type === 'html') {
-    var et = document.getElementById('et');
-    var ec = document.getElementById('ec');
-    if (et) b.title = et.value || b.title;
-    if (ec) b.code = ec.value || b.code;
   } else if (b.type === 'pdf') {
     var et = document.getElementById('et');
     var eu = document.getElementById('eu');
     if (et) b.title = et.value || b.title;
     if (eu) b.url = eu.value || b.url;
+  } else if (b.type === 'html') {
+    var et = document.getElementById('et');
+    var ehc = document.getElementById('ehc');
+    if (et) b.title = et.value || b.title;
+    if (ehc) b.code = ehc.value || b.code;
   }
   saveState();
   renderCanvas();
@@ -1582,78 +1790,6 @@ function imgUrlPreview() {
   }
 }
 
-// HTML File Processing
-function htmlDragOver(e) { e.preventDefault(); document.getElementById('htmlDrop').classList.add('dv'); }
-function htmlDragLeave() { document.getElementById('htmlDrop').classList.remove('dv'); }
-function htmlDropHandler(e) {
-  e.preventDefault();
-  document.getElementById('htmlDrop').classList.remove('dv');
-  var files = e.dataTransfer.files;
-  if (files.length) processHtmlFile(files[0]);
-}
-function htmlFileSelect(e) {
-  var files = e.target.files;
-  if (files.length) processHtmlFile(files[0]);
-}
-function processHtmlFile(file) {
-  if (!file.name.endsWith('.html') && file.type !== 'text/html') {
-    toast('error', '⚠ Invalid File', 'Please select an HTML file', 2500, 'lt');
-    return;
-  }
-  var r = new FileReader();
-  r.onload = function(evt) {
-    document.getElementById('htmlCode').value = evt.target.result;
-    document.getElementById('htmlTitle').value = file.name.replace(/\.[^/.]+$/, "");
-    document.getElementById('htmlDropTxt').textContent = '✓ ' + file.name + ' Loaded';
-    toast('success', 'File Loaded', file.name + ' successfully parsed!', 2000, 'lt');
-  };
-  r.readAsText(file);
-}
-
-// PDF File Processing
-function pdfDragOver(e) { e.preventDefault(); document.getElementById('pdfDrop').classList.add('dv'); }
-function pdfDragLeave() { document.getElementById('pdfDrop').classList.remove('dv'); }
-function pdfDropHandler(e) {
-  e.preventDefault();
-  document.getElementById('pdfDrop').classList.remove('dv');
-  var files = e.dataTransfer.files;
-  if (files.length) processPdfFile(files[0]);
-}
-function pdfFileSelect(e) {
-  var files = e.target.files;
-  if (files.length) processPdfFile(files[0]);
-}
-function processPdfFile(file) {
-  if (!file.name.endsWith('.pdf') && file.type !== 'application/pdf') {
-    toast('error', '⚠ Invalid File', 'Please select a PDF file', 2500, 'lt');
-    return;
-  }
-  var r = new FileReader();
-  r.onload = function(evt) {
-    document.getElementById('pdfUrl').value = evt.target.result;
-    document.getElementById('pdfTitle').value = file.name.replace(/\.[^/.]+$/, "");
-    document.getElementById('pdfDropTxt').textContent = '✓ ' + file.name + ' Uploaded';
-    toast('success', 'PDF Document Loaded', 'PDF successfully parsed!', 2000, 'lt');
-  };
-  r.readAsDataURL(file);
-}
-
-function addHtmlBlock() {
-  var code = document.getElementById('htmlCode').value.trim();
-  var title = document.getElementById('htmlTitle').value.trim() || 'Code Preview';
-  if (!code) { toast('error', '⚠ Empty Code', 'Write or upload some HTML code', 2500, 'lt'); return; }
-  addBlock({ type: 'html', code: code, title: title });
-  closeM('m-html');
-}
-
-function addPdfBlock() {
-  var url = document.getElementById('pdfUrl').value.trim();
-  var title = document.getElementById('pdfTitle').value.trim() || 'PDF Document';
-  if (!url) { toast('error', '⚠ Missing File', 'Upload a PDF or paste a link', 2500, 'lt'); return; }
-  addBlock({ type: 'pdf', url: url, title: title });
-  closeM('m-pdf');
-}
-
 function previewPage() {
   APP.published = false;
   saveState();
@@ -1684,7 +1820,7 @@ function publishPage() {
       stats.engagements = (stats.engagements || 0) + 5;
       window.saveUserStats(APP.username, stats);
     }
-    document.getElementById('pub-url-show').textContent = 'gamura.vercel.app/' + APP.username;
+    document.getElementById('pub-url-show').textContent = 'gamura.vercel.app/@' + APP.username;
     openModal('m-pub');
     toast('success', '🚀 Published!', 'Your Gamura page is now live!', 4000, 'dk');
   }, 1800);
@@ -1739,8 +1875,8 @@ function buildPublishedView() {
 }
 
 function openShare() {
-  var url = 'gamura.vercel.app/' + APP.username;
-  document.getElementById('sheetUrl').textContent = url;
+  var url = getClaimedUrl(APP.username);
+  document.getElementById('sheetUrl').textContent = 'gamura.vercel.app/@' + APP.username;
   document.getElementById('shareSheet').classList.add('open');
   document.getElementById('ssov').style.display = 'block';
 }
@@ -1751,13 +1887,13 @@ function closeShare() {
 }
 
 function copyMyUrl() {
-  var url = 'gamura.vercel.app/' + APP.username;
-  copyToClipboard(url, 'URL Copied', 'Paste it in your social bios!');
+  var url = getClaimedUrl(APP.username);
+  copyToClipboard(url, 'Live URL Copied!', 'The clickable live link has been copied to your clipboard!');
 }
 
 function copyModalUrl() {
-  var url = 'gamura.vercel.app/' + APP.username;
-  copyToClipboard(url, 'URL Copied', 'Your custom gamer handle URL is copied.');
+  var url = getClaimedUrl(APP.username);
+  copyToClipboard(url, 'Live URL Copied!', 'Pasted link will open your profile hub directly!');
 }
 
 function copyToClipboard(text, t, m) {
@@ -1773,7 +1909,7 @@ function copyToClipboard(text, t, m) {
 }
 
 function shareVia(plt) {
-  var url = 'gamura.vercel.app/' + APP.username;
+  var url = getClaimedUrl(APP.username);
   toast('info', 'Share via ' + plt, 'Opening standard share intent for ' + plt, 2500, 'lt');
 }
 
@@ -1833,6 +1969,23 @@ function toast(type, title, msg, time, theme) {
       }
     }, 16);
   }
+
+  window.getClaimedUrl = function(username) {
+    var user = username || APP.username || 'selvaranjan';
+    var base = window.location.origin + window.location.pathname;
+    try {
+      if (window.parent && window.parent.location && window.parent.location.origin) {
+        base = window.parent.location.origin + window.parent.location.pathname;
+      }
+    } catch (e) {}
+    
+    // Normalize url
+    base = base.replace(/\/selvaranjan_gamura\.html.*/i, '');
+    if (!base.endsWith('/')) {
+      base += '/';
+    }
+    return base + '?u=' + encodeURIComponent(user);
+  };
 
   window.getUserStats = function(username) {
     if (!username || !APP.username || username.toLowerCase() !== APP.username.toLowerCase()) {
@@ -1968,10 +2121,10 @@ function toast(type, title, msg, time, theme) {
 
   // Exit from previewing another user's profile live link hub cleanly
   window.exitPublishedView = function() {
+    window.parent.postMessage({ type: 'gamura-exit-profile' }, '*');
     if (window.currentViewerUsername) {
       window.currentViewerUsername = null;
       window.currentViewerProfile = null;
-      window.parent.postMessage({ type: 'exit-viewer-mode' }, '*');
       goTo('landing');
     } else {
       goTo('dashboard');
@@ -1993,8 +2146,13 @@ function toast(type, title, msg, time, theme) {
     
     var devs = window.gamuraDevelopers || [];
     if (devs.length === 0) {
-      if (loadingEl) loadingEl.style.display = 'block';
-      listEl.innerHTML = '';
+      if (window.gamuraDirectoryReceived) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        listEl.innerHTML = '<div style="text-align:center;color:var(--b);font-family:var(--font);padding:60px 20px;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;opacity:0.55;border:1px dashed rgba(255,255,255,0.06);border-radius:12px;margin:20px 0;">No active portfolio profiles yet. Be the first to claim yours above!</div>';
+      } else {
+        if (loadingEl) loadingEl.style.display = 'block';
+        listEl.innerHTML = '';
+      }
       return;
     }
     
@@ -2036,7 +2194,7 @@ function toast(type, title, msg, time, theme) {
           badgeHtml +
         '</div>' +
         '<div style="font-size: 11px; color: var(--mut); font-family:\'JetBrains Mono\', monospace; margin-bottom:14px; line-height: 1.4;">' +
-          '🔗 gamura.vercel.app/' + esc(dev.username) + '<br/>' +
+          '<span style="cursor:pointer; color:var(--b); font-weight:500;" onclick="copyToClipboard(\'' + esc(getClaimedUrl(dev.username)) + '\', \'URL Copied!\', \'Direct link to @' + esc(dev.username) + ' is ready.\')">🔗 gamura.vercel.app/@' + esc(dev.username) + ' 📋</span><br/>' +
           '📂 Blocks: ' + blocksCount + ' added' +
         '</div>' +
         '<div style="display:flex; gap:10px; margin-bottom:18px; background:rgba(0,0,0,.25); padding: 8px 10px; border-radius:8px;">' +
@@ -2107,6 +2265,7 @@ function toast(type, title, msg, time, theme) {
 
     if (data.type === 'gamura-directory-sync') {
       window.gamuraDevelopers = data.developers || [];
+      window.gamuraDirectoryReceived = true;
       // Re-evaluate username form state if typing
       onHeroInput();
       // Instantly refresh live portfolio hub directory feed
@@ -2117,18 +2276,119 @@ function toast(type, title, msg, time, theme) {
       }
     }
 
+    if (data.type === 'gamura-auth-sync') {
+      if (data.loggedIn) {
+        APP.email = data.email || '';
+        
+        // Auto check if this email already claimed a developer URL handle
+        var matchedDev = null;
+        if (data.profileFromLogin && data.profileUsername) {
+          matchedDev = {
+            username: data.profileUsername,
+            email: data.profileFromLogin.email || data.email,
+            blocks: data.profileFromLogin.blocks || [],
+            published: data.profileFromLogin.published || false,
+            plan: data.profileFromLogin.plan || 'Starter'
+          };
+        } else if (window.gamuraDevelopers && window.gamuraDevelopers.length > 0) {
+          matchedDev = window.gamuraDevelopers.find(function(d) {
+            return d.email && d.email.toLowerCase() === (data.email || '').toLowerCase();
+          });
+        }
+        
+        if (data.isNewlyRegistered && data.registeredUsername) {
+          var regUn = data.registeredUsername;
+          APP.username = regUn;
+          APP.email = data.email || '';
+          APP.blocks = (data.profileFromLogin && data.profileFromLogin.blocks) || [];
+          APP.published = (data.profileFromLogin && data.profileFromLogin.published) || false;
+          APP.plan = data.registeredPlan || (data.profileFromLogin && data.profileFromLogin.plan) || 'Starter';
+          
+          localStorage.setItem('gmr_cur', regUn);
+          localStorage.setItem('gmr_' + regUn, JSON.stringify({
+            username: regUn,
+            email: APP.email,
+            blocks: APP.blocks,
+            published: APP.published,
+            plan: APP.plan
+          }));
+          
+          renderDashboard();
+          goTo('dashboard');
+          
+          var sokU = document.getElementById('sok-u');
+          if (sokU) {
+            sokU.textContent = 'gamura.vercel.app/@' + regUn;
+          }
+          openModal('m-ok');
+          toast('success', '🚀 Gamura ID Claimed', 'Your unique URL handle @' + regUn + ' was claimed successfully!', 4500, 'dk');
+        } else if (matchedDev) {
+          APP.username = matchedDev.username;
+          APP.email = matchedDev.email || data.email;
+          APP.blocks = matchedDev.blocks || [];
+          APP.published = matchedDev.published || false;
+          APP.plan = matchedDev.plan || 'Starter';
+          
+          localStorage.setItem('gmr_cur', matchedDev.username);
+          localStorage.setItem('gmr_' + matchedDev.username, JSON.stringify({
+            username: matchedDev.username,
+            email: matchedDev.email,
+            blocks: matchedDev.blocks,
+            published: matchedDev.published,
+            plan: matchedDev.plan
+          }));
+          
+          renderDashboard();
+          goTo('dashboard');
+          toast('success', '🚀 Gamura Authenticated', 'Welcome back, ' + APP.username + '!', 3000, 'dk');
+        } else {
+          // prefill registration forms on register screen
+          var emInput = document.getElementById('suEm');
+          if (emInput) {
+            emInput.value = data.email || '';
+          }
+          toast('info', '🎯 Authenticated Successfully', 'Claim your custom developer URL handle below to finish setup!', 4500, 'dk');
+        }
+      } else {
+        // Log out or reset session if needed
+      }
+    }
+
+    if (data.type === 'gamura-auth-error') {
+      if (data.isCancelled) {
+        toast('warning', 'Google Sign-In Cancelled', data.message || 'The authentication popup was closed.', 3500, 'dk');
+      } else {
+        toast('error', 'Authentication Failed', data.message || 'Error occurred during login', 4500, 'dk');
+      }
+      var suBtn = document.getElementById('suBtn');
+      if (suBtn) {
+        suBtn.textContent = loginMode ? 'LOG IN' : 'CREATE ACCOUNT & CLAIM URL';
+        suBtn.classList.remove('ld');
+        suBtn.disabled = false;
+      }
+      var gmrSsoBtn = document.getElementById('gmrSsoSubmitBtn');
+      if (gmrSsoBtn) {
+        gmrSsoBtn.textContent = 'CONNECT ACCESS GATEWAY';
+        gmrSsoBtn.disabled = false;
+      }
+    }
+
     if (data.type === 'gamura-load-viewer-profile') {
       window.currentViewerUsername = data.username;
       window.currentViewerProfile = data.profile;
       
-      // Let parent register dynamic views metric increase in background!
-      window.parent.postMessage({
-        type: 'gamura-record-view',
-        username: data.username
-      }, '*');
+      var isViewActive = document.getElementById('v-published').classList.contains('active');
+      if (!isViewActive) {
+        window.parent.postMessage({
+          type: 'gamura-record-view',
+          username: data.username
+        }, '*');
+      }
 
       buildPublishedView();
-      goTo('published');
+      if (!isViewActive) {
+        goTo('published');
+      }
     }
   });
 
@@ -2217,9 +2477,19 @@ window.addEventListener('load', function() {
     window.renderLiveDirectory();
   }
 
-  setTimeout(function() {
-    toast('info', '👋 Welcome to GAMURA!', 'Claim your free gaming profile URL', 4000, 'dk');
-  }, 800);
+  // Check for dynamic query parameters to load developer hubs on launch
+  var sParams = new URLSearchParams(window.location.search);
+  var qUser = sParams.get('u') || sParams.get('username') || sParams.get('gamura_hub') || sParams.get('ref');
+  if (qUser) {
+    setTimeout(function() {
+      toast('info', '🛰️ URL Channel Loaded', 'Syncing real-time feed for @' + qUser + '...', 3500, 'dk');
+      window.parent.postMessage({ type: 'gamura-get-profile', username: qUser }, '*');
+    }, 450);
+  } else {
+    setTimeout(function() {
+      toast('info', '👋 Welcome to GAMURA!', 'Claim your free gaming profile URL', 4000, 'dk');
+    }, 800);
+  }
 });
 </script>
 </body>

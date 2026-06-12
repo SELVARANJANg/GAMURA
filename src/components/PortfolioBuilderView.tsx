@@ -784,7 +784,10 @@ const Sidebar = ({
   githubToken, setGithubToken, githubRepo, setGithubRepo, handlePublishGithub, githubStatus,
   vercelToken, setVercelToken, vercelProject, setVercelProject, handleDeployVercel, vercelStatus,
   confirmWipe, setConfirmWipe, confirmLoad, setConfirmLoad, soundEffect
-}: any) => (
+}: any) => {
+  const [projectToDeleteIndex, setProjectToDeleteIndex] = useState<number | null>(null);
+
+  return (
   <div className="w-full md:w-[260px] bg-[#050514] border-r border-white/5 overflow-y-auto flex-shrink-0 select-none flex flex-col h-full z-10" style={{ borderColor: 'rgba(var(--theme-accent-rgb), 0.1)' }}>
     <div className="p-2 bg-black/50 border-b border-white/5 flex items-center justify-between sticky top-0 z-10 backdrop-blur-md">
        <div className="flex items-center gap-1">
@@ -1548,20 +1551,48 @@ const Sidebar = ({
                 </div>
 
                 <div className="grid grid-cols-2 gap-1 mt-1 border-t border-white/5 pt-1.5">
-                  <button 
-                    type="button"
-                    onClick={() => setActiveProjectForModal(p)}
-                    className="text-[7.5px] text-[var(--theme-accent)] hover:text-white hover:bg-white/5 transition-colors py-1 font-mono uppercase tracking-widest flex items-center justify-center gap-1 rounded cursor-pointer"
-                  >
-                    🔍 Test Modal
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={()=>update("projects", data.projects.filter((_:any, j:number)=>j!==i))} 
-                    className="text-[7.5px] text-red-400 hover:text-red-350 hover:bg-white/5 transition-colors py-1 font-mono uppercase tracking-widest flex items-center justify-center gap-1 rounded cursor-pointer"
-                  >
-                    <Trash2 className="w-2.5 h-2.5" /> Purge Node
-                  </button>
+                  {projectToDeleteIndex === i ? (
+                    <div className="col-span-2 flex items-center justify-between bg-red-950/40 border border-red-500/20 p-1 rounded animate-pulse">
+                      <span className="text-[6.5px] text-red-500 font-bold uppercase tracking-wider font-mono">Purge?</span>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            update("projects", data.projects.filter((_:any, j:number)=>j!==i));
+                            setProjectToDeleteIndex(null);
+                            if (typeof soundEffect === "function") soundEffect();
+                          }}
+                          className="text-[6px] bg-red-600 hover:bg-red-500 text-white font-black px-2 py-0.5 rounded uppercase cursor-pointer"
+                        >
+                          YES
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProjectToDeleteIndex(null)}
+                          className="text-[6px] text-zinc-400 hover:text-white px-1 py-0.5 font-bold uppercase cursor-pointer"
+                        >
+                          NO
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <button 
+                        type="button"
+                        onClick={() => setActiveProjectForModal(p)}
+                        className="text-[7.5px] text-[var(--theme-accent)] hover:text-white hover:bg-white/5 transition-colors py-1 font-mono uppercase tracking-widest flex items-center justify-center gap-1 rounded cursor-pointer"
+                      >
+                        🔍 Test Modal
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setProjectToDeleteIndex(i)} 
+                        className="text-[7.5px] text-red-400 hover:text-red-350 hover:bg-white/5 transition-colors py-1 font-mono uppercase tracking-widest flex items-center justify-center gap-1 rounded cursor-pointer"
+                      >
+                        <Trash2 className="w-2.5 h-2.5" /> Purge Node
+                      </button>
+                    </>
+                  )}
                 </div>
              </div>
             ))}
@@ -1806,7 +1837,8 @@ const Sidebar = ({
       </Accordion>
     </div>
   </div>
-);
+  );
+};
 
 export interface PortfolioBuilderViewProps {
   onBack: () => void;
@@ -1815,6 +1847,8 @@ export interface PortfolioBuilderViewProps {
 
 export function PortfolioBuilderView({ onBack, showToast }: PortfolioBuilderViewProps) {
   const [view, setView] = useState<"hub" | "builder" | "full-preview" | "code" | "publish">("hub");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("saved");
+  const isInitialMount = useRef(true);
   const [score, setScore] = useState(0);
   const [data, setData] = useState(DEFAULT_PORTFOLIO);
   const [previewData, setPreviewData] = useState(DEFAULT_PORTFOLIO);
@@ -2073,7 +2107,34 @@ export function PortfolioBuilderView({ onBack, showToast }: PortfolioBuilderView
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("portfolio_system", JSON.stringify(data));
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    setSaveStatus("saving");
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem("portfolio_system", JSON.stringify(data));
+        setSaveStatus("saved");
+      } catch (err) {
+        console.error("Failed to auto-save file system:", err);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [data]);
+
+  // Ensure absolutely no data loss during unmount or window close
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      localStorage.setItem("portfolio_system", JSON.stringify(data));
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      localStorage.setItem("portfolio_system", JSON.stringify(data));
+    };
   }, [data]);
 
   const soundEffect = () => {
@@ -2425,7 +2486,52 @@ export function PortfolioBuilderView({ onBack, showToast }: PortfolioBuilderView
                     ))}
                   </div>
                </div>
-               <div className="flex gap-1 shrink-0">
+               <div className="flex gap-1 shrink-0 items-center">
+                  {/* GitHub Status Indicator */}
+                  <div 
+                    className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded text-[7px] md:text-[8px] font-mono border transition-all ${
+                      githubStatus.type === "loading" ? "bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse" :
+                      githubStatus.type === "success" ? "bg-emerald-500/10 border-emerald-500/15 text-emerald-450" :
+                      githubStatus.type === "error" ? "bg-red-500/10 border-red-500/20 text-red-500 font-bold" :
+                      "bg-zinc-900/50 border-white/5 text-zinc-500 hover:text-zinc-400"
+                    }`}
+                    title={githubStatus.message || "GitHub Connection Status: Idle"}
+                  >
+                    <Github className="w-2 md:w-2.5 h-2 md:h-2.5 shrink-0" />
+                    <span className="hidden xs:inline font-black uppercase tracking-wider text-[6.5px] md:text-[7.5px]">
+                      {githubStatus.type === "loading" ? "Syncing..." :
+                       githubStatus.type === "success" ? "Synced" :
+                       githubStatus.type === "error" ? "Sync Fail" :
+                       "Offline"}
+                    </span>
+                    <span className={`w-1 h-1 md:w-1.5 md:h-1.5 rounded-full ${
+                      githubStatus.type === "loading" ? "bg-amber-400 animate-pulse" :
+                      githubStatus.type === "success" ? "bg-emerald-400 animate-ping" :
+                      githubStatus.type === "error" ? "bg-red-400 animate-pulse animate-bounce" :
+                      "bg-zinc-600"
+                    }`} />
+                  </div>
+
+                  {/* Auto-Save Indicator */}
+                  <div 
+                    className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded text-[7px] md:text-[8px] font-mono border transition-all ${
+                      saveStatus === "saving" ? "bg-sky-500/10 border-sky-500/20 text-sky-400" :
+                      "bg-zinc-900/40 border-white/5 text-emerald-400"
+                    }`}
+                    title={saveStatus === "saving" ? "Writing changes to local cache..." : "All edits compiled and saved locally"}
+                  >
+                    {saveStatus === "saving" ? (
+                      <RefreshCw className="w-2 md:w-2.5 h-2 md:h-2.5 animate-spin text-sky-400 shrink-0" />
+                    ) : (
+                      <Check className="w-2 md:w-2.5 h-2 md:h-2.5 text-emerald-500 shrink-0" />
+                    )}
+                    <span className="hidden xs:inline font-black uppercase tracking-wider text-[6.5px] md:text-[7.5px]">
+                      {saveStatus === "saving" ? "Saving" : "Saved"}
+                    </span>
+                  </div>
+
+                  <div className="h-4 w-[1px] bg-white/10 shrink-0 mx-1 hidden sm:block" />
+
                   <Btn onClick={() => {
                     const blob = new Blob([liveHTML], { type: "text/html" });
                     const a = document.createElement("a");
