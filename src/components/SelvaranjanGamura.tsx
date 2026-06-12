@@ -515,9 +515,12 @@ export default function SelvaranjanGamura({ onBack }: { onBack: () => void }) {
           } catch (err: any) {
             console.error("Google popup error in container bridge:", err);
             const isPopupClosed = err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request';
+            const isDomainNotAuth = err.code === 'auth/unauthorized-domain';
             iframe.contentWindow?.postMessage({
               type: "gamura-auth-error",
-              message: isPopupClosed ? "Google login popup was closed window cancelled. Please try again." : (err.message || "Google Authentication failed"),
+              message: isPopupClosed ? "Google login popup was closed. Please try again." : 
+                        isDomainNotAuth ? `Domain Not Authorized. Please add ${window.location.hostname} to authorized domains in Firebase.` :
+                        (err.message || "Google Authentication failed"),
               isCancelled: isPopupClosed
             }, "*");
           }

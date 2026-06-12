@@ -9306,6 +9306,17 @@ export default function App() {
             </p>
           </div>,
         );
+      } else if (error.code === "auth/unauthorized-domain") {
+        setAuthError(
+          <div className="space-y-1.5 text-red-600 dark:text-red-400 p-1 bg-red-500/10 rounded-xl">
+            <p className="font-extrabold uppercase tracking-wide text-[10px] text-left">
+              Domain Not Authorized
+            </p>
+            <p className="text-[10px] normal-case leading-relaxed text-left opacity-90">
+              Please add <strong className="font-bold">{window.location.hostname}</strong> to your Firebase Console under Authentication &gt; Settings &gt; Authorized domains.
+            </p>
+          </div>,
+        );
       } else if (isPopupError) {
         setAuthError(
           <div className="space-y-2 text-zinc-800 dark:text-zinc-200 p-1 text-left normal-case tracking-normal">
@@ -10245,9 +10256,24 @@ export default function App() {
       }
     } catch (error: any) {
       console.error("GPG Error:", error);
+      let errorText = error.message || "Could not connect to the AI service. Please ensure your GEMINI_API_KEY is configured in the Secrets panel.";
+      
+      try {
+        if (errorText.includes("503") || errorText.includes("UNAVAILABLE")) {
+          const parsed = JSON.parse(errorText.replace("Error: ", "").trim());
+          if (parsed && parsed.error && parsed.error.message) {
+             errorText = "Gamura AI is currently experiencing high demand. Please wait a moment and try again.";
+          }
+        }
+      } catch (e) {
+        if (errorText.includes("503") || errorText.includes("UNAVAILABLE")) {
+          errorText = "Gamura AI is currently experiencing high demand. Please wait a moment and try again.";
+        }
+      }
+
       const errorMessage: Message = {
         role: "model",
-        content: `Error: ${error.message || "Could not connect to the AI service. Please ensure your GEMINI_API_KEY is configured in the Secrets panel."}`,
+        content: `Error: ${errorText}`,
       };
 
       const errorChatSession: Chat = {
