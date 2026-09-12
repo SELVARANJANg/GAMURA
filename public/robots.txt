@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Allow: /favicon.ico
+Allow: /gamura-logo.png
+Allow: /favicon-48x48.png
+Allow: /favicon-96x96.png
+Allow: /apple-touch-icon.png
+Allow: /site.webmanifest
+
+Sitemap: https://gamura.vercel.app/sitemap.xml

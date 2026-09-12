@@ -1,6 +1,6 @@
 {
   "name": "GAMURA",
-  "description": "The Official GAMURA App - SELVARANJAN G's Edition",
+  "description": "GAMURA — Intelligence Redefined. The next-generation gaming, AI, and developer universe.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
