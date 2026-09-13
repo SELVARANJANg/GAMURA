@@ -166,6 +166,7 @@ const loaderImgSources = [
   "https://lh3.googleusercontent.com/d/1lUg4cyZcP17Av5MC-ij8JJM0HGmmUJu-",
 ];
 const logoSources = [
+  "/gamura-logo.png",
   "https://lh3.googleusercontent.com/d/1gdDmsxtjEHxq4qvmshBQL3eX3c1cOSWY",
 ];
 const mainImgSources = [
@@ -9976,6 +9977,20 @@ export default function App() {
 
   const [gpgInput, setGpgInput] = useState("");
   const [isGpgLoading, setIsGpgLoading] = useState(false);
+  const [serverAiAvailable, setServerAiAvailable] = useState<boolean>(true);
+
+  useEffect(() => {
+    fetch("/api/ai/status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data?.available === "boolean") {
+          setServerAiAvailable(data.available);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const isAiConfigured = serverAiAvailable || !!getAi();
   const [limitError, setLimitError] = useState<string | null>(null);
   const [isDeletingChat, setIsDeletingChat] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
@@ -10145,52 +10160,125 @@ export default function App() {
       const toolContext = selectedTool
         ? `[TOOL: ${selectedTool.toUpperCase()}] `
         : "";
-      const ai = getAi();
 
-      if (!ai) {
-        throw new Error(
-          "GEMINI_API_KEY is missing. Please configure it in the Secrets panel.",
-        );
+      let generatedPromptText = "";
+      let fetchSucceeded = false;
+
+      // 1. Primary: Server-side API (/api/gpg) - Secure, avoids CORS/Permission issues in browser
+      try {
+        const res = await fetch("/api/gpg", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: newMessages,
+            selectedTool,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data.text === "string") {
+            generatedPromptText = data.text;
+            fetchSucceeded = true;
+          }
+        } else {
+          const errData = await res.json().catch(() => null);
+          if (errData && errData.error) {
+            console.warn("Server GPG returned error:", errData.error);
+            // If explicit permission or configuration error from server, surface it
+            if (
+              errData.error.includes("Permission denied") ||
+              errData.error.includes("not configured") ||
+              errData.error.includes("PERMISSION_DENIED")
+            ) {
+              throw new Error(errData.error);
+            }
+          }
+        }
+      } catch (err: any) {
+        if (
+          err.message &&
+          (err.message.includes("Permission denied") ||
+            err.message.includes("not configured") ||
+            err.message.includes("PERMISSION_DENIED"))
+        ) {
+          throw err;
+        }
+        console.warn("Server GPG endpoint unreachable, trying client fallback:", err);
       }
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: newMessages.map((m) => ({
-          role: m.role,
-          parts: [
-            { text: m.role === "user" ? toolContext + m.content : m.content },
-          ],
-        })),
-        config: {
-          systemInstruction: `You are the Gamura Prompt Generator (GPG) v3.1. Your ONLY purpose is to generate highly optimized prompts based on the user's input.
-          If the user asks a general question, tries to chat with you, or asks you to do anything OTHER than generating a prompt, you MUST reply with exactly: "I'm a GPG". Do not generate a prompt in this case.
-          When generating a prompt, your output MUST be ONLY the generated prompt.
-          
-          STRICT RULES:
-          1. ONLY generate prompts. Otherwise reply "I'm a GPG".
-          2. NO conversational filler.
-          3. NO markdown formatting.
-          4. NO unwanted symbols.
-          5. Output ONLY the raw prompt text.
-          
-          TOOL-SPECIFIC OPTIMIZATION:
-          - CODE: Focus on logic, language-specific best practices, and architecture.
-          - IMAGE: Focus on cinematic lighting, camera specs (35mm, f/1.8), and artistic style.
-          - VIDEO: Focus on camera movement (pan, tilt, zoom), frame rate, and temporal consistency.
-          - MATHS: Focus on step-by-step logic, precision, and mathematical notation.
-          - CHART: Focus on data structure, axes labels, and visual clarity.
-          - GRAPH: Focus on nodes, edges, relationships, and topological layout.
-          
-          SPEED:
-          - Provide the absolute best version immediately.`,
-          temperature: 0.4,
-        },
-      });
+      // 2. Client-side fallback if server was not reachable
+      if (!fetchSucceeded) {
+        const ai = getAi();
+        if (!ai) {
+          throw new Error(
+            "GEMINI_API_KEY is missing. Please configure it in the Secrets panel.",
+          );
+        }
+
+        let response: any;
+        try {
+          response = await ai.models.generateContent({
+            model: "gemini-3.8-flash",
+            contents: newMessages.map((m) => ({
+              role: m.role,
+              parts: [
+                { text: m.role === "user" ? toolContext + m.content : m.content },
+              ],
+            })),
+            config: {
+              systemInstruction: `You are the Gamura Prompt Generator (GPG) v3.1. Your ONLY purpose is to generate highly optimized prompts based on the user's input.
+              If the user asks a general question, tries to chat with you, or asks you to do anything OTHER than generating a prompt, you MUST reply with exactly: "I'm a GPG". Do not generate a prompt in this case.
+              When generating a prompt, your output MUST be ONLY the generated prompt.
+              
+              STRICT RULES:
+              1. ONLY generate prompts. Otherwise reply "I'm a GPG".
+              2. NO conversational filler.
+              3. NO markdown formatting.
+              4. NO unwanted symbols.
+              5. Output ONLY the raw prompt text.
+              
+              TOOL-SPECIFIC OPTIMIZATION:
+              - CODE: Focus on logic, language-specific best practices, and architecture.
+              - IMAGE: Focus on cinematic lighting, camera specs (35mm, f/1.8), and artistic style.
+              - VIDEO: Focus on camera movement (pan, tilt, zoom), frame rate, and temporal consistency.
+              - MATHS: Focus on step-by-step logic, precision, and mathematical notation.
+              - CHART: Focus on data structure, axes labels, and visual clarity.
+              - GRAPH: Focus on nodes, edges, relationships, and topological layout.
+              
+              SPEED:
+              - Provide the absolute best version immediately.`,
+              temperature: 0.4,
+            },
+          });
+        } catch (modelErr) {
+          // Fallback to gemini-2.5-flash
+          response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: newMessages.map((m) => ({
+              role: m.role,
+              parts: [
+                { text: m.role === "user" ? toolContext + m.content : m.content },
+              ],
+            })),
+            config: {
+              systemInstruction: `You are the Gamura Prompt Generator (GPG) v3.1. Your ONLY purpose is to generate highly optimized prompts based on the user's input.
+              If the user asks a general question, tries to chat with you, or asks you to do anything OTHER than generating a prompt, you MUST reply with exactly: "I'm a GPG". Do not generate a prompt in this case.
+              When generating a prompt, your output MUST be ONLY the generated prompt.`,
+              temperature: 0.4,
+            },
+          });
+        }
+
+        generatedPromptText =
+          response.text ||
+          "I couldn't generate a prompt right now. Please try again.";
+      }
 
       const modelMessage: Message = {
         role: "model",
         content:
-          response.text ||
+          generatedPromptText ||
           "I couldn't generate a prompt right now. Please try again.",
       };
 
@@ -10256,19 +10344,28 @@ export default function App() {
       }
     } catch (error: any) {
       console.error("GPG Error:", error);
-      let errorText = error.message || "Could not connect to the AI service. Please ensure your GEMINI_API_KEY is configured in the Secrets panel.";
-      
+      const rawMsg =
+        error?.message ||
+        (typeof error === "string" ? error : JSON.stringify(error));
+      let errorText = rawMsg;
+
       try {
-        if (errorText.includes("503") || errorText.includes("UNAVAILABLE")) {
-          const parsed = JSON.parse(errorText.replace("Error: ", "").trim());
-          if (parsed && parsed.error && parsed.error.message) {
-             errorText = "Gamura AI is currently experiencing high demand. Please wait a moment and try again.";
-          }
+        if (
+          rawMsg.includes("PERMISSION_DENIED") ||
+          rawMsg.includes("403") ||
+          rawMsg.includes("does not have permission")
+        ) {
+          errorText =
+            "Permission denied for the Generative Language API. Please verify that your GEMINI_API_KEY in the Secrets panel has permissions enabled.";
+        } else if (rawMsg.includes("503") || rawMsg.includes("UNAVAILABLE")) {
+          errorText =
+            "Gamura AI is currently experiencing high demand. Please wait a moment and try again.";
+        } else if (rawMsg.includes("missing") || rawMsg.includes("not configured")) {
+          errorText =
+            "GEMINI_API_KEY is not configured. Please add your key in the Secrets panel.";
         }
       } catch (e) {
-        if (errorText.includes("503") || errorText.includes("UNAVAILABLE")) {
-          errorText = "Gamura AI is currently experiencing high demand. Please wait a moment and try again.";
-        }
+        errorText = "Could not connect to the AI service. Please try again.";
       }
 
       const errorMessage: Message = {
@@ -13354,7 +13451,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col h-screen overflow-hidden">
         {/* API Key Warning Overlay */}
-        {!getAi() && (
+        {!isAiConfigured && (
           <div className="absolute inset-0 z-50 bg-white dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-6">
             <div className="bg-white dark:bg-zinc-950 border border-zinc-200 shadow-2xl rounded-[2.5rem] p-8 max-w-md w-full text-center space-y-6">
               <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
@@ -13620,7 +13717,7 @@ export default function App() {
               />
               <button
                 type="submit"
-                disabled={!gpgInput.trim() || isGpgLoading || !getAi()}
+                disabled={!gpgInput.trim() || isGpgLoading || !isAiConfigured}
                 className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 bg-black text-white dark:bg-white dark:text-black rounded-xl hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 transition-all shadow-md flex items-center justify-center"
               >
                 {isGpgLoading ? (
@@ -13915,21 +14012,37 @@ export default function App() {
             <div className="flex flex-col items-center gap-2">
               <button
                 onClick={() => {
-                  setCurrentPage("aura");
+                  setCurrentPage("selvaranjan");
                 }}
-                className="w-16 h-16 md:w-24 md:h-24 rounded-full overflow-hidden shadow-xl border border-zinc-200 bg-white flex items-center justify-center p-2 hover:opacity-80 transition-opacity cursor-pointer shadow-black/10 dark:shadow-white/5"
+                className="w-16 h-16 md:w-24 md:h-24 rounded-full overflow-hidden shadow-xl border-2 border-emerald-400 hover:border-emerald-500 bg-white flex items-center justify-center p-2 hover:opacity-90 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-black/10 dark:shadow-white/5"
+                title="Founder of GAMURA is Selvaranjan Ganthi"
               >
                 <SafeImage
                   srcs={rightRoundImgSources}
-                  alt="Gamura Extra Details Right"
+                  alt="Founder of GAMURA is Selvaranjan Ganthi"
                   className="w-full h-full object-contain bg-white"
                   fallbackIcon={Sparkles}
                 />
               </button>
-              <span className="text-[10px] md:text-[11px] font-extrabold tracking-[0.25em] text-zinc-500 dark:text-zinc-400 font-sans uppercase">
-                AURA
+              <span className="text-[10px] md:text-[11px] font-extrabold tracking-[0.25em] text-emerald-500 dark:text-emerald-400 font-sans uppercase">
+                FOUNDER
               </span>
             </div>
+          </div>
+
+          {/* FOUNDER OF GAMURA BRAND ATTRIBUTION HEADER */}
+          <div className="w-full max-w-2xl mx-auto text-center mt-6 mb-2 px-4">
+            <button
+              onClick={() => setCurrentPage("selvaranjan")}
+              className="inline-flex flex-col items-center gap-1.5 py-2.5 px-6 rounded-2xl bg-zinc-100/90 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800/80 shadow-sm hover:border-sky-500 hover:shadow-md transition-all cursor-pointer group"
+            >
+              <h2 className="text-xs sm:text-sm md:text-base font-extrabold tracking-[0.16em] text-zinc-900 dark:text-white uppercase font-orbitron group-hover:text-sky-400 transition-colors">
+                FOUNDER OF GAMURA IS SELVARANJAN GANTHI
+              </h2>
+              <p className="text-[10px] sm:text-[11px] font-medium tracking-[0.18em] text-zinc-500 dark:text-zinc-400 uppercase">
+                Intelligence Redefined · UNIVERSE · JOIN GALAXY
+              </p>
+            </button>
           </div>
         </div>
 
