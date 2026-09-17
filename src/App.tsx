@@ -166,7 +166,6 @@ const loaderImgSources = [
   "https://lh3.googleusercontent.com/d/1lUg4cyZcP17Av5MC-ij8JJM0HGmmUJu-",
 ];
 const logoSources = [
-  "/gamura-logo.png",
   "https://lh3.googleusercontent.com/d/1gdDmsxtjEHxq4qvmshBQL3eX3c1cOSWY",
 ];
 const mainImgSources = [
@@ -14012,37 +14011,21 @@ export default function App() {
             <div className="flex flex-col items-center gap-2">
               <button
                 onClick={() => {
-                  setCurrentPage("selvaranjan");
+                  setCurrentPage("aura");
                 }}
-                className="w-16 h-16 md:w-24 md:h-24 rounded-full overflow-hidden shadow-xl border-2 border-emerald-400 hover:border-emerald-500 bg-white flex items-center justify-center p-2 hover:opacity-90 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-black/10 dark:shadow-white/5"
-                title="Founder of GAMURA is Selvaranjan Ganthi"
+                className="w-16 h-16 md:w-24 md:h-24 rounded-full overflow-hidden shadow-xl border border-zinc-200 bg-white flex items-center justify-center p-2 hover:opacity-80 transition-opacity cursor-pointer shadow-black/10 dark:shadow-white/5"
               >
                 <SafeImage
                   srcs={rightRoundImgSources}
-                  alt="Founder of GAMURA is Selvaranjan Ganthi"
+                  alt="Gamura Extra Details Right"
                   className="w-full h-full object-contain bg-white"
                   fallbackIcon={Sparkles}
                 />
               </button>
-              <span className="text-[10px] md:text-[11px] font-extrabold tracking-[0.25em] text-emerald-500 dark:text-emerald-400 font-sans uppercase">
-                FOUNDER
+              <span className="text-[10px] md:text-[11px] font-extrabold tracking-[0.25em] text-zinc-500 dark:text-zinc-400 font-sans uppercase">
+                AURA
               </span>
             </div>
-          </div>
-
-          {/* FOUNDER OF GAMURA BRAND ATTRIBUTION HEADER */}
-          <div className="w-full max-w-2xl mx-auto text-center mt-6 mb-2 px-4">
-            <button
-              onClick={() => setCurrentPage("selvaranjan")}
-              className="inline-flex flex-col items-center gap-1.5 py-2.5 px-6 rounded-2xl bg-zinc-100/90 dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-800/80 shadow-sm hover:border-sky-500 hover:shadow-md transition-all cursor-pointer group"
-            >
-              <h2 className="text-xs sm:text-sm md:text-base font-extrabold tracking-[0.16em] text-zinc-900 dark:text-white uppercase font-orbitron group-hover:text-sky-400 transition-colors">
-                FOUNDER OF GAMURA IS SELVARANJAN GANTHI
-              </h2>
-              <p className="text-[10px] sm:text-[11px] font-medium tracking-[0.18em] text-zinc-500 dark:text-zinc-400 uppercase">
-                Intelligence Redefined · UNIVERSE · JOIN GALAXY
-              </p>
-            </button>
           </div>
         </div>
 
