@@ -23,7 +23,12 @@ export default function ClaimedProfileView({ username, onBack, onClaimRoute }: C
 
   // Load profile in real-time
   useEffect(() => {
-    const normalizedUsername = username.toLowerCase();
+    const normalizedUsername = (username || "").trim().toLowerCase();
+    if (!normalizedUsername || normalizedUsername.includes("/") || normalizedUsername.length > 50) {
+      setLoading(false);
+      setExistsCheck(false);
+      return;
+    }
     const docRef = doc(db, "gamura_developers", normalizedUsername);
 
     // Initial incremental view logging
@@ -62,7 +67,8 @@ export default function ClaimedProfileView({ username, onBack, onClaimRoute }: C
 
   // Atomic link/PDF click tracking
   const trackClick = async () => {
-    const normalizedUsername = username.toLowerCase();
+    const normalizedUsername = (username || "").trim().toLowerCase();
+    if (!normalizedUsername || normalizedUsername.includes("/")) return;
     const docRef = doc(db, "gamura_developers", normalizedUsername);
     try {
       await updateDoc(docRef, {

@@ -138,6 +138,7 @@ export const GamuraOverview: React.FC<GamuraProps> = ({ activeTab }) => {
   const [isWarpActive, setIsWarpActive] = useState(false);
   const [selectedBentoCard, setSelectedBentoCard] = useState<string | null>(null);
   const [systemSettings, setSystemSettings] = useState<any>(null);
+  const [supportSubmitted, setSupportSubmitted] = useState(false);
 
   // Sync Global Settings for real-time effects
   useEffect(() => {
@@ -899,43 +900,56 @@ export const GamuraOverview: React.FC<GamuraProps> = ({ activeTab }) => {
             <p className="text-xs text-gamura-muted">Submit telemetry bugs or core synchronization anomalies directly to our ground team.</p>
           </div>
 
-          <form onSubmit={(e) => { e.preventDefault(); alert("Packet dispatched to Ground Command!"); }} className="space-y-4 pt-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {supportSubmitted ? (
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-mono flex items-center justify-between">
+              <span>✓ Packet dispatched to Ground Command successfully!</span>
+              <button 
+                type="button" 
+                onClick={() => setSupportSubmitted(false)}
+                className="text-[10px] uppercase font-bold text-zinc-400 hover:text-white"
+              >
+                Send Another
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={(e) => { e.preventDefault(); setSupportSubmitted(true); }} className="space-y-4 pt-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-sharetech text-gamura-muted uppercase tracking-wider block">SELVARANJAN G Name</label>
+                  <input 
+                    type="text" 
+                    defaultValue="SELVARANJAN G" 
+                    className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2 outline-none focus:border-gamura-accent/40 text-xs text-white"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-sharetech text-gamura-muted uppercase tracking-wider block">Galaxy Channel</label>
+                  <input 
+                    type="text" 
+                    defaultValue="Node-Alpha-BCA" 
+                    className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2 outline-none focus:border-gamura-accent/40 text-xs text-white color-scheme-dark"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-1.5">
-                <label className="text-[10px] font-sharetech text-gamura-muted uppercase tracking-wider block">SELVARANJAN G Name</label>
-                <input 
-                  type="text" 
-                  defaultValue="SELVARANJAN G" 
-                  className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2 outline-none focus:border-gamura-accent/40 text-xs text-white"
+                <label className="text-[10px] font-sharetech text-gamura-muted uppercase tracking-wider block">Transmission Logs / Payload</label>
+                <textarea 
+                  rows={4} 
+                  placeholder="Explicate your warp anomaly or code requirements here..." 
+                  className="w-full bg-white/5 border border-white/5 rounded-lg p-4 outline-none focus:border-gamura-accent/40 text-xs text-white resize-none"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-sharetech text-gamura-muted uppercase tracking-wider block">Galaxy Channel</label>
-                <input 
-                  type="text" 
-                  defaultValue="Node-Alpha-BCA" 
-                  className="w-full bg-white/5 border border-white/5 rounded-lg px-4 py-2 outline-none focus:border-gamura-accent/40 text-xs text-white color-scheme-dark"
-                />
-              </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-sharetech text-gamura-muted uppercase tracking-wider block">Transmission Logs / Payload</label>
-              <textarea 
-                rows={4} 
-                placeholder="Explicate your warp anomaly or code requirements here..." 
-                className="w-full bg-white/5 border border-white/5 rounded-lg p-4 outline-none focus:border-gamura-accent/40 text-xs text-white resize-none"
-              />
-            </div>
-
-            <button 
-              type="submit" 
-              className="bg-gradient-to-r from-gamura-accent to-indigo-600 hover:shadow-lg hover:shadow-gamura-accent/20 text-white text-xs font-bold uppercase tracking-widest px-6 py-2.5 rounded-lg cursor-pointer active:scale-95 transition-all inline-flex items-center gap-2"
-            >
-              <Send className="w-3.5 h-3.5" />
-              Dispatch Packet Payload
-            </button>
-          </form>
+              <button 
+                type="submit" 
+                className="bg-gradient-to-r from-gamura-accent to-indigo-600 hover:shadow-lg hover:shadow-gamura-accent/20 text-white text-xs font-bold uppercase tracking-widest px-6 py-2.5 rounded-lg cursor-pointer active:scale-95 transition-all inline-flex items-center gap-2"
+              >
+                <Send className="w-3.5 h-3.5" />
+                Dispatch Packet Payload
+              </button>
+            </form>
+          )}
         </div>
       )}
 

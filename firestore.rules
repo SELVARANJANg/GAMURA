@@ -210,7 +210,15 @@ service cloud.firestore {
     // Gamura Developers Hub Match Block
     match /gamura_developers/{username} {
       allow read, list: if true;
-      allow create, update: if isValidId(username) && isValidGamuraDeveloper(incoming());
+      allow create: if isSignedIn() && isValidId(username) && isValidGamuraDeveloper(incoming()) 
+        && (incoming().username == username || incoming().uid == request.auth.uid);
+      allow update: if isSignedIn() && isValidGamuraDeveloper(incoming()) && (
+        isAdmin() || 
+        (resource.data.uid == request.auth.uid) ||
+        (resource.data.email == request.auth.token.email) ||
+        (exists(/databases/$(database)/documents/usernames/$(username)) && get(/databases/$(database)/documents/usernames/$(username)).data.uid == request.auth.uid) ||
+        (incoming().uid == request.auth.uid)
+      );
       allow delete: if isSignedIn() && (
         isAdmin() ||
         (resource != null && (
@@ -220,6 +228,40 @@ service cloud.firestore {
           (exists(/databases/$(database)/documents/usernames/$(username)) && get(/databases/$(database)/documents/usernames/$(username)).data.uid == request.auth.uid)
         ))
       );
+    }
+
+    // User Streaks Matrix
+    match /user_streaks/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Gamura Short Links
+    match /gamura_shortlinks/{linkId} {
+      allow read, list: if true;
+      allow create: if isSignedIn() && incoming().uid == request.auth.uid;
+      allow update: if (isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin())) || (incoming().diff(existing()).affectedKeys().hasOnly(['clicks']));
+      allow delete: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // Operational Broadcasts
+    match /broadcasts/{broadcastId} {
+      allow read, list: if true;
+      allow write: if isSignedIn();
+    }
+
+    // Activity Logs
+    match /activityLogs/{userId} {
+      allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      match /logs/{logId} {
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      }
+    }
+
+    // Analytics
+    match /analytics/{doc=**} {
+      allow read, list: if true;
+      allow write: if isSignedIn();
     }
   }
 }

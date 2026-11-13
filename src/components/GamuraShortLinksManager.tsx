@@ -27,10 +27,45 @@ export default function GamuraShortLinksManager({ user }: { user: any }) {
     fetchLinks();
   }, [user]);
 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   const handleAddLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Server is currently busy. Please try again later.");
-    return;
+    if (!slug.trim() || !url.trim() || !user) return;
+    setErrorMsg(null);
+    setAdding(true);
+    try {
+      let formattedUrl = url.trim();
+      if (!/^https?:\/\//i.test(formattedUrl)) {
+        formattedUrl = `https://${formattedUrl}`;
+      }
+      const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+      if (!cleanSlug) {
+        setErrorMsg("Please provide a valid slug (alphanumeric and dashes).");
+        setAdding(false);
+        return;
+      }
+      const docId = cleanSlug;
+      const newLink = {
+        slug: cleanSlug,
+        url: formattedUrl,
+        uid: user.uid,
+        clicks: 0,
+        createdAt: serverTimestamp(),
+      };
+      await setDoc(doc(db, "gamura_shortlinks", docId), newLink);
+      setLinks((prev) => [
+        { id: docId, ...newLink, clicks: 0 },
+        ...prev.filter((l) => l.id !== docId),
+      ]);
+      setSlug("");
+      setUrl("");
+    } catch (err: any) {
+      console.error("Failed to add short link", err);
+      setErrorMsg("Failed to create short link. Please try again.");
+    } finally {
+      setAdding(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -101,6 +136,12 @@ export default function GamuraShortLinksManager({ user }: { user: any }) {
           </button>
         </div>
       </form>
+
+      {errorMsg && (
+        <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-mono rounded-xl">
+          {errorMsg}
+        </div>
+      )}
 
       <div className="space-y-3">
         {links.length === 0 ? (

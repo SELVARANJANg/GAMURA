@@ -61,6 +61,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   }
 
   // To prevent the React renderer & async listeners from crashing, we print beautiful, clean warning blocks
-  // to the developer console rather than throwing a fatal crash. This guarantees 105% uptime and fault tolerance.
-  console.error('Firestore Error Handled (Non-lethal):', JSON.stringify(errInfo));
+  // to the developer console and throw the error as per skill requirements.
+  console.error('Firestore Error Handled:', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
 }

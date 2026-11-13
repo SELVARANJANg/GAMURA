@@ -114,12 +114,60 @@ export default function GamuraUniverseProfileManager({ user, showToast }: Profil
   }, [username, profile]);
 
   const handleSave = async () => {
-    if (showToast) {
-      showToast("⏳", "Server Busy", "The server is currently busy. Please try again later.", "warning");
-    } else {
-      alert("Server is currently busy. Please try again later.");
+    if (!username.trim()) {
+      if (showToast) showToast("⚠️", "Username Required", "Please provide a valid username handle.", "warning");
+      return;
     }
-    return;
+    if (checkStatus === "taken" && profile?.username !== username) {
+      if (showToast) showToast("⚠️", "Handle Taken", "This username is already taken. Please pick another.", "warning");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const cleanUser = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+      const payload: any = {
+        username: cleanUser,
+        displayName: displayName.trim() || cleanUser,
+        bio: bio.trim(),
+        website: website.trim(),
+        github: github.trim(),
+        linkedin: linkedin.trim(),
+        twitter: twitter.trim(),
+        youtube: youtube.trim(),
+        projects: projects || [],
+        blocks: blocks || [],
+        published: true,
+        uid: user?.uid,
+        email: user?.email || `${cleanUser}@gamura.app`,
+        plan: profile?.plan || "Starter",
+        clicks: profile?.clicks || 0,
+        views: profile?.views || 1,
+        visitors: profile?.visitors || 1,
+        engagements: profile?.engagements || 1,
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(doc(db, "gamura_developers", cleanUser), payload, { merge: true });
+
+      if (user?.uid) {
+        await setDoc(doc(db, "gamura_developers", user.uid), payload, { merge: true }).catch(() => null);
+        await setDoc(doc(db, "usernames", cleanUser), { uid: user.uid }, { merge: true }).catch(() => null);
+      }
+
+      setProfile(payload);
+      setShowPublishSuccess(true);
+      if (showToast) {
+        showToast("🚀", "Profile Published!", "Your Gamura Universe profile is live.", "success");
+      }
+    } catch (err: any) {
+      console.error("Save profile error:", err);
+      if (showToast) {
+        showToast("❌", "Save Failed", err.message || "Failed to save profile. Please check your connection.", "error");
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {

@@ -5,9 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GAMURA</title>
     <meta name="description" content="GAMURA — Intelligence Redefined. The next-generation gaming, AI, and developer universe." />
+    <meta name="keywords" content="GAMURA, GAMURA WORLD, SELVARANJAN, G, SELVARANJAN GANTHI, RANJAN, SELVA, SELVARANJAN G, RANJAN G, SELVARANJAN G GAMURA, GAMURA VERCEL, GAMURA VERC, GPG, GAMURA PROMPT GENERATOR, AI Prompt Engineering, Neural Link, Developer Platform, Play Store PWA" />
+    <meta name="author" content="Selvaranjan G" />
     <meta name="application-name" content="GAMURA" />
     <meta name="apple-mobile-web-app-title" content="GAMURA" />
-    <meta name="theme-color" content="#03050A" />
+    <meta name="theme-color" content="#10b981" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
     <!-- Canonical URL -->
     <link rel="canonical" href="https://gamura.vercel.app/" />
@@ -19,11 +23,14 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" />
-    <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512x512.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Puter.js for 100% Free Realtime AI & Cloud Services -->
+    <script src="https://js.puter.com/v2/"></script>
 
     <!-- Open Graph (Search Engines, Social Media, Messengers) -->
     <meta property="og:site_name" content="GAMURA" />
@@ -59,9 +66,36 @@
       "logo": "https://gamura.vercel.app/gamura-logo.png"
     }
     </script>
+    <!-- Google Search Structured Data (Person / Creator) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "name": "Selvaranjan G",
+      "additionalName": "Gamura",
+      "url": "https://gamura.vercel.app",
+      "sameAs": [
+        "https://github.com",
+        "https://github.com/Gamura-Galaxy",
+        "https://linkedin.com",
+        "https://instagram.com",
+        "https://instagram.com/selvaranjang"
+      ],
+      "jobTitle": "Software Developer",
+      "alumniOf": {
+        "@type": "CollegeOrUniversity",
+        "name": "Dwaraka Doss Goverdhan Doss Vaishnav College"
+      }
+    }
+    </script>
 
     <script>
       window.process = { env: {} };
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js").catch(() => {});
+        });
+      }
     </script>
   </head>
   <body>

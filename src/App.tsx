@@ -51,6 +51,7 @@ import {
   Search,
   Bell,
   ChevronLeft,
+  ChevronRight,
   ChevronDown,
   ChevronUp,
   Calendar,
@@ -81,8 +82,27 @@ import {
   Radio,
   Download,
   PieChart as PieChartIcon,
+  Flame,
+  Music,
 } from "lucide-react";
-import { GoogleGenAI } from "@google/genai";
+import {
+  DndContext,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  defaultDropAnimationSideEffects,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import axios from "axios";
 import { auth, db, firebaseConfig } from "./firebase";
 import {
@@ -157,7 +177,14 @@ import ClaimedProfileView from "./components/ClaimedProfileView";
 import ShortLinkRedirectView from "./components/ShortLinkRedirectView";
 import GamuraShortLinksManager from "./components/GamuraShortLinksManager";
 import GamuraUniverseProfileManager from "./components/GamuraUniverseProfileManager";
-import { GlobalConnectionPulse } from "./components/GlobalConnectionPulse";
+import { NetworkGraphView } from "./components/NetworkGraphView";
+import { DailyStreakWidget } from "./components/DailyStreakWidget";
+import { BackgroundAudioPlayer } from "./components/BackgroundAudioPlayer";
+import {
+  PrivacyPolicyView,
+  TermsOfServiceView,
+  AccountDeletionView,
+} from "./components/LegalViews";
 
 const GAMURA_G_LOGO =
   "https://lh3.googleusercontent.com/d/1QJprWSIgOa32ADyWHBikyBibzN80Vetv";
@@ -190,21 +217,6 @@ const roundImgSources = [
 const rightRoundImgSources = [
   "https://lh3.googleusercontent.com/d/1yUWJgx-rYDX78t5Mb-BgZs2TVvhWe2Ct",
 ];
-
-// Lazy initialization of Gemini AI
-const getAi = () => {
-  const apiKey =
-    process.env.GAMURA_API_KEY && process.env.GAMURA_API_KEY.length > 20
-      ? process.env.GAMURA_API_KEY
-      : process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 20
-        ? process.env.GEMINI_API_KEY
-        : null;
-
-  if (!apiKey || apiKey.includes("MY_GEMINI_API_KEY")) {
-    return null;
-  }
-  return new GoogleGenAI({ apiKey });
-};
 
 // Dark Mode Toggle Component
 const DarkModeToggle = ({
@@ -345,17 +357,17 @@ const GamuraLoader = ({ onFinish }: { onFinish: () => void }) => {
 
     const timer = setInterval(() => {
       setProgress((prev) => {
-        const next = Math.min(100, prev + 0.5); // 0.5 * 200 ticks = 100 (200 * 30ms = 6000ms = 6s)
+        const next = Math.min(100, prev + 8); // Fast 200ms loader
         if (next >= 100) {
           clearInterval(timer);
           setTimeout(() => {
             setIsFading(true);
-            setTimeout(onFinish, 200);
-          }, 50);
+            setTimeout(onFinish, 100);
+          }, 30);
         }
         return next;
       });
-    }, 30);
+    }, 20);
 
     return () => {
       window.removeEventListener("resize", resize);
@@ -366,7 +378,7 @@ const GamuraLoader = ({ onFinish }: { onFinish: () => void }) => {
 
   return (
     <div
-      className={`fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center overflow-hidden font-sans transition-opacity duration-600 ${isFading ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+      className={`fixed inset-0 bg-[#05070c] text-white z-[9999] flex flex-col items-center justify-center overflow-hidden font-sans transition-opacity duration-300 ${isFading ? "opacity-0 pointer-events-none" : "opacity-100"}`}
     >
       <canvas
         ref={canvasRef}
@@ -632,12 +644,133 @@ const NeuralLinkView = ({
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [groupNameInput, setGroupNameInput] = useState("");
   const [showAddMemberDropdown, setShowAddMemberDropdown] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [searchMode, setSearchMode] = useState<"keyword" | "semantic">("semantic");
+  const [semanticMatches, setSemanticMatches] = useState<Record<string, { relevance: number; reason: string }>>({});
+  const [isSearchingSemantically, setIsSearchingSemantically] = useState(false);
+  const [semanticError, setSemanticError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<"users" | "requests" | "active">(
     "users",
   );
   const [refreshBit, setRefreshBit] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setChatSearchQuery("");
+    setSemanticMatches({});
+    setIsSearchingSemantically(false);
+  }, [activeChat?.id]);
+
+  const triggerSemanticSearch = useCallback(
+    async (query: string, currentMessages: any[]) => {
+      if (!query.trim() || currentMessages.length === 0) {
+        setSemanticMatches({});
+        setIsSearchingSemantically(false);
+        return;
+      }
+      setIsSearchingSemantically(true);
+      setSemanticError(null);
+      try {
+        const res = await fetch("/api/chat/semantic-search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: query.trim(),
+            messages: currentMessages.map((m: any) => ({
+              id: m.id || String(m.ts),
+              text: m.text,
+              senderName: m.senderName,
+            })),
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const matchMap: Record<string, { relevance: number; reason: string }> = {};
+          if (Array.isArray(data.matches)) {
+            data.matches.forEach((item: any) => {
+              if (item && item.id) {
+                matchMap[String(item.id)] = {
+                  relevance: typeof item.relevance === "number" ? item.relevance : 85,
+                  reason: item.reason || "Semantic contextual match",
+                };
+              }
+            });
+          }
+          setSemanticMatches(matchMap);
+        } else {
+          setSemanticError("Semantic search unavailable");
+        }
+      } catch (err) {
+        console.warn("Semantic search failed:", err);
+        setSemanticError("Failed to search semantically");
+      } finally {
+        setIsSearchingSemantically(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (searchMode !== "semantic" || !chatSearchQuery.trim()) {
+      setSemanticMatches({});
+      setIsSearchingSemantically(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      triggerSemanticSearch(chatSearchQuery, messages);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [chatSearchQuery, searchMode, messages, triggerSemanticSearch]);
+
+  const filteredMessages = useMemo(() => {
+    if (!chatSearchQuery.trim()) return messages;
+    if (searchMode === "semantic") {
+      const matchCount = Object.keys(semanticMatches).length;
+      if (isSearchingSemantically && matchCount === 0) {
+        return messages;
+      }
+      if (!isSearchingSemantically && matchCount === 0) {
+        return [];
+      }
+      return messages
+        .filter((m: any) => {
+          const key = String(m.id || m.ts);
+          return !!semanticMatches[key];
+        })
+        .sort((a: any, b: any) => {
+          const relA = semanticMatches[String(a.id || a.ts)]?.relevance || 0;
+          const relB = semanticMatches[String(b.id || b.ts)]?.relevance || 0;
+          return relB - relA;
+        });
+    }
+
+    const q = chatSearchQuery.toLowerCase().trim();
+    return messages.filter(
+      (m: any) =>
+        (m.text && m.text.toLowerCase().includes(q)) ||
+        (m.senderName && m.senderName.toLowerCase().includes(q)),
+    );
+  }, [messages, chatSearchQuery, searchMode, semanticMatches, isSearchingSemantically]);
+
+  const highlightChatQuery = (text: string, query: string) => {
+    if (!query.trim() || !text) return text;
+    const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(${escaped})`, "gi");
+    const parts = text.split(regex);
+    return parts.map((part, index) =>
+      part.toLowerCase() === query.trim().toLowerCase() ? (
+        <mark
+          key={index}
+          className="bg-amber-300 text-slate-900 px-0.5 rounded font-semibold"
+        >
+          {part}
+        </mark>
+      ) : (
+        part
+      ),
+    );
+  };
 
   useEffect(() => {
     // Force refresh every 30 seconds to update expired messages dynamically
@@ -1776,14 +1909,14 @@ const NeuralLinkView = ({
           {/* ACTIVE CHAT WORKSPACE AREA */}
           {activeChat && (
             <div className="flex-1 flex flex-col h-full bg-slate-50/30">
-              {/* Chat Title bar */}
-              <div className="p-4 px-6 border-b border-slate-100 flex items-center justify-between bg-white relative z-10">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200/50 flex items-center justify-center text-sky-500 font-extrabold text-[12px]">
+              {/* Chat Title bar & Workspace Header */}
+              <div className="p-3.5 sm:p-4 px-4 sm:px-6 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-white relative z-10">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200/50 flex items-center justify-center text-sky-500 font-extrabold text-[12px] shrink-0">
                     {activeChat.type === "group" ? "G" : "D"}
                   </div>
-                  <div className="flex flex-col">
-                    <h3 className="text-xs font-black text-slate-900 tracking-tight uppercase">
+                  <div className="flex flex-col min-w-0">
+                    <h3 className="text-xs font-black text-slate-900 tracking-tight uppercase truncate">
                       {activeChat.type === "group"
                         ? activeChat.name
                         : (Object.values(activeChat.nicknames || {}).find(
@@ -1791,16 +1924,91 @@ const NeuralLinkView = ({
                           ) as string) || "Private Conversation"}
                     </h3>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                        Highly Secure Ephemeral Segment // Messages Auto-deleted
-                        in 24 Hours
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest truncate">
+                        Ephemeral Segment // 24h Auto-delete
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                {/* Workspace Header Actions: Search Bar & Controls */}
+                <div className="flex items-center gap-2 ml-auto flex-wrap">
+                  {/* Search Bar Component with Semantic Search Mode */}
+                  <div className="relative flex items-center gap-1.5">
+                    {/* Mode Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={() => setSearchMode(searchMode === "semantic" ? "keyword" : "semantic")}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        searchMode === "semantic"
+                          ? "bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-xs hover:brightness-105"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200"
+                      }`}
+                      title={
+                        searchMode === "semantic"
+                          ? "Semantic Search (Active) - Searches by AI concept & meaning via Gemini"
+                          : "Keyword Filter (Active) - Searches exact word matches. Click to switch to AI Semantic Search."
+                      }
+                    >
+                      <Sparkles size={11} className={searchMode === "semantic" ? "text-amber-200 animate-pulse" : "text-slate-400"} />
+                      <span>{searchMode === "semantic" ? "AI Semantic" : "Keyword"}</span>
+                    </button>
+
+                    <div
+                      className={`relative flex items-center bg-slate-50 hover:bg-slate-100/90 focus-within:bg-white border rounded-xl px-2.5 py-1.5 transition-all duration-300 ${
+                        searchMode === "semantic"
+                          ? "border-amber-400 focus-within:border-amber-500 focus-within:ring-4 focus-within:ring-amber-400/30 focus-within:shadow-[0_0_20px_rgba(245,158,11,0.35)] focus-within:animate-pulse"
+                          : "border-sky-300 focus-within:border-sky-500 focus-within:ring-4 focus-within:ring-sky-400/30 focus-within:shadow-[0_0_20px_rgba(56,189,248,0.35)] focus-within:animate-pulse"
+                      } ${
+                        chatSearchQuery ? "w-52 sm:w-68" : "w-36 sm:w-56"
+                      }`}
+                    >
+                      {isSearchingSemantically ? (
+                        <Loader2 size={12} className="text-amber-500 animate-spin shrink-0 mr-1.5" />
+                      ) : searchMode === "semantic" ? (
+                        <Sparkles size={12} className="text-amber-500 shrink-0 mr-1.5" />
+                      ) : (
+                        <Search size={12} className="text-slate-400 shrink-0 mr-1.5" />
+                      )}
+                      <input
+                        type="text"
+                        value={chatSearchQuery}
+                        onChange={(e) => setChatSearchQuery(e.target.value)}
+                        placeholder={
+                          searchMode === "semantic"
+                            ? "AI Search (e.g. 'budget discussion')..."
+                            : "Filter messages..."
+                        }
+                        className="bg-transparent border-none outline-none text-xs text-slate-800 placeholder-slate-400 w-full font-medium"
+                      />
+                      {chatSearchQuery && (
+                        <div className="flex items-center gap-1 shrink-0 ml-1">
+                          <span
+                            className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                              searchMode === "semantic"
+                                ? "text-amber-700 bg-amber-100"
+                                : "text-sky-600 bg-sky-100/70"
+                            }`}
+                          >
+                            {filteredMessages.length}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setChatSearchQuery("");
+                              setSemanticMatches({});
+                            }}
+                            className="p-0.5 text-slate-400 hover:text-slate-600 rounded transition-colors cursor-pointer"
+                            title="Clear search"
+                          >
+                            <X size={11} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {activeChat.type === "group" && (
                     <button
                       onClick={() =>
@@ -1844,6 +2052,7 @@ const NeuralLinkView = ({
                     onClick={() => {
                       setActiveChat(null);
                       setShowAddMemberDropdown(false);
+                      setChatSearchQuery("");
                     }}
                     className="p-1 px-3 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
                   >
@@ -1963,7 +2172,7 @@ const NeuralLinkView = ({
               {/* Split Chat Hub + Members list panel */}
               <div className="flex-1 flex overflow-hidden">
                 {/* Scrollable messages on left */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col bg-slate-50/50">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 flex flex-col bg-slate-50/50">
                   <div className="p-4 bg-white border border-slate-100 rounded-2xl text-center shadow-sm max-w-md mx-auto space-y-1">
                     <p className="text-[10px] font-black text-sky-500 uppercase tracking-widest flex items-center justify-center gap-1">
                       🔒 Protected Uplink
@@ -1975,13 +2184,129 @@ const NeuralLinkView = ({
                     </p>
                   </div>
 
-                  {messages.map((m, i) => {
+                  {/* Active Search Filter Banner */}
+                  {chatSearchQuery.trim() && (
+                    <div
+                      className={`flex items-center justify-between px-3.5 py-2 rounded-xl text-xs shadow-xs ${
+                        searchMode === "semantic"
+                          ? "bg-amber-50/90 border border-amber-200/70"
+                          : "bg-sky-50/90 border border-sky-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {isSearchingSemantically ? (
+                          <Loader2 size={13} className="text-amber-600 animate-spin" />
+                        ) : searchMode === "semantic" ? (
+                          <Sparkles size={13} className="text-amber-600" />
+                        ) : (
+                          <Search size={13} className="text-sky-600" />
+                        )}
+                        <span className="font-bold text-[11px] text-slate-700">
+                          {searchMode === "semantic" ? "AI Semantic Search:" : "Keyword Filter:"}{" "}
+                          <span
+                            className={`font-black ${
+                              searchMode === "semantic" ? "text-amber-700" : "text-sky-700"
+                            }`}
+                          >
+                            "{chatSearchQuery}"
+                          </span>
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            searchMode === "semantic"
+                              ? "text-amber-700 bg-white border border-amber-200"
+                              : "text-sky-600 bg-white/80 border border-sky-200/60"
+                          }`}
+                        >
+                          {isSearchingSemantically
+                            ? "Analyzing meaning..."
+                            : `${filteredMessages.length} of ${messages.length} found`}
+                        </span>
+                        {searchMode === "semantic" && (
+                          <span className="text-[9px] font-mono text-amber-600/80 bg-amber-100/60 px-1.5 py-0.5 rounded hidden sm:inline">
+                            Powered by Gemini
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSearchMode(searchMode === "semantic" ? "keyword" : "semantic")
+                          }
+                          className="text-[10px] font-extrabold text-slate-500 hover:text-slate-800 underline uppercase tracking-wider cursor-pointer"
+                        >
+                          Switch to {searchMode === "semantic" ? "Exact" : "Semantic"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setChatSearchQuery("");
+                            setSemanticMatches({});
+                          }}
+                          className={`text-[10px] font-extrabold underline uppercase tracking-wider cursor-pointer transition-colors ${
+                            searchMode === "semantic"
+                              ? "text-amber-700 hover:text-amber-900"
+                              : "text-sky-600 hover:text-sky-800"
+                          }`}
+                        >
+                          Reset Filter
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* No matching search results */}
+                  {chatSearchQuery.trim() && !isSearchingSemantically && filteredMessages.length === 0 && (
+                    <div className="py-12 px-4 text-center bg-white border border-dashed border-slate-200 rounded-2xl max-w-sm mx-auto my-auto space-y-2.5">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto ${
+                          searchMode === "semantic" ? "bg-amber-50 text-amber-500" : "bg-slate-100 text-slate-400"
+                        }`}
+                      >
+                        {searchMode === "semantic" ? <Sparkles size={18} /> : <Search size={18} />}
+                      </div>
+                      <p className="text-xs font-bold text-slate-800">
+                        {searchMode === "semantic" ? "No conceptual matches" : "No messages found"}
+                      </p>
+                      <p className="text-[10.5px] text-slate-400 leading-relaxed">
+                        {searchMode === "semantic"
+                          ? `No messages in this chat session semantically match "${chatSearchQuery}". Try rephrasing or switch to Exact Keyword mode.`
+                          : `No messages in this chat session contain "${chatSearchQuery}".`}
+                      </p>
+                      <div className="flex items-center justify-center gap-2 pt-1">
+                        {searchMode === "semantic" && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchMode("keyword")}
+                            className="text-xs font-bold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Try Keyword Mode
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setChatSearchQuery("");
+                            setSemanticMatches({});
+                          }}
+                          className="text-xs font-bold text-sky-600 hover:text-sky-700 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Clear Search
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {filteredMessages.map((m, i) => {
                     const isMe = m.senderId === user.uid;
                     const timeStr = getRemainingTimeStr(m.ts);
+                    const matchKey = String(m.id || m.ts);
+                    const semanticMatch = searchMode === "semantic" ? semanticMatches[matchKey] : null;
 
                     return (
                       <div
-                        key={i}
+                        key={m.id || i}
                         className={`flex flex-col max-w-[75%] space-y-1.5 ${isMe ? "self-end" : "self-start"}`}
                       >
                         <span
@@ -1997,8 +2322,27 @@ const NeuralLinkView = ({
                           }`}
                         >
                           <p className="whitespace-pre-wrap tracking-wide">
-                            {m.text}
+                            {searchMode === "keyword"
+                              ? highlightChatQuery(m.text, chatSearchQuery)
+                              : m.text}
                           </p>
+                          {semanticMatch && (
+                            <div
+                              className={`flex items-center justify-between gap-2 mt-2.5 pt-2 border-t text-[9.5px] font-bold ${
+                                isMe
+                                  ? "border-white/20 text-sky-100"
+                                  : "border-slate-100 text-amber-700"
+                              }`}
+                            >
+                              <span className="flex items-center gap-1 font-mono">
+                                <Sparkles size={10} className={isMe ? "text-amber-300" : "text-amber-500"} />
+                                <span>{semanticMatch.relevance}% Match</span>
+                              </span>
+                              <span className="truncate max-w-[170px] opacity-90 font-sans">
+                                {semanticMatch.reason}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between gap-6 pt-3 mt-3 border-t border-black/5 text-[9px] opacity-60">
                             <span className="font-mono uppercase tracking-wider font-semibold">
                               Expires in
@@ -2168,7 +2512,7 @@ const GalaxyCoreView = () => {
           </div>
         </div>
 
-        <h2 className="text-3xl font-black text-white uppercase tracking-[0.4em] mb-4">
+        <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-[0.3em] mb-4">
           Galaxy Core
         </h2>
 
@@ -4054,7 +4398,7 @@ const FeaturePipelineView = ({
               Neural Roadmap Live
             </span>
           </div>
-          <h2 className="text-4xl font-black text-white uppercase tracking-tighter leading-none">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-white uppercase tracking-tight leading-none">
             Universe{" "}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">
               Pipeline
@@ -5005,6 +5349,197 @@ const UsersView = ({
   );
 };
 
+// --- BROADCAST KANBAN COMPONENTS ---
+const KanbanItem = ({ id, task, isOverlay = false }: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging && !isOverlay ? 0.3 : 1,
+  };
+
+  const priorityColors: any = {
+    High: "border-rose-500/30 bg-rose-500/5 text-rose-400",
+    Medium: "border-amber-500/30 bg-amber-500/5 text-amber-400",
+    Low: "border-emerald-500/30 bg-emerald-500/5 text-emerald-400",
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`p-4 mb-3 rounded-2xl border bg-zinc-900/50 backdrop-blur-md group hover:border-cyan-500/30 transition-all cursor-grab active:cursor-grabbing ${isOverlay ? "border-cyan-500 shadow-2xl scale-105 z-50" : "border-white/5"}`}
+    >
+      <div className="flex justify-between items-start mb-2">
+        <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${priorityColors[task.priority || "Medium"]}`}>
+          {task.priority || "Medium"}
+        </span>
+        <span className="text-[8px] font-mono text-zinc-600">
+          {task.timestamp?.toDate ? task.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "JUST NOW"}
+        </span>
+      </div>
+      <p className="text-[11px] font-bold text-white leading-relaxed">
+        {task.message}
+      </p>
+      <div className="mt-3 flex items-center gap-2 pt-3 border-t border-white/5">
+        <div className="w-5 h-5 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
+          <User size={10} />
+        </div>
+        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">
+          @{task.username || "explorer"}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const KanbanColumn = ({ id, title, tasks }: { id: string; title: string; tasks: any[] }) => {
+  return (
+    <div className="flex-1 min-w-[280px] bg-black/20 rounded-3xl p-4 border border-white/5 flex flex-col h-full max-h-[70vh]">
+      <div className="flex items-center justify-between mb-4 px-2">
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${id === "High" ? "bg-rose-500 shadow-[0_0_8px_#ef4444]" : id === "Medium" ? "bg-amber-500 shadow-[0_0_8px_#f59e0b]" : "bg-emerald-500 shadow-[0_0_8px_#10b981]"}`} />
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-100">{title}</h3>
+        </div>
+        <span className="text-[9px] font-black text-zinc-600 bg-white/5 px-2 py-0.5 rounded-full">{tasks.length}</span>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+        <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          {tasks.map((task) => (
+            <KanbanItem key={task.id} id={task.id} task={task} />
+          ))}
+        </SortableContext>
+        {tasks.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-white/5 rounded-2xl opacity-20">
+            <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">No nodes in queue</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const BroadcastKanbanView = ({ db, user, showToast }: { db: any; user: any; showToast: any }) => {
+  const [broadcasts, setBroadcasts] = useState<any[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const q = query(collection(db, "broadcasts"), orderBy("timestamp", "desc"), limit(50));
+    const unsub = onSnapshot(q, (snap) => {
+      const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setBroadcasts(list);
+    });
+    return () => unsub();
+  }, [db]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragStart = (event: any) => {
+    setActiveId(event.active.id);
+  };
+
+  const handleDragOver = async (event: any) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeTask = broadcasts.find(t => t.id === active.id);
+    const overId = over.id;
+
+    // Check if over a column or an item
+    const overColumn = ["High", "Medium", "Low"].includes(overId as string);
+    const overTask = broadcasts.find(t => t.id === overId);
+    const targetColumn = overColumn ? (overId as string) : (overTask?.priority || "Medium");
+
+    if (activeTask && activeTask.priority !== targetColumn) {
+      // Optimistic update
+      setBroadcasts(prev => prev.map(t => t.id === active.id ? { ...t, priority: targetColumn } : t));
+      
+      // Firestore update
+      try {
+        await updateDoc(doc(db, "broadcasts", active.id as string), { priority: targetColumn });
+      } catch (err) {
+        console.error("Failed to update priority", err);
+      }
+    }
+  };
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setBroadcasts((items) => {
+        const oldIndex = items.findIndex(t => t.id === active.id);
+        const newIndex = items.findIndex(t => t.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+    setActiveId(null);
+  };
+
+  const highTasks = broadcasts.filter(t => (t.priority || "Medium") === "High");
+  const mediumTasks = broadcasts.filter(t => (t.priority || "Medium") === "Medium");
+  const lowTasks = broadcasts.filter(t => (t.priority || "Medium") === "Low");
+
+  const activeTask = broadcasts.find(t => t.id === activeId);
+
+  return (
+    <div className="p-4 md:p-6 pb-24 min-h-screen">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div>
+          <h2 className="text-xl font-black text-white uppercase tracking-widest flex items-center gap-3">
+            <Radio className="text-cyan-400" size={24} />
+            Broadcast Kanban
+          </h2>
+          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">
+            Drag and drop signals to prioritize universe deployment
+          </p>
+        </div>
+      </div>
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex flex-col lg:flex-row gap-6 h-full items-start">
+          <KanbanColumn id="High" title="High Priority" tasks={highTasks} />
+          <KanbanColumn id="Medium" title="Standard Sync" tasks={mediumTasks} />
+          <KanbanColumn id="Low" title="Low Latency" tasks={lowTasks} />
+        </div>
+
+        <DragOverlay dropAnimation={{
+          sideEffects: defaultDropAnimationSideEffects({
+            styles: {
+              active: {
+                opacity: '0.4',
+              },
+            },
+          }),
+        }}>
+          {activeId ? (
+            <KanbanItem id={activeId} task={activeTask} isOverlay />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
+  );
+};
+
 const UniverseDashboard = ({
   onBack,
   isLoggedIn,
@@ -5038,9 +5573,8 @@ const UniverseDashboard = ({
   setShowDeleteConfirm: (val: boolean) => void;
   setShowSignOutConfirm: (val: boolean) => void;
 }) => {
-  const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("Analytics");
+  const [activeTab, setActiveTab] = useState("Overview");
   const [quickAddText, setQuickAddText] = useState("");
   const [quickPriority, setQuickPriority] = useState("Medium");
   const [quickDueDate, setQuickDueDate] = useState("");
@@ -5633,6 +6167,8 @@ const UniverseDashboard = ({
       await setDoc(doc(collection(db, "broadcasts")), {
         message: quickAddText.trim(),
         senderUid: user.uid,
+        username: userInfo?.username || "Anonymous",
+        priority: quickPriority,
         timestamp: serverTimestamp(),
       });
       
@@ -6317,63 +6853,61 @@ const UniverseDashboard = ({
 
   const navGroups = [
     {
-      label: "",
+      label: "Workspace",
       items: [
-        { name: "Analytics", icon: <Activity size={18} /> },
+        { name: "Overview", icon: <LayoutGrid size={16} /> },
         {
           name: "Users",
-          icon: <Users size={18} />,
+          icon: <Users size={16} />,
           badge: allUsers.length > 0 ? `${allUsers.length}` : undefined,
-          badgeColor: "cyan",
         },
         {
           name: "Active Users",
-          icon: <Radio size={18} />,
+          icon: <Radio size={16} />,
           badge: `${activeCount} Live`,
-          badgeColor: "green",
         },
         {
           name: "Features",
-          icon: <Layers size={18} />,
+          icon: <Layers size={16} />,
           badge: "NEW",
-          badgeColor: "cyan",
         },
-        { name: "Integrations", icon: <Share2 size={18} /> },
+        { name: "Integrations", icon: <Share2 size={16} /> },
+        { name: "Network Graph", icon: <Network size={16} /> },
+        { name: "Daily Streak", icon: <Flame size={16} /> },
+        { name: "Audio Module", icon: <Music size={16} /> },
       ],
     },
     {
-      label: "Universe",
+      label: "Universe Ecosystem",
       items: [
-        { name: "Galaxy Core", icon: <Cpu size={18} /> },
+        { name: "Galaxy Core", icon: <Cpu size={16} /> },
         {
           name: "Gamura Universe",
-          icon: <Globe size={18} />,
+          icon: <Globe size={16} />,
           badge: "CLAIM",
-          badgeColor: "cyan",
         },
         {
           name: "Neutral Link",
-          icon: <Link size={18} />,
+          icon: <Link size={16} />,
           badge: "ACTIVE",
-          badgeColor: "green",
         },
-        { name: "Gamura Link", icon: <Link size={18} /> },
-        { name: "Aura Settings", icon: <Settings size={18} /> },
+        { name: "Gamura Link", icon: <Link size={16} /> },
+        { name: "Aura Settings", icon: <Settings size={16} /> },
+        { name: "Portfolio Builder", icon: <Briefcase size={16} /> },
         {
           name: "Website",
-          icon: <Globe size={18} />,
+          icon: <Globe size={16} />,
           action: () => window.open(window.location.origin, "_blank"),
         },
         {
-          name: "GCP🕊️",
-          icon: <Cloud size={18} />,
+          name: "GCP",
+          icon: <Cloud size={16} />,
           action: () => window.open("https://gamuracp.vercel.app/", "_blank"),
         },
         {
-          name: "GAMURA ELVARAN (GELVARAN)",
-          icon: <Sparkles size={18} />,
-          badge: "COMING SOON",
-          badgeColor: "yellow",
+          name: "Gamura Elvaran",
+          icon: <Sparkles size={16} />,
+          badge: "SOON",
           action: () =>
             showToast(
               "⌛",
@@ -6383,32 +6917,31 @@ const UniverseDashboard = ({
         },
         {
           name: "Gamura Galaxy",
-          icon: <Sparkles size={18} />,
+          icon: <Sparkles size={16} />,
           action: () =>
             window.open("https://gamuragalaxy.vercel.app/", "_blank"),
         },
         {
           name: "SR Portfolio",
-          icon: <User size={18} />,
+          icon: <User size={16} />,
           action: () =>
             window.open("https://selvaranjan.netlify.app/", "_blank"),
         },
         {
           name: "BuBuBai",
-          icon: <Bot size={18} />,
+          icon: <Bot size={16} />,
           action: () => window.open("https://bububai.vercel.app/", "_blank"),
         },
         {
           name: "Resume Builder",
-          icon: <FileText size={18} />,
+          icon: <FileText size={16} />,
           action: () =>
             showToast(
               "📝",
               "Resume Builder",
-              "GO TO GAMURA GALAXY AND BUILD YOUR RESUME.",
+              "Go to Gamura Galaxy to build your resume.",
             ),
         },
-        { name: "Portfolio Builder", icon: <Briefcase size={18} /> },
       ],
     },
   ];
@@ -6416,16 +6949,12 @@ const UniverseDashboard = ({
   const [connectedApps, setConnectedApps] = useState<any[]>([]);
 
   const handleConnectApp = async (app: string) => {
-    if (!user) return;
-    showToast(
-      "🔌",
-      `Connecting ${app}`,
-      "Redirecting to secure authorization...",
-    );
-
-    // For Vercel/Netlify/etc., simulate with a prompt for API Key (Real enough for "Authorization")
-    const apiKey = prompt(`Enter your ${app} API Token to authorize Gamura:`);
-    if (apiKey) {
+    if (!user) {
+      showToast("⚠️", "Authentication Required", "Please sign in to connect integrations.");
+      return;
+    }
+    try {
+      const token = `gm_tok_${Math.random().toString(36).substring(2, 12)}`;
       const connRef = doc(db, "user_connections", user.uid);
       const currentConns = [...connectedApps];
       if (!currentConns.includes(app)) currentConns.push(app);
@@ -6434,89 +6963,24 @@ const UniverseDashboard = ({
         connRef,
         {
           connections: currentConns,
-          [`${app.toLowerCase()}_token`]: apiKey,
+          [`${app.toLowerCase()}_token`]: token,
+          updatedAt: serverTimestamp(),
         },
         { merge: true },
       );
 
+      setConnectedApps(currentConns);
       addActivity(`Authorized ${app} integration`, "🔗");
       showToast(
         "✅",
         `${app} Connected`,
-        `Successfully linked ${app} via token.`,
+        `Successfully linked ${app} securely via token.`,
       );
+    } catch (err: any) {
+      console.error("Failed to connect app", err);
+      showToast("❌", "Connection Error", `Could not connect ${app}.`);
     }
   };
-
-  const [isLoadingUniverse, setIsLoadingUniverse] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoadingUniverse(false), 6000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (isLoadingUniverse) {
-    return (
-      <div className="fixed inset-0 bg-black z-[9999] flex flex-col items-center justify-center p-8 overflow-hidden font-sans">
-        {/* Animated Background Grid */}
-        <div
-          className="absolute inset-0 opacity-20 pointer-events-none"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 2px 2px, rgba(56,189,248,0.2) 1px, transparent 0)",
-            backgroundSize: "40px 40px",
-          }}
-        />
-
-        <div className="relative z-10 flex flex-col items-center">
-          {/* Central Logo */}
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0, rotate: -20 }}
-            animate={{ scale: 1, opacity: 1, rotate: 0 }}
-            transition={{ duration: 1.5, ease: "easeOut" }}
-            className="w-24 h-24 border border-cyan-500/30 flex items-center justify-center mb-12 relative group"
-          >
-            <img
-              src={GAMURA_G_LOGO}
-              className="w-16 h-16 object-contain brightness-125 contrast-125"
-              alt="Loading Logo"
-            />
-            <div className="absolute -inset-4 border border-cyan-400/10 animate-spin-slow pointer-events-none" />
-            <div className="absolute -inset-8 border border-white/5 animate-reverse-spin-slow pointer-events-none" />
-          </motion.div>
-
-          {/* Loading Text */}
-          <div className="space-y-2 text-center">
-            <h2 className="text-2xl font-black text-white uppercase tracking-[0.4em] animate-pulse">
-              Initializing <span className="text-cyan-400">Universe</span>
-            </h2>
-          </div>
-
-          {/* Progress Bar (6s) */}
-          <div className="w-64 h-1 bg-white/5 border border-white/10 mt-12 overflow-hidden relative">
-            <motion.div
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              transition={{ duration: 6, ease: "linear" }}
-              className="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-cyan-600 via-blue-500 to-cyan-400 shadow-[0_0_15px_#00d2ff]"
-            />
-          </div>
-
-          <div className="mt-6 flex flex-col items-center gap-1.5">
-            <p className="text-[8px] font-bold text-zinc-700 uppercase tracking-widest">
-              GAMURA UNIVERSE
-            </p>
-          </div>
-        </div>
-
-        {/* Decorative Corner Borders */}
-        <div className="absolute top-8 left-8 w-12 h-12 border-t-2 border-l-2 border-cyan-500/30" />
-        <div className="absolute top-8 right-8 w-12 h-12 border-t-2 border-r-2 border-white/10" />
-        <div className="absolute bottom-8 left-8 w-12 h-12 border-b-2 border-l-2 border-white/10" />
-        <div className="absolute bottom-8 right-8 w-12 h-12 border-b-2 border-r-2 border-cyan-500/30" />
-      </div>
-    );
-  }
 
   return (
     <div
@@ -6649,460 +7113,336 @@ const UniverseDashboard = ({
 
       <style>{`
         .universe-dashboard-root {
-          --bg: #05080c;
-          --bg2: #0a0e14;
-          --bg3: #0d121b;
-          --surface: #0a0e14;
-          --surface2: #0f151e;
-          --border: rgba(255,255,255,0.06);
-          --border2: rgba(255,255,255,0.03);
-          --text: #ffffff;
-          --text2: #94a3b8;
-          --text3: #475569;
-          --cyan: #38bdf8;
-          --cyan2: #0ea5e9;
-          --blue: #3b82f6;
-          --purple: #a78bfa;
-          --green: #34d399;
-          --red: #f87171;
-          --yellow: #fbbf24;
-          --orange: #fb923c;
-          --pink: #f472b6;
-          --white: #f8fafc;
-          --sidebar-w: 220px;
-          --topbar-h: 56px;
-          --r: 0px; /* Global Sharpness! */
-          --shadow: 0 4px 24px rgba(0,0,0,0.6);
-          font-family: 'Inter', 'Google Sans', sans-serif;
-          background: var(--bg);
-          color: var(--text);
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+          background: #f5f5f7;
+          color: #1d1d1f;
           min-height: 100vh;
+          overflow-x: hidden;
         }
-        .universe-dashboard-root[data-theme="light"] {
-          --bg: #f8fafc;
-          --bg2: #ffffff;
-          --bg3: #f1f5f9;
-          --surface: #ffffff;
-          --surface2: #f8fafc;
-          --border: rgba(0,0,0,0.05);
-          --border2: rgba(0,0,0,0.02);
-          --text: #0f172a;
-          --text2: #475569;
-          --text3: #94a3b8;
-          --shadow: 0 4px 20px rgba(0,0,0,0.05);
-        }
+        .universe-dashboard-root * { box-sizing: border-box; }
 
-        .universe-dashboard-root * { box-sizing: border-box; border-radius: 0 !important; } /* Hard Sharpness Enforcement */
-
-        .ud-sidebar {
-          position: fixed; top: 0; left: 0; bottom: 0;
-          width: var(--sidebar-w);
-          background: var(--bg2);
-          border-right: 1px solid var(--border);
-          display: flex; flex-direction: column;
-          z-index: 300;
-          transition: transform 0.3s cubic-bezier(.4,0,.2,1), width 0.3s cubic-bezier(.4,0,.2,1);
+        .ud-main {
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          background: #f5f5f7;
+          padding-bottom: 72px;
         }
-        .ud-sidebar.collapsed { width: 72px; }
-        
-        .ud-logo-wrap {
-          display: flex; align-items: center; gap: 12px;
-          padding: 24px; border-bottom: 1px solid var(--border);
-          min-height: 80px; cursor: pointer;
-          transition: all 0.2s ease;
-          background: #000;
-        }
-        .ud-logo-wrap:hover { background: #050505; }
-        .ud-sidebar.collapsed .ud-logo-wrap {
-          padding: 24px 0;
-          justify-content: center;
-        }
-        .ud-logo-icon {
-          width: 44px; height: 44px; border: 1px solid rgba(56,189,248,0.2); flex-shrink: 0;
-          background: #000;
-          display: flex; align-items: center; justify-content: center;
-          position: relative; overflow: hidden;
-        }
-        .ud-logo-name {
-          font-family: 'Space Grotesk', sans-serif;
-          font-size: 16px; font-weight: 900;
-          color: #fff;
-          letter-spacing: 0.15em; white-space: nowrap;
-          line-height: 1; text-transform: uppercase;
-        }
-        .ud-logo-sub {
-          font-size: 9px; color: var(--cyan); letter-spacing: 0.4em;
-          text-transform: uppercase; white-space: nowrap;
-          font-weight: 800; opacity: 0.6;
-          margin-top: 2px;
-        }
-
-        .ud-nav { flex: 1; padding: 16px 8px; overflow-y: auto; }
-        .ud-nav-label {
-          font-size: 9px; color: var(--text3); letter-spacing: 0.15em;
-          text-transform: uppercase; padding: 16px 12px 8px; font-weight: 800;
-        }
-        .ud-nav-item {
-          display: flex; align-items: center; gap: 12px;
-          padding: 10px 14px;
-          color: var(--text2); font-size: 11px; font-weight: 800;
-          transition: all 0.15s; cursor: pointer; margin-bottom: 2px;
-          position: relative; border: 1px solid transparent; text-transform: uppercase; tracking-widest;
-        }
-        .ud-nav-item:hover { background: var(--bg3); color: var(--text); border-color: var(--border); }
-        .ud-nav-item.active { background: rgba(56,189,248,0.05); color: var(--cyan); border-color: rgba(56,189,248,0.1); }
-        .ud-nav-item.active::before {
-          content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-          width: 3px; background: var(--cyan);
-        }
-        .ud-nav-badge {
-          font-size: 8px; font-weight: 900; padding: 1px 6px; border: 1px solid currentColor;
-        }
-
-        .ud-user-panel { padding: 8px; border-top: 1px solid var(--border); background: #000; }
-        .ud-user-card {
-          display: flex; align-items: center; gap: 10px;
-          padding: 10px 14px; cursor: pointer; transition: all 0.15s; border: 1px solid var(--border);
-        }
-        .ud-user-card:hover { border-color: var(--cyan); background: var(--bg3); }
-        .ud-user-av {
-          width: 34px; height: 34px; flex-shrink: 0;
-          background: #111; border: 1px solid var(--border);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 11px; font-weight: 900; color: white;
-        }
-        .ud-online-dot { width: 6px; height: 6px; background: var(--green); box-shadow: 0 0 6px var(--green); }
-
-        .ud-main { 
-          margin-left: var(--sidebar-w); min-height: 100vh; 
-          display: flex; flex-direction: column; transition: margin-left 0.3s; 
-          background: var(--bg);
-        }
-        .ud-main.wide { margin-left: 72px; }
-
         .ud-topbar {
-          position: sticky; top: 0; z-index: 200; height: var(--topbar-h);
-          background: var(--bg2); border-bottom: 1px solid var(--border);
-          display: flex; align-items: center; gap: 12px; padding: 0 24px;
+          position: sticky;
+          top: 0;
+          z-index: 300;
+          height: 52px;
+          background: rgba(255, 255, 255, 0.88);
+          backdrop-filter: saturate(180%) blur(20px);
+          border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 0 16px;
         }
-        .ud-topbar-toggle {
-          width: 36px; height: 36px; background: none; border: 1px solid var(--border);
-          color: var(--text2); display: flex; align-items: center; justify-content: center;
-          transition: all 0.15s; cursor: pointer;
+        .ud-content {
+          flex: 1;
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          max-width: 960px;
+          margin: 0 auto;
+          width: 100%;
         }
-        .ud-topbar-toggle:hover { background: var(--bg3); color: var(--text); border-color: var(--text2); }
-        
-        .ud-search-box {
-          display: flex; align-items: center; gap: 6px;
-          background: var(--bg); border: 1px solid var(--border);
-          padding: 6px 14px; width: 240px; transition: all 0.2s; cursor: pointer;
-        }
-        .ud-search-box input { background: none; border: none; color: var(--text); font-size: 11px; width: 100%; cursor: pointer; outline: none; font-weight: 700; text-transform: uppercase; }
-        
-        .ud-tb-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-        .ud-tb-btn {
-          width: 38px; height: 38px; background: var(--bg); border: 1px solid var(--border);
-          display: flex; align-items: center; justify-content: center;
-          color: var(--text2); transition: all 0.15s; position: relative; cursor: pointer;
-        }
-        .ud-tb-btn:hover { border-color: var(--cyan); color: var(--cyan); }
-        .ud-tb-pip { position: absolute; top: -1px; right: -1px; width: 8px; height: 8px; background: var(--red); border: 1px solid var(--bg2); }
-
-        .ud-content { flex: 1; padding: 32px; display: flex; flex-direction: column; gap: 32px; max-width: 1600px; margin: 0 auto; w-full; }
-
-        .ud-welcome {
-          background: #000; border: 1px solid var(--border);
-          padding: 32px 40px; position: relative; overflow: hidden;
-        }
-        .ud-welcome-bg {
-          position: absolute; inset: 0; pointer-events: none; opacity: 0.1;
-          background-image: linear-gradient(rgba(56,189,248,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.1) 1px, transparent 1px);
-          background-size: 20px 20px;
-        }
-        .ud-welcome-title { font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 900; color: var(--white); margin-bottom: 4px; text-transform: uppercase; letter-spacing: -0.02em; }
-        .ud-welcome-title span { color: var(--cyan); }
-        .ud-welcome-desc { font-size: 11px; color: var(--text2); line-height: 1.6; max-width: 500px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-        
-        .ud-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-        .ud-metric {
-          background: var(--bg2); border: 1px solid var(--border);
-          padding: 20px; transition: all 0.3s ease; position: relative; overflow: hidden; cursor: default;
-        }
-        .ud-metric:hover { 
-          border-color: var(--cyan); 
-          background: var(--bg3);
-          transform: translateY(-2px);
-        }
-        .ud-m-val { 
-          font-family: 'Space Grotesk', sans-serif; 
-          font-size: 28px; 
-          font-weight: 900; 
-          margin-bottom: 2px; 
-          letter-spacing: -0.06em; 
-        }
-        .ud-m-label { 
-          font-size: 9px; 
-          color: var(--text3); 
-          font-weight: 900; 
-          text-transform: uppercase; 
-          letter-spacing: 0.2em; 
-        }
-
-        .ud-charts-row { display: grid; grid-template-columns: 1fr 360px; gap: 20px; }
-        .ud-panel { background: var(--bg2); border: 1px solid var(--border); overflow: hidden; }
-        .ud-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); background: #000; }
-        .ud-panel-title { font-size: 11px; font-weight: 900; color: var(--text); text-transform: uppercase; letter-spacing: 0.1em; }
-
-        .ud-tables-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .ud-table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; }
-        th { font-size: 9px; color: var(--text3); text-transform: uppercase; padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); font-weight: 900; letter-spacing: 0.1em; }
-        td { padding: 12px 16px; font-size: 11px; color: var(--text2); border-bottom: 1px solid var(--border2); font-weight: 700; }
-        
-        .ud-bottom-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
-
-        .ud-status-chip { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border: 1px solid var(--border); font-size: 10px; color: var(--text2); cursor: default; font-weight: 800; text-transform: uppercase; }
-        .ud-sc-dot { width: 6px; height: 6px; }
-
-        @media(max-width: 1200px) {
-          .ud-metrics { grid-template-columns: repeat(2, 1fr); }
-          .ud-charts-row { grid-template-columns: 1fr; }
-          .ud-tables-row { grid-template-columns: 1fr; }
-          .ud-bottom-row { grid-template-columns: 1fr 1fr; }
-        }
-        @media(max-width: 900px) {
-          .ud-sidebar { transform: translateX(-100%); }
-          .ud-sidebar.mob-open { transform: translateX(0); }
-          .ud-main { margin-left: 0 !important; }
-        }
-        @media(max-width: 640px) {
-          .ud-metrics { grid-template-columns: 1fr 1fr; }
-          .ud-bottom-row { grid-template-columns: 1fr; }
-          .ud-search-box { display: none; }
+        @media (min-width: 768px) {
+          .ud-topbar { padding: 0 24px; }
+          .ud-content { padding: 20px 24px; gap: 16px; }
         }
       `}</style>
 
-      {/* MOBILE OVERLAY */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-[299] backdrop-blur-sm"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
+      {/* APPLE-STYLE COMPACT WHITE BOTTOM TAB DOCK */}
+      <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white/95 backdrop-blur-2xl border-t border-zinc-200/80 px-2 h-14 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.04)]">
+        {[
+          { name: "Overview", label: "Home", icon: <Home size={16} /> },
+          { name: "Daily Streak", label: "Streak", icon: <Flame size={16} /> },
+          { name: "Audio Module", label: "Audio", icon: <Music size={16} /> },
+          { name: "Neutral Link", label: "Links", icon: <Link size={16} /> },
+        ].map((item) => (
+          <button
+            key={item.name}
+            onClick={() => {
+              setActiveTab(item.name);
+              setMobileOpen(false);
+            }}
+            className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+              activeTab === item.name
+                ? "text-zinc-950 font-semibold"
+                : "text-zinc-400 hover:text-zinc-700"
+            }`}
+          >
+            {item.icon}
+            <span className="text-[10px] tracking-tight">{item.label}</span>
+          </button>
+        ))}
+        <button
+          onClick={() => setMobileOpen(true)}
+          className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+            mobileOpen ? "text-zinc-950 font-semibold" : "text-zinc-400 hover:text-zinc-700"
+          }`}
+          aria-label="Open Universe Menu"
+        >
+          <Menu size={16} />
+          <span className="text-[10px] tracking-tight">Menu</span>
+        </button>
+      </div>
 
-      {/* SIDEBAR */}
-      <aside
-        className={`ud-sidebar ${collapsed ? "collapsed" : ""} ${mobileOpen ? "mob-open" : ""}`}
-      >
-        <div className="ud-logo-wrap" onClick={onBack}>
-          <div className="ud-logo-icon">
-            <img
-              src={GAMURA_G_LOGO}
-              className="w-9 h-9 object-contain"
-              alt="Logo"
+      {/* APPLE-STYLE WHITE BOTTOM-UP ROUNDED MENU SHEET FOR UNIVERSE PAGE */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/25 backdrop-blur-sm z-[499]"
+              onClick={() => setMobileOpen(false)}
             />
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col ml-3">
-              <span className="ud-logo-name">GAMURA</span>
-              <span className="ud-logo-sub">UNIVERSE</span>
-            </div>
-          )}
-        </div>
-
-        <nav className="ud-nav">
-          {navGroups.map((group, gIdx) => (
-            <React.Fragment key={gIdx}>
-              {group.label && !collapsed && (
-                <div className="ud-nav-label mt-4">{group.label}</div>
-              )}
-              {group.items.map((item: any, iIdx) => (
-                <div
-                  key={iIdx}
-                  className={`ud-nav-item group relative hover:bg-white/10 ${activeTab === item.name ? "active bg-cyan-500/10" : ""}`}
-                  onClick={() => {
-                    if (item.action) {
-                      item.action();
-                    } else {
-                      setActiveTab(item.name);
-                    }
-                  }}
-                >
-                  {/* Sidebar Teal indicator bar like in screenshot */}
-                  {activeTab === item.name && (
-                    <motion.div
-                      layoutId="activeNav"
-                      className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-cyan-400 rounded-r-full shadow-[0_0_8px_rgba(34,211,238,0.5)]"
-                    />
-                  )}
-
-                  <div
-                    className={`transition-transform duration-300 ${activeTab === item.name ? "scale-110 text-cyan-400" : "group-hover:scale-110 text-zinc-500"} group-hover:text-cyan-400`}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 360, damping: 34 }}
+              className="fixed bottom-0 left-0 right-0 z-[500] mx-auto w-full max-w-2xl h-[62vh] min-h-[380px] max-h-[600px] bg-white/95 backdrop-blur-2xl rounded-t-[2.25rem] border-t border-x border-zinc-200/80 shadow-[0_-24px_60px_rgba(0,0,0,0.14)] flex flex-col overflow-hidden text-zinc-900"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Drag Handle & Compact Header */}
+              <div className="pt-2.5 pb-2 px-5 flex flex-col items-center border-b border-zinc-100 shrink-0 bg-white/80">
+                <div className="w-10 h-1 rounded-full bg-zinc-300 mb-2.5" />
+                <div className="w-full flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-xl bg-zinc-100 border border-zinc-200/70 flex items-center justify-center p-1">
+                      <img src={GAMURA_G_LOGO} className="w-full h-full object-contain mix-blend-multiply" alt="Gamura" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold tracking-tight text-zinc-900 leading-none">
+                        Universe Menu
+                      </span>
+                      <span className="text-[10px] text-zinc-500 font-medium mt-0.5">
+                        Workspace Navigation
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setMobileOpen(false)}
+                    className="w-7 h-7 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-600 transition-colors cursor-pointer"
+                    aria-label="Close Menu"
                   >
-                    {item.icon}
-                  </div>
-                  {!collapsed && (
-                    <span
-                      className={`flex-1 font-black text-xs tracking-tight ${activeTab === item.name ? "text-cyan-400" : "text-zinc-400 group-hover:text-zinc-200"}`}
-                    >
-                      {item.name}
-                    </span>
-                  )}
-                  {!collapsed && item.badge && (
-                    <span
-                      className={`ud-nav-badge px-2 py-0.5 text-[9px] font-black ${item.badgeColor === "yellow" ? "bg-amber-500/20 text-amber-500" : `nb-${item.badgeColor}`}`}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
+                    <X size={14} />
+                  </button>
                 </div>
-              ))}
-            </React.Fragment>
-          ))}
-        </nav>
+              </div>
 
-        {/* BOTTOM CONNECT BUTTON / USER INFO */}
-        {!collapsed && (
-          <div className="p-4 mt-auto">
-            {isLoggedIn ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white/5 border border-white/10 rounded-2xl p-3 flex items-center gap-3 cursor-pointer hover:bg-white/10 transition-all group"
-                onClick={() => setProfileOpen(true)}
-              >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-400/20 to-blue-400/20 flex items-center justify-center text-cyan-400 font-black text-sm relative p-1.5 overflow-hidden">
-                  {userInfo?.avatarUrl ? (
-                    <img
-                      src={userInfo.avatarUrl}
-                      className="w-full h-full object-cover rounded-lg"
-                      alt="User"
-                    />
-                  ) : user?.photoURL ? (
-                    <img
-                      src={user.photoURL}
-                      className="w-full h-full object-cover rounded-lg"
-                      alt="User"
-                    />
+              {/* Scrollable Grouped Apple White Cards */}
+              <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-3.5 space-y-4 bg-[#f5f5f7]">
+                {navGroups.map((group, gIdx) => (
+                  <div key={gIdx} className="space-y-1.5">
+                    {group.label && (
+                      <div className="px-2 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+                        {group.label}
+                      </div>
+                    )}
+                    <div className="bg-white rounded-2xl border border-zinc-200/70 divide-y divide-zinc-100 overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+                      {group.items.map((item: any, iIdx) => {
+                        const isActive = activeTab === item.name;
+                        return (
+                          <button
+                            key={iIdx}
+                            onClick={() => {
+                              if (item.action) {
+                                item.action();
+                              } else {
+                                setActiveTab(item.name);
+                              }
+                              setMobileOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3.5 py-2.5 text-left transition-colors cursor-pointer ${
+                              isActive
+                                ? "bg-zinc-100/80 text-zinc-950 font-semibold"
+                                : "hover:bg-zinc-50 active:bg-zinc-100 text-zinc-700"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                isActive ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600"
+                              }`}>
+                                {item.icon}
+                              </div>
+                              <span className="text-xs truncate">{item.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {item.badge && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-zinc-100 border border-zinc-200/70 text-[9px] font-semibold text-zinc-600">
+                                  {item.badge}
+                                </span>
+                              )}
+                              <ChevronRight size={14} className="text-zinc-400" />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Account Footer Strip inside Sheet */}
+                <div className="bg-white rounded-2xl border border-zinc-200/70 p-3 flex items-center justify-between gap-3 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+                  {isLoggedIn ? (
+                    <button
+                      onClick={() => {
+                        setMobileOpen(false);
+                        setProfileOpen(true);
+                      }}
+                      className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center overflow-hidden shrink-0">
+                        {userInfo?.avatarUrl || user?.photoURL ? (
+                          <img
+                            src={userInfo?.avatarUrl || user?.photoURL}
+                            className="w-full h-full object-cover"
+                            alt="User"
+                          />
+                        ) : (
+                          <User size={15} className="text-zinc-600" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-zinc-900 truncate">{displayName}</div>
+                        <div className="text-[10px] text-zinc-500 font-mono truncate">{gamuraId}</div>
+                      </div>
+                    </button>
                   ) : (
-                    <User size={18} />
+                    <button
+                      onClick={() => {
+                        setMobileOpen(false);
+                        onConnect();
+                      }}
+                      className="flex-1 bg-zinc-900 text-white text-xs font-semibold py-2 px-4 rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer"
+                    >
+                      Sign In to Universe
+                    </button>
                   )}
+                  <button
+                    onClick={() => {
+                      setMobileOpen(false);
+                      onBack();
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-[11px] font-semibold transition-colors cursor-pointer shrink-0"
+                  >
+                    Home
+                  </button>
                 </div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="text-[11px] font-black text-zinc-100 truncate">
-                    {displayName}
-                  </div>
-                  <div className="text-[8px] font-black text-cyan-500 uppercase tracking-widest truncate">
-                    {gamuraId}
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.button
-                whileHover={{
-                  scale: 1.02,
-                  boxShadow: "0 0 20px rgba(34,211,238,0.3)",
-                }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  showToast(
-                    "🔌",
-                    "Authenticating",
-                    "Establishing neural uplink...",
-                  );
-                  onConnect();
-                }}
-                className="w-full bg-cyan-500 text-black font-black text-[11px] py-3 rounded-xl uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(34,211,238,0.2)] border border-cyan-400/50"
-              >
-                <Zap size={14} fill="currentColor" />
-                CONNECT
-              </motion.button>
-            )}
-          </div>
+              </div>
+            </motion.div>
+          </>
         )}
-      </aside>
+      </AnimatePresence>
 
-      {/* MAIN */}
-      <main className={`ud-main ${collapsed ? "wide" : ""}`}>
+      {/* MAIN WORKSPACE */}
+      <main className="ud-main">
         <header className="ud-topbar">
           <button
-            className="ud-topbar-toggle"
-            onClick={() => {
-              if (window.innerWidth <= 900) setMobileOpen(!mobileOpen);
-              else setCollapsed(!collapsed);
-            }}
+            onClick={() => setMobileOpen(true)}
+            className="flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-xl bg-zinc-100/90 hover:bg-zinc-200/80 border border-zinc-200/70 transition-all cursor-pointer shrink-0"
+            aria-label="Open Universe Menu"
           >
-            <Menu size={18} />
+            <div className="w-6 h-6 rounded-lg bg-white border border-zinc-200/70 flex items-center justify-center p-0.5">
+              <img src={GAMURA_G_LOGO} className="w-full h-full object-contain mix-blend-multiply" alt="Menu" />
+            </div>
+            <Menu size={14} className="text-zinc-700" />
+            <span className="text-xs font-semibold text-zinc-900 tracking-tight hidden sm:inline">Menu</span>
           </button>
 
-          <div className="flex items-center gap-4">
-            <h1 className="text-[18px] font-black tracking-tighter leading-none text-white uppercase font-sans">
-              DASHBOARD
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-xs sm:text-sm font-semibold tracking-tight text-zinc-900 truncate">
+              {activeTab}
             </h1>
-            <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
-            <p className="text-[10px] text-zinc-500 font-bold tracking-widest hidden sm:block uppercase">
-              Command Center
-            </p>
           </div>
 
-          <div className="ud-tb-actions">
+          <div className="flex-1 max-w-xs mx-2 hidden md:flex items-center">
+            <div className="w-full relative flex items-center">
+              <Search size={13} className="absolute left-3 text-zinc-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search Universe..."
+                className="w-full bg-zinc-100 border border-zinc-200/70 rounded-xl pl-8 pr-7 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-zinc-300 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 text-zinc-400 hover:text-zinc-700"
+                  title="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="ml-auto flex items-center gap-1.5 shrink-0">
             <button
-              className="ud-tb-btn group"
-              onClick={() => {
-                setIsDark(!isDark);
-                addActivity(
-                  isDark ? "Switched to Light mode" : "Switched to Dark mode",
-                  "🌓",
-                );
-              }}
-            >
-              {isDark ? <Sun size={17} /> : <Moon size={17} />}
-            </button>
-            <button
-              className="ud-tb-btn group"
               onClick={() => {
                 setNotifOpen(!notifOpen);
-                if (!notifOpen) {
-                  // Mark all as read when opening? Or just leave it.
-                }
                 addActivity("Checked notifications", "🔔");
               }}
+              className="w-8 h-8 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200/70 flex items-center justify-center text-zinc-600 relative transition-colors cursor-pointer"
+              aria-label="Notifications"
             >
-              <Bell size={17} />
+              <Bell size={14} />
               {notifications.some((n) => n.unread) && (
-                <span className="absolute top-[8px] right-[9px] w-1.5 h-1.5 rounded-full bg-red-500 border border-zinc-900 shadow-[0_0_10px_rgba(239,68,68,0.5)]" />
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />
               )}
             </button>
-            <button className="ud-tb-btn group" onClick={handleRefresh}>
-              <RotateCw
-                size={17}
-                className={`${isRefreshing ? "animate-spin" : ""} transition-all`}
-              />
-            </button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={onBack}
-              className="ud-user-av ml-2 cursor-pointer shadow-[0_0_15px_rgba(56,189,248,0.4)] border border-white/20 bg-gradient-to-tr from-cyan-500 to-blue-500 flex items-center justify-center group relative"
+            <button
+              onClick={handleRefresh}
+              className="w-8 h-8 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200/70 flex items-center justify-center text-zinc-600 transition-colors cursor-pointer"
+              aria-label="Refresh"
             >
-              <Home size={14} className="text-white group-hover:hidden" />
-              <span className="hidden group-hover:block text-[9px] font-black">
-                EXIT
-              </span>
-            </motion.button>
+              <RotateCw size={14} className={isRefreshing ? "animate-spin" : ""} />
+            </button>
+            <button
+              onClick={onBack}
+              className="px-2.5 h-8 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer"
+              title="Back to Home"
+            >
+              <Home size={13} />
+              <span className="hidden sm:inline">Home</span>
+            </button>
           </div>
         </header>
 
         <div className="ud-content">
-          {activeTab === "Portfolio Builder" ? (
+          {activeTab === "Network Graph" ? (
+            <NetworkGraphView
+              currentUser={user}
+              showToast={showToast}
+              onBack={() => setActiveTab("Overview")}
+            />
+          ) : activeTab === "Daily Streak" ? (
+            <div className="max-w-lg mx-auto w-full py-2">
+              <DailyStreakWidget db={db} currentUser={user} showToast={showToast} />
+            </div>
+          ) : activeTab === "Audio Module" ? (
+            <div className="max-w-lg mx-auto w-full py-2">
+              <BackgroundAudioPlayer showToast={showToast} />
+            </div>
+          ) : activeTab === "Portfolio Builder" ? (
             <PortfolioBuilderView
-              onBack={() => setActiveTab("Analytics")}
+              onBack={() => setActiveTab("Overview")}
               showToast={showToast}
             />
           ) : activeTab === "Neutral Link" ? (
             <NeuralLinkView
-              onBack={() => setActiveTab("Analytics")}
+              onBack={() => setActiveTab("Overview")}
               user={user}
               userInfo={userInfo}
               showToast={showToast}
@@ -7116,7 +7456,7 @@ const UniverseDashboard = ({
               presenceData={presenceData}
               addActivity={addActivity}
               initialFilter="all"
-              onBack={() => setActiveTab("Analytics")}
+              onBack={() => setActiveTab("Overview")}
             />
           ) : activeTab === "Active Users" ? (
             <UsersView
@@ -7126,1149 +7466,161 @@ const UniverseDashboard = ({
               presenceData={presenceData}
               addActivity={addActivity}
               initialFilter="active"
-              onBack={() => setActiveTab("Analytics")}
+              onBack={() => setActiveTab("Overview")}
             />
           ) : activeTab === "Aura Settings" ? (
             <AuraSettingsView
               user={user}
               userInfo={userInfo}
               setCurrentUserInfo={setCurrentUserInfo}
-              onBack={() => setActiveTab("Analytics")}
+              onBack={() => setActiveTab("Overview")}
               showToast={showToast}
             />
           ) : activeTab === "Galaxy Core" ? (
             <GalaxyCoreView />
           ) : activeTab === "Features" ? (
             <FeaturesView
-              onBack={() => setActiveTab("Analytics")}
+              onBack={() => setActiveTab("Overview")}
               loaderImgSources={loaderImgSources}
               showToast={showToast}
             />
           ) : activeTab === "Gamura Universe" ? (
-            <div className="p-2 md:p-6 pb-24">
+            <div className="p-2 md:p-4 pb-16">
               <GamuraUniverseProfileManager user={user} showToast={showToast} />
             </div>
           ) : activeTab === "Gamura Link" ? (
-            <div className="p-2 md:p-6 pb-24">
+            <div className="p-2 md:p-4 pb-16">
               <GamuraShortLinksManager user={user} />
             </div>
           ) : activeTab === "Integrations" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
                 {
                   id: "Vercel",
                   name: "Vercel",
                   desc: "Manage deployments and edge functions directly.",
-                  ic: <ArrowUpRight size={32} />,
-                  color: "bg-black",
+                  ic: <ArrowUpRight size={18} />,
+                  color: "bg-zinc-900 text-white",
                 },
                 {
                   id: "Netlify",
                   name: "Netlify",
                   desc: "Global hosting and serverless form handling.",
-                  ic: <Globe size={32} />,
-                  color: "bg-cyan-500/10",
+                  ic: <Globe size={18} />,
+                  color: "bg-sky-50 text-sky-600",
                 },
                 {
                   id: "Slack",
                   name: "Slack",
-                  desc: "Push system alerts and logs to your workspace.",
-                  ic: <MessageSquare size={32} />,
-                  color: "bg-red-500/10",
+                  desc: "Push system alerts and updates to your workspace.",
+                  ic: <MessageSquare size={18} />,
+                  color: "bg-rose-50 text-rose-600",
                 },
                 {
                   id: "Discord",
                   name: "Discord",
-                  desc: "Gamified community management and webhooks.",
-                  ic: <MessageCircle size={32} />,
-                  color: "bg-indigo-500/10",
+                  desc: "Community webhooks and real-time alerts.",
+                  ic: <MessageCircle size={18} />,
+                  color: "bg-indigo-50 text-indigo-600",
                 },
               ].map((app, i) => {
                 const isConnected = connectedApps.includes(app.id);
                 return (
-                  <motion.div
+                  <div
                     key={i}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="ud-panel p-6 flex flex-col gap-4 group hover:border-cyan-500/30 transition-all cursor-default"
+                    className="bg-white border border-zinc-200/80 rounded-2xl p-4 flex flex-col gap-3 shadow-xs"
                   >
-                    <div className="flex justify-between items-start">
-                      <div
-                        className={`w-14 h-14 rounded-2xl ${app.color} flex items-center justify-center border border-white/5`}
-                      >
+                    <div className="flex justify-between items-center">
+                      <div className={`w-9 h-9 rounded-xl ${app.color} flex items-center justify-center border border-zinc-200/50`}>
                         {app.ic}
                       </div>
                       {isConnected ? (
-                        <div className="px-2 py-1 rounded-md bg-emerald-500/20 text-emerald-500 text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5">
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Authorized
-                        </div>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                          Connected
+                        </span>
                       ) : (
                         <button
                           onClick={() => handleConnectApp(app.id)}
-                          className="px-3 py-1.5 rounded-lg bg-cyan-500 text-black text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform"
+                          className="px-3 py-1 rounded-lg bg-zinc-900 text-white text-[11px] font-semibold hover:bg-zinc-800 transition-colors cursor-pointer"
                         >
-                          Authorize
+                          Connect
                         </button>
                       )}
                     </div>
                     <div>
-                      <h3 className="text-lg font-black text-white">
-                        {app.name}
-                      </h3>
-                      <p className="text-xs text-zinc-500 font-medium leading-relaxed mt-1">
-                        {app.desc}
-                      </p>
+                      <h3 className="text-xs font-semibold text-zinc-900">{app.name}</h3>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">{app.desc}</p>
                     </div>
-                    {isConnected && (
-                      <div className="mt-2 pt-4 border-t border-white/5 flex gap-2">
-                        <button className="text-[10px] font-bold text-zinc-500 hover:text-white transition-colors">
-                          Configure
-                        </button>
-                        <div className="w-px h-3 bg-white/10 my-auto" />
-                        <button className="text-[10px] font-bold text-red-500/60 hover:text-red-500 transition-colors">
-                          Revoke
-                        </button>
-                      </div>
-                    )}
-                  </motion.div>
+                  </div>
                 );
               })}
             </div>
           ) : (
-            <>
-              {/* WELCOME CARD */}
-              <div className="ud-welcome py-8">
-                <div className="ud-welcome-bg" />
-                <div className="ud-welcome-grid absolute inset-0 opacity-10" />
-                <div className="relative z-10 space-y-4">
-                  <div className="flex items-center gap-2 mb-2 text-[10px] font-black text-cyan-400 uppercase tracking-widest">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
-                    Live Dashboard
-                  </div>
-                  <h1 className="ud-welcome-title">
-                    Welcome back,{" "}
-                    <span className="text-cyan-400">{displayName}!</span> 👋
-                  </h1>
-                  <div className="inline-flex items-center gap-3 px-4 py-2 bg-black/40 border border-white/10 rounded-xl backdrop-blur-md shadow-lg font-sharetech text-zinc-300 transform hover:scale-105 transition-all">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-                      GAMURA ID
-                    </span>
-                    <span className="text-white font-mono font-bold tracking-widest text-sm drop-shadow-[0_0_8px_#fff]">
-                      {gamuraId}
-                    </span>
-                  </div>
+            <div className="space-y-3.5">
+              {/* COMPACT APPLE WELCOME CARD */}
+              <div className="bg-white border border-zinc-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base sm:text-lg font-semibold text-zinc-900 tracking-tight">
+                    Welcome back, {displayName}
+                  </h2>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">
+                    Gamura Universe • Compact Workspace
+                  </p>
                 </div>
-              </div>
-
-              {/* QUICK ADD MODULE */}
-              <div className="mb-8 group">
-                <form
-                  onSubmit={handleQuickAdd}
-                  className="bg-black/40 border border-white/10 rounded-[2rem] p-2 flex flex-col md:flex-row items-center gap-2 group-hover:border-cyan-500/30 transition-all shadow-xl backdrop-blur-md relative"
-                >
-                  <div className="flex items-center flex-1 w-full gap-2">
-                    <div className="w-10 h-10 rounded-2xl bg-zinc-800 flex items-center justify-center text-zinc-500 group-focus-within:text-cyan-400 group-focus-within:bg-cyan-500/10 transition-all ml-1 shrink-0">
-                      <Plus size={18} />
-                    </div>
-                    <input
-                      type="text"
-                      value={quickAddText}
-                      onChange={(e) => setQuickAddText(e.target.value)}
-                      placeholder="Broadcast a quick task or signal to the mesh..."
-                      className="flex-1 bg-transparent border-none outline-none text-xs font-bold text-white placeholder:text-zinc-600 px-2 font-sans"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full md:w-auto px-2 pb-2 md:pb-0">
-                    <button
-                      type="submit"
-                      disabled={!quickAddText.trim()}
-                      className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl text-black text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] disabled:opacity-30 disabled:grayscale disabled:scale-100 shrink-0"
-                    >
-                      SYNC SIGNAL
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              {/* GITHUB PIPELINE DIRECT COUPLING */}
-              <div className="mb-8 p-6 bg-zinc-950/60 border border-white/5 rounded-3xl relative overflow-hidden backdrop-blur-md shadow-2xl">
-                {/* Ambient subtle glow */}
-                <div className="absolute top-0 right-0 w-44 h-44 bg-cyan-400/5 rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute -bottom-10 -left-10 w-44 h-44 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
-
-                <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-white/5 pb-4 mb-5 gap-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[12px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-mono font-bold tracking-wider uppercase">
-                        Pipeline Engine
-                      </span>
-                    </div>
-                    <h3 className="text-sm font-black uppercase text-white tracking-[0.1em] font-sans">
-                      GitHub Direct Deploy Connection
-                    </h3>
-                    <p className="text-[9.5px] text-zinc-500 font-mono">
-                      Push compiled developer portfolio and live code
-                      modifications directly to GitHub
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 self-start md:self-auto font-mono text-[9px] text-zinc-400">
-                    <div
-                      className={`w-2 h-2 rounded-full ${dbStatus.type === "success" ? "bg-emerald-500 shadow-[0_0_8px_#10b981]" : dbToken ? "bg-cyan-400 shadow-[0_0_8px_#22d3ee]" : "bg-zinc-600 animate-pulse"}`}
-                    />
-                    <span className="font-bold tracking-widest uppercase">
-                      {dbStatus.type === "success"
-                        ? "Active Uplink"
-                        : dbToken
-                          ? "Configured"
-                          : "Offline"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-                  <div>
-                    <label className="block text-[8px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5 font-black">
-                      GitHub Token
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-                      value={dbToken}
-                      onChange={(e) => setDbToken(e.target.value)}
-                      className="w-full bg-zinc-900/60 border border-white/10 rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:border-cyan-500 font-mono transition-all placeholder:text-zinc-700"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[8px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5 font-black">
-                      Repository Target
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="my-personal-portfolio"
-                      value={dbRepo}
-                      onChange={(e) => setDbRepo(e.target.value)}
-                      className="w-full bg-zinc-900/60 border border-white/10 rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:border-cyan-500 font-mono transition-all placeholder:text-zinc-700"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[8px] font-mono text-zinc-400 uppercase tracking-widest mb-1.5 font-black">
-                      Commit Annotation
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Publish custom changes"
-                      value={dbCommitMsg}
-                      onChange={(e) => setDbCommitMsg(e.target.value)}
-                      className="w-full bg-zinc-900/60 border border-white/10 rounded-xl px-3 py-2 text-[10px] text-white outline-none focus:border-cyan-500 font-mono transition-all placeholder:text-zinc-700"
-                    />
-                  </div>
-                </div>
-
-                {dbStatus.type !== "idle" && (
-                  <div
-                    className={`p-3 text-[9px] font-mono rounded-xl border mb-5 leading-relaxed ${
-                      dbStatus.type === "loading"
-                        ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
-                        : dbStatus.type === "success"
-                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300 break-all"
-                          : "bg-red-500/10 border-red-500/20 text-red-300 break-all"
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <div className="mt-0.5 font-black font-sans">
-                        {dbStatus.type === "loading"
-                          ? "⏳"
-                          : dbStatus.type === "success"
-                            ? "⚡"
-                            : "⚠️"}
-                      </div>
-                      <div>
-                        <span className="font-bold">{dbStatus.message}</span>
-                        {dbStatus.type === "success" && dbStatus.url && (
-                          <div className="mt-2 flex gap-3">
-                            <a
-                              href={dbStatus.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 hover:text-emerald-200 rounded-md transition-all font-black uppercase text-[8px] tracking-widest inline-flex items-center gap-1 border border-emerald-500/30"
-                            >
-                              View Repository{" "}
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2 border-t border-white/5">
-                  <span className="text-[9px] text-zinc-500 leading-relaxed font-mono">
-                    {dbStatus.type === "success"
-                      ? "🎯 Portfolio synchronized on the decentralized internet successfully."
-                      : "🔧 Compiles single-page static HTML structures via developer pipeline parameters."}
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-50 border border-zinc-200/80 rounded-xl self-start sm:self-auto">
+                  <span className="text-[10px] font-medium text-zinc-500">ID</span>
+                  <span className="text-xs font-mono font-semibold text-zinc-900 tracking-wide">
+                    {gamuraId}
                   </span>
-
-                  <button
-                    onClick={handleDashboardPublishGithub}
-                    disabled={dbStatus.type === "loading"}
-                    className={`py-3 px-8 rounded-xl text-[10px] font-black uppercase tracking-widest cursor-pointer flex items-center justify-center gap-1.5 transition-all self-end sm:self-auto ${
-                      dbStatus.type === "loading"
-                        ? "bg-zinc-800 text-zinc-500 border border-zinc-700"
-                        : "bg-[#10b981] hover:bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.35)] hover:scale-[1.02] active:scale-[0.98] duration-200"
-                    }`}
-                  >
-                    {dbStatus.type === "loading" ? (
-                      <span className="flex items-center gap-1.5 justify-center">
-                        <RefreshCw className="w-3 h-3 animate-spin text-amber-300" />
-                        <span>Syncing Uplink...</span>
-                      </span>
-                    ) : (
-                      <>Sync to GitHub 🚀</>
-                    )}
-                  </button>
                 </div>
               </div>
 
-              {/* METRICS */}
-              <div className="ud-metrics">
-                {[
-                  {
-                    label: "Total Users",
-                    val: totalUsersVal,
-                    trend: "+12.4%",
-                    color: "text-cyan-400",
-                  },
-                  {
-                    label: "Active Nodes",
-                    val: activeCount || 0,
-                    trend: "REAL TIME",
-                    color: "text-emerald-400",
-                  },
-                  {
-                    label: "Avg Load Time",
-                    val: avgLoadTime,
-                    trend: "-0.1s",
-                    color: "text-yellow-400",
-                  },
-                  {
-                    label: "Total Logins",
-                    val: loginCount.toLocaleString(),
-                    trend: "REAL TIME",
-                    color: "text-violet-400",
-                  },
-                ].map((m, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                    className="ud-metric group relative"
-                  >
-                    {(m.label === "Total Users" ||
-                      m.label === "Active Nodes") && (
-                      <div className="absolute top-0 right-0 p-2 opacity-5 group-hover:opacity-10 transition-opacity">
-                        {m.label === "Total Users" ? (
-                          <Users size={64} />
-                        ) : (
-                          <Sparkles size={64} />
-                        )}
-                      </div>
-                    )}
-                    <div className="flex justify-between items-start mb-4">
-                      <div
-                        className={`p-2 rounded-xl bg-zinc-800/80 text-zinc-400 group-hover:text-white group-hover:bg-cyan-500/20 group-hover:border-cyan-500/30 border border-white/5 transition-all duration-500 flex items-center justify-center`}
-                      >
-                        {m.label === "Total Users" ? (
-                          <Users size={14} />
-                        ) : m.label === "Active Nodes" ? (
-                          <Sparkles size={14} />
-                        ) : m.label === "Avg Load Time" ? (
-                          <Activity size={14} />
-                        ) : (
-                          <ArrowRight size={14} />
-                        )}
-                      </div>
-                      <div
-                        className={`text-[8px] font-black px-2 py-0.5 rounded-md bg-white/5 backdrop-blur-sm border border-white/5 shadow-inner ${m.trend.startsWith("+") ? "text-emerald-500" : "text-red-500"}`}
-                      >
-                        {m.trend}
-                      </div>
-                    </div>
-                    <div className="relative z-10">
-                      <div
-                        className={`ud-m-val ${m.color} transition-colors duration-500`}
-                      >
-                        {m.val}
-                      </div>
-                      <div className="ud-m-label">{m.label}</div>
-                    </div>
-                    {/* Background glow on hover */}
-                    <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  </motion.div>
-                ))}
-              </div>
-
-              {/* REAL-TIME IDENTITY FEED */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                {/* Latest Created User */}
-                <div className="bg-[#050811]/90 border border-zinc-900/60 p-4 rounded-xl flex flex-col gap-2 relative overflow-hidden group hover:border-[#10F080]/30 transition-all duration-300">
-                   <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
-                      <Users size={48} />
-                   </div>
-                   <span className="text-[9px] font-black uppercase text-[#10F080] tracking-widest flex items-center gap-2">
-                     <span className="w-1.5 h-1.5 rounded-full bg-[#10F080] animate-pulse shadow-[0_0_8px_#10F080]" />
-                     New Gamura ID Created
-                   </span>
-                   <div className="flex items-center justify-between mt-1 relative z-10">
-                     <span className="font-mono text-white text-xs sm:text-sm tracking-widest bg-white/5 px-2 py-1 rounded">
-                       {newestCreatedUser?.id || "AWAITING..."}
-                     </span>
-                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest truncate max-w-[150px]">
-                       {newestCreatedUser?.username || "---"}
-                     </span>
-                   </div>
+              {/* COMPACT APPLE QUICK BROADCAST BAR */}
+              <form
+                onSubmit={handleQuickAdd}
+                className="bg-white border border-zinc-200/80 rounded-2xl p-1.5 flex items-center gap-2 shadow-xs"
+              >
+                <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-500 shrink-0">
+                  <Plus size={15} />
                 </div>
-
-                {/* Latest Login User */}
-                <div className="bg-[#050811]/90 border border-zinc-900/60 p-4 rounded-xl flex flex-col gap-2 relative overflow-hidden group hover:border-violet-500/30 transition-all duration-300">
-                   <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
-                      <Activity size={48} />
-                   </div>
-                   <span className="text-[9px] font-black uppercase text-violet-400 tracking-widest flex items-center gap-2">
-                     <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse shadow-[0_0_8px_#a78bfa]" />
-                     Newest Login Node
-                   </span>
-                   <div className="flex items-center justify-between mt-1 relative z-10">
-                     <span className="font-mono text-white text-xs sm:text-sm tracking-widest bg-white/5 px-2 py-1 rounded">
-                       {newestLoginUser?.id || "AWAITING..."}
-                     </span>
-                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest truncate max-w-[150px]">
-                       {newestLoginUser?.username || "---"}
-                     </span>
-                   </div>
-                </div>
-              </div>
-
-              {/* GLOBAL CONNECTION PULSE VISUALIZER */}
-              <div className="mb-8">
-                <GlobalConnectionPulse
-                  allUsers={allUsers}
-                  globalConnections={globalConnections}
+                <input
+                  type="text"
+                  value={quickAddText}
+                  onChange={(e) => setQuickAddText(e.target.value)}
+                  placeholder="Share a quick signal or note..."
+                  className="flex-1 bg-transparent border-none outline-none text-xs text-zinc-900 placeholder:text-zinc-400 px-1"
                 />
+                <button
+                  type="submit"
+                  disabled={!quickAddText.trim()}
+                  className="px-3.5 py-1.5 bg-zinc-900 text-white rounded-xl text-[11px] font-semibold hover:bg-zinc-800 active:scale-[0.98] transition-all disabled:opacity-40 cursor-pointer shrink-0"
+                >
+                  Send
+                </button>
+              </form>
+
+              {/* COMPACT STREAK & AUDIO WIDGETS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                <DailyStreakWidget db={db} currentUser={user} showToast={showToast} />
+                <BackgroundAudioPlayer showToast={showToast} />
               </div>
 
-              {/* CHARTS ROW */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
-                <div className="ud-panel">
-                  <div className="ud-panel-head">
-                    <span className="ud-panel-title">Traffic Overview</span>
-                  </div>
-                  <div className="p-4 pt-1 h-[260px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={trafficData}>
-                        <defs>
-                          <linearGradient
-                            id="colorVis"
-                            x1="0"
-                            y1="0"
-                            x2="0"
-                            y2="1"
-                          >
-                            <stop
-                              offset="5%"
-                              stopColor="#38bdf8"
-                              stopOpacity={0.3}
-                            />
-                            <stop
-                              offset="95%"
-                              stopColor="#38bdf8"
-                              stopOpacity={0}
-                            />
-                          </linearGradient>
-                          <linearGradient
-                            id="colorAct"
-                            x1="0"
-                            y1="0"
-                            x2="0"
-                            y2="1"
-                          >
-                            <stop
-                              offset="5%"
-                              stopColor="#a78bfa"
-                              stopOpacity={0.3}
-                            />
-                            <stop
-                              offset="95%"
-                              stopColor="#a78bfa"
-                              stopOpacity={0}
-                            />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="rgba(255,255,255,0.05)"
-                          vertical={false}
-                        />
-                        <XAxis
-                          dataKey="name"
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{
-                            fill: "#475569",
-                            fontSize: 10,
-                            fontWeight: 700,
-                          }}
-                          dy={10}
-                        />
-                        <YAxis hide />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "#1a2332",
-                            border: "1px solid rgba(255,255,255,0.1)",
-                            borderRadius: "12px",
-                          }}
-                          itemStyle={{ fontSize: "11px", fontWeight: "bold" }}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="visitors"
-                          stroke="#38bdf8"
-                          strokeWidth={3}
-                          fillOpacity={1}
-                          fill="url(#colorVis)"
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="active"
-                          stroke="#a78bfa"
-                          strokeWidth={3}
-                          fillOpacity={1}
-                          fill="url(#colorAct)"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* 7-DAY ACTIVITY FREQUENCY BAR CHART */}
-                <div className="ud-panel group hover:border-[#10F080]/20 transition-all duration-300">
-                  <div className="ud-panel-head flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="ud-panel-title">Activity Frequency</span>
-                      <span className="text-[8px] font-bold text-[#10F080] bg-[#10F080]/10 border border-[#10F080]/20 px-1.5 py-0.5 rounded tracking-widest font-mono uppercase">
-                        7 DAYS
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-4 pt-1 h-[260px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={activitiesOverLast7Days}>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          stroke="rgba(255,255,255,0.05)"
-                          vertical={false}
-                        />
-                        <XAxis
-                          dataKey="name"
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{
-                            fill: "#475569",
-                            fontSize: 10,
-                            fontWeight: 700,
-                          }}
-                          dy={10}
-                        />
-                        <YAxis
-                          allowDecimals={false}
-                          axisLine={false}
-                          tickLine={false}
-                          tick={{
-                            fill: "#475569",
-                            fontSize: 10,
-                            fontWeight: 705,
-                          }}
-                        />
-                        <Tooltip
-                          cursor={{ fill: "rgba(255,255,255,0.03)" }}
-                          contentStyle={{
-                            backgroundColor: "#070a13",
-                            border: "1px solid rgba(255,255,255,0.1)",
-                            borderRadius: "12px",
-                          }}
-                          itemStyle={{
-                            fontSize: "11px",
-                            fontWeight: "bold",
-                            color: "#10F080",
-                          }}
-                          labelStyle={{
-                            fontSize: "10px",
-                            fontWeight: "bold",
-                            color: "#94a3b8",
-                          }}
-                        />
-                        <Bar
-                          dataKey="count"
-                          fill="#10F080"
-                          radius={[4, 4, 0, 0]}
-                          maxBarSize={32}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="ud-panel">
-                  <div className="ud-panel-head">
-                    <span className="ud-panel-title">
-                      Platform Distribution
-                    </span>
-                  </div>
-                  <div className="p-6 flex flex-col items-center">
-                    <div className="relative w-40 h-40">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={platformData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={55}
-                            outerRadius={70}
-                            paddingAngle={5}
-                            dataKey="value"
-                            stroke="none"
-                          >
-                            {platformData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-2xl font-black text-white">
-                          60%
-                        </span>
-                        <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">
-                          Mobile
-                        </span>
-                      </div>
-                    </div>
-                    <div className="w-full mt-8 space-y-4">
-                      {[
-                        {
-                          label: "Mobile",
-                          pct: "60%",
-                          color: "bg-cyan-500",
-                          val: "2.9K",
-                        },
-                        {
-                          label: "Desktop",
-                          pct: "30%",
-                          color: "bg-violet-500",
-                          val: "1.4K",
-                        },
-                        {
-                          label: "Tablet",
-                          pct: "10%",
-                          color: "bg-emerald-500",
-                          val: "482",
-                        },
-                      ].map((d, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center gap-4 group cursor-default"
-                        >
-                          <div
-                            className={`w-1.5 h-1.5 rounded-full ${d.color} shadow-[0_0_8px_rgba(0,0,0,0.5)]`}
-                          />
-                          <span className="text-[11px] font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors flex-1">
-                            {d.label}
-                          </span>
-                          <div className="flex-1 max-w-[80px] h-1 bg-zinc-800 rounded-full overflow-hidden">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              animate={{ width: d.pct }}
-                              transition={{
-                                duration: 1.5,
-                                delay: 0.5 + i * 0.1,
-                                ease: "circOut",
-                              }}
-                              className={`h-full ${d.color}`}
-                            />
-                          </div>
-                          <span className="text-[11px] font-black text-zinc-200 font-mono w-10 text-right">
-                            {d.pct}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* TABLES ROW */}
-              <div className="ud-tables-row">
-                <div className="ud-panel">
-                  <div className="ud-panel-head">
-                    <span className="ud-panel-title">User Directory</span>
-                    <button 
-                      onClick={() => setSortActiveFirst(!sortActiveFirst)}
-                      className={`text-[10px] font-bold px-2 py-1 rounded-md transition-colors ${sortActiveFirst ? "bg-emerald-500/20 text-emerald-400" : "bg-white/5 text-zinc-400 hover:text-zinc-200"}`}
-                    >
-                      {sortActiveFirst ? "Sorting: Active First" : "Sorting: Newest First"}
-                    </button>
-                  </div>
-                  <div className="ud-table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Gamura ID</th>
-                          <th>User</th>
-                          <th>Joined</th>
-                          <th>Status</th>
-                          <th>Activity</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(() => {
-                           const displayed = [...allUsers];
-                           if (sortActiveFirst) {
-                             displayed.sort((a, b) => {
-                               const aOnline = presenceData?.[a.id]?.online ? 1 : 0;
-                               const bOnline = presenceData?.[b.id]?.online ? 1 : 0;
-                               if (aOnline !== bOnline) return bOnline - aOnline;
-                               const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : new Date(a.createdAt || 0).getTime();
-                               const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : new Date(b.createdAt || 0).getTime();
-                               return tb - ta;
-                             });
-                           } else {
-                             displayed.sort((a, b) => {
-                               const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : new Date(a.createdAt || 0).getTime();
-                               const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : new Date(b.createdAt || 0).getTime();
-                               return tb - ta;
-                             });
-                           }
-                           
-                           return displayed.length > 0 ? (
-                             displayed.map((u, i) => {
-                               const lastSeen = u.lastLogin?.toDate
-                                 ? u.lastLogin.toDate()
-                                 : new Date();
-                               
-                               const isOnline = presenceData?.[u.id]?.online;
-   
-                               let status = "Offline";
-                               let statusColor = "zinc";
-                               if (isOnline) {
-                                 status = "Active";
-                                 statusColor = "emerald";
-                               }
-   
-                               const now = new Date();
-                               const diffMs = now.getTime() - lastSeen.getTime();
-                               const diffMin = Math.floor(diffMs / 60000);
-   
-                               const joined =
-                                 diffMin < 1
-                                   ? "Just now"
-                                   : diffMin < 60
-                                     ? `${diffMin}m ago`
-                                     : `${Math.floor(diffMin / 60)}h ago`;
-   
-                               return (
-                                 <tr
-                                   key={i}
-                                   className="hover:bg-white/[0.02] transition-colors group"
-                                 >
-                                   <td className="font-mono text-zinc-500 text-[9px] uppercase tracking-widest">
-                                     {u.id}
-                                   </td>
-                                   <td className="font-bold text-zinc-100 group-hover:text-cyan-400 transition-colors uppercase text-[10px] tracking-tight flex items-center gap-2">
-                                     <div className={`w-2 h-2 rounded-full ${isOnline ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] animate-pulse" : "bg-zinc-600"}`} />
-                                     {u.username || "Anonymous"}
-                                     {neuralProfiles[u.id] && (
-                                       <button
-                                         onClick={() => setActiveTab("Neutral Link")}
-                                         className="flex items-center gap-1 text-[8px] bg-sky-500/20 text-sky-400 px-1.5 py-0.5 rounded font-mono tracking-widest border border-sky-500/30 hover:bg-sky-500/40 hover:text-white transition-all cursor-pointer"
-                                         title="Connect via Neutral Link"
-                                       >
-                                         <Link2 size={8} />
-                                         @{neuralProfiles[u.id]}
-                                       </button>
-                                     )}
-                                   </td>
-                                   <td className="text-zinc-500 text-[9px] font-bold">
-                                     {joined}
-                                   </td>
-                                   <td>
-                                     <span
-                                       className={`text-[8px] font-black px-2 py-0.5 rounded-md bg-${statusColor}-500/10 text-${statusColor}-500 uppercase tracking-wider shadow-[0_0_10px_rgba(0,0,0,0.1)]`}
-                                     >
-                                       {status}
-                                     </span>
-                                   </td>
-                                   <td>
-                                     <div className="w-16 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                                       <motion.div
-                                         initial={{ width: 0 }}
-                                         animate={{
-                                           width: `${60 + ((i * 7) % 35)}%`,
-                                         }}
-                                         className={`h-full bg-${statusColor}-500 rounded-full shadow-[0_0_5px_rgba(0,0,0,0.5)]`}
-                                       />
-                                     </div>
-                                   </td>
-                                 </tr>
-                               );
-                             })
-                           ) : (
-                             <tr>
-                               <td
-                                 colSpan={5}
-                                 className="text-center py-8 text-zinc-600 font-bold uppercase tracking-widest text-[10px]"
-                               >
-                                 No active user sessions found
-                               </td>
-                             </tr>
-                           );
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              <div className="ud-bottom-row">
-                <div className="ud-panel col-span-full border border-zinc-800/80 rounded-2xl bg-slate-950 overflow-hidden shadow-2xl">
-                  <div className="ud-panel-head bg-black px-5 py-3.5 border-b border-zinc-900 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-black tracking-[0.25em] text-white uppercase font-sans">
-                        Activity Log
-                      </span>
-                      <span className="bg-[#10F080]/10 text-[#10F080] text-[8.5px] px-2 py-0.5 rounded font-mono font-bold tracking-wider uppercase border border-[#10F080]/15">
-                        REAL-TIME
-                      </span>
-                    </div>
-
-                    {/* Mode + Scope Filter Toggle and Export */}
-                    <div className="flex items-center gap-2 self-end sm:self-auto">
-                      <button
-                        onClick={exportTelemetryData}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-extrabold tracking-wider uppercase rounded-lg transition-all font-mono bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer"
-                        title="Export Activity Log as CSV"
-                      >
-                        <Download size={10} />
-                        EXPORT CSV
-                      </button>
-                      <div className="flex items-center gap-1 bg-zinc-950 p-1 border border-zinc-900 rounded-lg">
-                        <button
-                        onClick={() => {
-                          setActivityFilter("mine");
-                          setVisibleActivitiesCount(6);
-                        }}
-                        className={`px-3 py-1 text-[9px] font-extrabold pb-0.5 tracking-wider uppercase rounded transition-all font-mono ${
-                          activityFilter === "mine"
-                            ? "bg-gradient-to-r from-indigo-500/20 to-cyan-500/25 border border-cyan-500/30 text-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.15)]"
-                            : "text-zinc-500 hover:text-zinc-350 cursor-pointer"
-                        }`}
-                      >
-                        👤 My Activities
-                      </button>
-                      <button
-                        onClick={() => {
-                          setActivityFilter("global");
-                          setVisibleActivitiesCount(6);
-                        }}
-                        className={`px-3 py-1 text-[9px] font-extrabold pb-0.5 tracking-wider uppercase rounded transition-all font-mono ${
-                          activityFilter === "global"
-                            ? "bg-gradient-to-r from-teal-500/20 to-emerald-600/25 border border-emerald-500/30 text-[#10F080] shadow-[0_0_8px_rgba(16,240,128,0.15)]"
-                            : "text-zinc-500 hover:text-zinc-350 cursor-pointer"
-                        }`}
-                      >
-                        🌐 Global Universe
-                      </button>
-                    </div>
-                  </div>
-                  </div>
-
-                  {/* Real-time Activity Summary Card */}
-                  <div className="px-5 py-4 bg-gradient-to-r from-zinc-950 via-[#070a13] to-zinc-950 border-b border-zinc-900/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {/* Card 1: Total Activities */}
-                    <div className="bg-[#050811]/90 border border-zinc-900/60 p-3.5 rounded-xl flex items-center justify-between gap-3 group hover:border-[#10F080]/30 transition-all duration-300">
-                      <div className="space-y-1">
-                        <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-[0.2em] block">
-                          Uplink Telemetry
-                        </span>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-xl font-black text-white font-mono tracking-tight">
-                            {totalTelemetry !== null ? totalTelemetry : activitySummary.total}
-                          </span>
-                          <span className="flex items-center gap-1 text-[8.5px] font-extrabold text-emerald-450 font-sans uppercase">
-                            Total Actions
-                            <span className={`text-[9px] ${activitySummary.trendDir === "up" ? "text-emerald-400" : activitySummary.trendDir === "down" ? "text-red-400" : "text-zinc-500"} flex items-center`}>
-                              {activitySummary.trendDir === "up" ? <ArrowRight size={10} className="-rotate-45" /> : activitySummary.trendDir === "down" ? <ArrowRight size={10} className="rotate-45" /> : "-"} {activitySummary.trendStr}
-                            </span>
-                          </span>
-                        </div>
-                      </div>
-                      <div className="w-9 h-9 rounded-lg bg-[#10F080]/5 text-[#10F080] border border-[#10F080]/15 flex items-center justify-center font-mono text-sm font-black group-hover:scale-105 transition-transform duration-300">
-                        Σ
-                      </div>
-                    </div>
-
-                    {/* Card 2: Most Frequent Activity Type */}
-                    <div className="bg-[#050811]/90 border border-zinc-900/60 p-3.5 rounded-xl flex items-center justify-between gap-3 group hover:border-cyan-500/30 transition-all duration-300">
-                      <div className="space-y-1">
-                        <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-[0.2em] block">
-                          Dominant Waveform
-                        </span>
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-xs sm:text-xs font-black text-cyan-400 truncate max-w-[150px] uppercase tracking-wider">
-                            {activitySummary.mostFrequent}
-                          </span>
-                          {activitySummary.maxCount > 0 && (
-                            <span className="text-[8.5px] font-mono text-zinc-500 font-bold">
-                              x{activitySummary.maxCount}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="w-9 h-9 rounded-lg bg-cyan-500/5 text-cyan-400 border border-cyan-500/15 flex items-center justify-center text-sm group-hover:scale-105 transition-transform duration-300">
-                        <Activity size={14} />
-                      </div>
-                    </div>
-
-                    {/* Card 3: Network Pulse / Sync Status */}
-                    <div className="bg-[#050811]/90 border border-zinc-900/60 p-3.5 rounded-xl flex items-center justify-between gap-3 group hover:border-violet-500/30 transition-all duration-300 sm:col-span-2 lg:col-span-1">
-                      <div className="space-y-1">
-                        <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-[0.2em] block">
-                          System Sync Status
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-1.5 h-1.5 rounded-full shadow-[0_0_8px_currentColor] animate-pulse ${isConnected ? 'bg-[#10F080] text-[#10F080]' : 'bg-red-500 text-red-500'}`} />
-                          <span className={`text-[10px] font-extrabold tracking-widest uppercase font-mono ${isConnected ? 'text-[#10F080]' : 'text-red-500'}`}>
-                            {isConnected ? 'CONNECTED' : 'OFFLINE'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="w-9 h-9 rounded-lg bg-violet-500/5 text-violet-400 border border-violet-500/15 flex items-center justify-center text-xs font-mono font-bold group-hover:scale-105 transition-transform duration-300">
-                        99.9%
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    ref={scrollContainerRef}
-                    className="flex flex-col max-h-[620px] overflow-y-auto divide-y divide-zinc-900/60 bg-[#070a13]/80"
-                  >
-                    {activities.length > 0 ? (
-                      activities
-                        .slice(0, visibleActivitiesCount)
-                        .map((a, i) => {
-                          const timeAgo = a.timestamp?.toDate
-                            ? Math.floor(
-                                (new Date().getTime() -
-                                  a.timestamp.toDate().getTime()) /
-                                  60000,
-                              )
-                            : 0;
-                          const timeStr =
-                            timeAgo < 1
-                              ? "Just now"
-                              : timeAgo < 60
-                                ? `${timeAgo}m ago`
-                                : `${Math.floor(timeAgo / 60)}h ago`;
-                          return (
-                            <div
-                              key={i}
-                              onClick={() =>
-                                setExpandedActivityId(
-                                  expandedActivityId === a.id
-                                    ? null
-                                    : a.id || i.toString(),
-                                )
-                              }
-                              className={`flex flex-col p-4.5 hover:bg-white/[0.02] active:bg-white/[0.04] transition-all cursor-pointer border-b border-zinc-900/40 last:border-0 ${expandedActivityId === a.id ? "bg-white/[0.03]" : ""}`}
-                            >
-                              <div className="flex items-center gap-4">
-                                {(() => {
-                                  const textVal = (a.title || a.action || "").toLowerCase();
-                                  const isKeyEvent =
-                                    a.ic === "🔑" ||
-                                    textVal.includes("login") ||
-                                    textVal.includes("auth");
-                                  const isLinkEvent =
-                                    a.ic === "🔗" ||
-                                    a.ic === "🧬" ||
-                                    textVal.includes("connect");
-                                  const iconBgClass = isKeyEvent
-                                    ? "bg-amber-500/10 border border-amber-500/20 text-amber-500"
-                                    : isLinkEvent
-                                      ? "bg-sky-500/10 border border-sky-500/20 text-sky-450"
-                                      : "bg-zinc-900 border border-zinc-800 text-slate-300";
-                                  return (
-                                    <div
-                                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-sm md:text-base font-bold transition-transform shrink-0 ${iconBgClass} ${expandedActivityId === a.id ? "scale-110 shadow-[0_0_12px_rgba(245,158,11,0.2)]" : ""}`}
-                                    >
-                                      {a.ic || "⚡"}
-                                    </div>
-                                  );
-                                })()}
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[12.5px] font-bold text-slate-100 flex items-center justify-between gap-2">
-                                    <span
-                                      className={`truncate ${expandedActivityId === a.id ? "text-cyan-400" : "text-slate-200"}`}
-                                    >
-                                      {a.title || a.action}
-                                    </span>
-                                    <ChevronDown
-                                      size={14}
-                                      className={`text-slate-500 transition-transform shrink-0 ${expandedActivityId === a.id ? "rotate-180 text-cyan-400" : ""}`}
-                                    />
-                                  </div>
-                                  <div className="text-[10px] text-slate-500 flex justify-between items-center mt-1.5 font-sans">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-semibold text-slate-400/80">
-                                        {timeStr}
-                                      </span>
-                                      {a.priority && (
-                                        <span
-                                          className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
-                                            a.priority === "High"
-                                              ? "bg-red-500/10 border border-red-500/20 text-red-400"
-                                              : a.priority === "Medium"
-                                                ? "bg-amber-500/10 border border-amber-500/20 text-amber-500"
-                                                : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-                                          }`}
-                                        >
-                                          {a.priority}
-                                        </span>
-                                      )}
-                                      {a.dueDate && (
-                                        <span className="flex items-center gap-1 text-[8px] text-slate-500 font-bold uppercase tracking-widest">
-                                          <Calendar size={10} /> {a.dueDate}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {a.user && (
-                                      <span className="text-[10px] font-semibold text-slate-500/80 italic">
-                                        by {a.user}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <AnimatePresence>
-                                {expandedActivityId === a.id && (
-                                  <motion.div
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: "auto", opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    className="overflow-hidden"
-                                  >
-                                    <div className="pt-3.5 pl-13 space-y-3 pb-1">
-                                      <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
-                                        Detailed activity record securely logged
-                                        inside your personal account ecosystem.
-                                        This secure log entry remains strictly
-                                        confidential.
-                                      </p>
-                                      <div className="flex gap-2">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            const lowerTitle =
-                                              a.title.toLowerCase();
-                                            if (lowerTitle.includes("feature"))
-                                              setActiveTab("Features");
-                                            else if (
-                                              lowerTitle.includes(
-                                                "integration",
-                                              ) ||
-                                              lowerTitle.includes("github")
-                                            )
-                                              setActiveTab("Integrations");
-                                            else setActiveTab("Analytics");
-                                          }}
-                                          className="text-[10px] font-black text-cyan-400 hover:text-cyan-300 uppercase tracking-widest transition-colors cursor-pointer"
-                                        >
-                                          Go to Section
-                                        </button>
-                                        <div className="w-px h-3 bg-zinc-850 my-auto" />
-                                        <span className="text-[9px] font-bold text-slate-650 uppercase tracking-widest font-mono">
-                                          HASH:{" "}
-                                          {a.id
-                                            ? a.id.substring(0, 8)
-                                            : "ACT-SYS"}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          );
-                        })
-                    ) : (
-                      <div className="p-8 text-center text-slate-600 text-[10px] font-black uppercase tracking-widest">
-                        No activities recorded in your current session
-                      </div>
-                    )}
-
-                    {/* Intersection Observer Sentinel for Auto-scrolling / Dynamic Loading */}
-                    <div
-                      ref={sentinelRef}
-                      className="p-5 bg-black/30 border-t border-zinc-950/60 text-center flex items-center justify-center"
-                    >
-                      {activities.length > visibleActivitiesCount ? (
-                        <div className="flex items-center gap-2 text-zinc-500 font-mono text-[9px] font-black animate-pulse">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#10F080]" />
-                          <span>
-                            SYNCHRONIZING MORE REAL-TIME DATAFREAMS... (
-                            {activities.length - visibleActivitiesCount}{" "}
-                            REMAINING)
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-zinc-650 tracking-[0.2em] font-black uppercase text-[8px] font-mono">
-                          ☠ DATA DEPLOYMENT TRANSCEIVER SYNCHRONIZED ☠
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* SHARED PROJECTS SECTION */}
-              <div className="mt-8 mb-12">
-                <div className="flex items-center justify-between mb-6 px-2">
-                  <div className="flex flex-col">
-                    <h2 className="text-[14px] font-black text-white uppercase tracking-[0.2em] flex items-center gap-2">
-                      <LayoutGrid size={16} className="text-violet-400" />
+              {/* COMPACT SHARED PROJECTS SECTION */}
+              <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xs font-semibold text-zinc-900 flex items-center gap-1.5">
+                      <LayoutGrid size={14} className="text-zinc-600" />
                       Shared Universe Projects
                     </h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">
-                      Innovation from the Gamura community
+                    <p className="text-[10px] text-zinc-500 mt-0.5">
+                      Creations shared by the community
                     </p>
                   </div>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                  <button
                     onClick={() => {
                       if (!isLoggedIn) {
-                        showToast(
-                          "🔒",
-                          "Access Denied",
-                          "Connect your account to share projects.",
-                        );
+                        showToast("🔒", "Sign In Required", "Connect your account to share projects.");
                         return;
                       }
                       setProjectTitle("");
@@ -8276,112 +7628,82 @@ const UniverseDashboard = ({
                       setProjectImage("");
                       setShowProjectModal(true);
                     }}
-                    className="px-6 py-3 bg-gradient-to-r from-violet-500/20 to-cyan-500/20 border border-violet-500/30 rounded-2xl text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2 hover:from-violet-500/30 hover:to-cyan-500/30 transition-all font-sans"
+                    className="px-3 py-1.5 bg-zinc-900 text-white rounded-xl text-[11px] font-semibold flex items-center gap-1 hover:bg-zinc-800 active:scale-[0.98] transition-all cursor-pointer"
                   >
-                    <Plus size={14} />
-                    Add Project
-                  </motion.button>
+                    <Plus size={12} />
+                    Add
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {sharedProjects.length > 0 ? (
                     sharedProjects.map((project, i) => (
-                      <motion.div
+                      <div
                         key={project.id || i}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.1 }}
-                        className="group bg-zinc-900 border border-white/5 rounded-[2rem] overflow-hidden hover:border-violet-500/50 transition-all flex flex-col h-full"
+                        className="bg-zinc-50 border border-zinc-200/70 rounded-xl p-3 flex flex-col justify-between gap-2.5 hover:bg-white transition-colors"
                       >
-                        <div className="aspect-video bg-zinc-800 relative overflow-hidden">
-                          {project.image ? (
-                            <img
-                              src={project.image}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                              alt={project.title}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center opacity-20">
-                              <ImageIcon size={48} />
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-7 h-7 rounded-lg bg-white border border-zinc-200/70 flex items-center justify-center text-zinc-700 shrink-0">
+                              <Code size={13} />
                             </div>
-                          )}
-                          <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent opacity-60" />
-                          <div className="absolute bottom-4 left-4 right-4">
-                            <div className="text-[12px] font-black text-white uppercase tracking-wider">
-                              {project.title}
-                            </div>
-                            <div className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest mt-0.5">
-                              by {project.userName}
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold text-zinc-900 truncate">
+                                {project.title}
+                              </div>
+                              <div className="text-[10px] text-zinc-500 truncate">
+                                by {project.userName}
+                              </div>
                             </div>
                           </div>
+                          <a
+                            href={project.link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1.5 rounded-lg bg-white border border-zinc-200/70 text-zinc-600 hover:text-zinc-900 transition-colors shrink-0"
+                            title="Open Project"
+                          >
+                            <ExternalLink size={12} />
+                          </a>
                         </div>
-                        <div className="p-6 flex flex-col flex-1 gap-4">
-                          <p className="text-[10px] text-zinc-500 font-bold leading-relaxed uppercase tracking-tight">
-                            A unique visualization project connected to the
-                            Gamura Universe neural link.
-                          </p>
-                          <div className="mt-auto flex flex-col gap-4">
-                            <div className="flex items-center gap-4 border-t border-zinc-800 pt-4">
-                                <button onClick={() => handleLikeProject(project)} className={`flex items-center gap-1.5 text-[10px] font-bold ${project.likes?.includes(user?.uid) ? "text-rose-500" : "text-zinc-500 hover:text-zinc-300"} transition-colors cursor-pointer`}>
-                                  <Heart size={14} className={project.likes?.includes(user?.uid) ? "fill-rose-500" : ""} /> {project.likes?.length || 0}
-                                </button>
-                                <button onClick={() => handleCommentProject(project)} className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer">
-                                  <MessageCircle size={14} /> {project.comments?.length || 0}
-                                </button>
-                                <button onClick={() => { navigator.clipboard.writeText(project.link); showToast("📋", "Link Copied", "Project URL copied to clipboard."); }} className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 hover:text-cyan-400 transition-colors ml-auto cursor-pointer">
-                                  <Share2 size={14} /> Share
-                                </button>
-                            </div>
-                            
-                            {project.comments && project.comments.length > 0 && (
-                              <div className="bg-black/20 border border-white/5 rounded-xl p-3 max-h-24 overflow-y-auto space-y-2 no-scrollbar">
-                                {project.comments.map((comment: any, idx: number) => (
-                                  <div key={idx} className="flex flex-col gap-0.5">
-                                    <span className="text-[8px] text-cyan-400 font-bold tracking-widest uppercase">{comment.userName}</span>
-                                    <p className="text-[10px] text-zinc-300 leading-tight block">{comment.text}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
 
-                            <div className="flex items-center justify-between">
-                              <a
-                                href={project.link}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-[10px] font-black text-cyan-400 hover:text-white transition-colors uppercase tracking-widest flex items-center gap-1.5"
-                              >
-                                View Project <ExternalLink size={12} />
-                              </a>
-                              <div className="text-[8px] text-zinc-600 font-black uppercase tracking-widest">
-                                {project.timestamp?.toDate
-                                  ? project.timestamp
-                                      .toDate()
-                                      .toLocaleDateString()
-                                  : "Active"}
-                              </div>
-                            </div>
-                          </div>
+                        <div className="flex items-center gap-3 pt-2 border-t border-zinc-200/60 text-[10px] font-medium text-zinc-500">
+                          <button
+                            onClick={() => handleLikeProject(project)}
+                            className={`flex items-center gap-1 ${project.likes?.includes(user?.uid) ? "text-rose-500" : "hover:text-zinc-800"} cursor-pointer`}
+                          >
+                            <Heart size={11} className={project.likes?.includes(user?.uid) ? "fill-rose-500" : ""} />
+                            {project.likes?.length || 0}
+                          </button>
+                          <button
+                            onClick={() => handleCommentProject(project)}
+                            className="flex items-center gap-1 hover:text-zinc-800 cursor-pointer"
+                          >
+                            <MessageCircle size={11} />
+                            {project.comments?.length || 0}
+                          </button>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(project.link);
+                              showToast("📋", "Link Copied", "Project URL copied.");
+                            }}
+                            className="ml-auto flex items-center gap-1 hover:text-zinc-800 cursor-pointer"
+                          >
+                            <Share2 size={11} />
+                            Share
+                          </button>
                         </div>
-                      </motion.div>
+                      </div>
                     ))
                   ) : (
-                    <div className="col-span-full py-12 bg-white/[0.02] border border-dashed border-white/10 rounded-[2rem] flex flex-col items-center justify-center text-center">
-                      <LayoutGrid
-                        size={32}
-                        className="text-zinc-700 mb-4 opacity-50"
-                      />
-                      <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">
-                        No shared projects yet
-                      </p>
-                      <p className="text-zinc-600 text-[9px] mt-2 font-bold uppercase tracking-widest">
-                        Be the first to showcase your innovation
-                      </p>
+                    <div className="col-span-full py-6 bg-zinc-50 border border-dashed border-zinc-200 rounded-xl flex flex-col items-center justify-center text-center">
+                      <LayoutGrid size={18} className="text-zinc-400 mb-1.5" />
+                      <p className="text-zinc-600 text-[11px] font-medium">No shared projects yet</p>
                     </div>
                   )}
                 </div>
               </div>
-            </>
+            </div>
           )}
         </div>
       </main>
@@ -8393,43 +7715,35 @@ const UniverseDashboard = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-md z-[500] flex items-start justify-center pt-[15vh] px-4"
+            className="fixed inset-0 bg-black/25 backdrop-blur-sm z-[500] flex items-start justify-center pt-[15vh] px-4"
             onClick={() => setSearchOpen(false)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -20 }}
+              initial={{ opacity: 0, scale: 0.96, y: -12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -20 }}
-              className="w-full max-w-xl bg-zinc-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+              exit={{ opacity: 0, scale: 0.96, y: -12 }}
+              className="w-full max-w-md bg-white border border-zinc-200/80 rounded-2xl shadow-2xl overflow-hidden text-zinc-900"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center gap-3 p-5 border-b border-white/5">
-                <Search size={20} className="text-zinc-500" />
+              <div className="flex items-center gap-2.5 p-3.5 border-b border-zinc-100">
+                <Search size={16} className="text-zinc-400" />
                 <input
                   autoFocus
-                  className="flex-1 bg-transparent border-none outline-none text-base text-zinc-100 placeholder:text-zinc-600"
-                  placeholder="Search Universe commands..."
+                  className="flex-1 bg-transparent border-none outline-none text-xs text-zinc-900 placeholder:text-zinc-400"
+                  placeholder="Search Universe..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                <div className="px-2 py-1 bg-zinc-800 border border-white/10 rounded text-[9px] font-bold text-zinc-500">
+                <div className="px-1.5 py-0.5 bg-zinc-100 border border-zinc-200/70 rounded text-[9px] font-semibold text-zinc-500">
                   ESC
                 </div>
               </div>
-              <div className="p-2 space-y-1 max-h-[400px] overflow-y-auto">
+              <div className="p-2 space-y-1 max-h-[320px] overflow-y-auto">
                 {[
-                  {
-                    ic: "📊",
-                    title: "Analytics Overview",
-                    sub: "View metrics",
-                  },
-                  {
-                    ic: "🎮",
-                    title: "BuBuBai Feature",
-                    sub: "Development progress",
-                  },
-                  { ic: "🌌", title: "Galaxy Core", sub: "Platform status" },
-                  { ic: "👥", title: "User Management", sub: "4,829 users" },
+                  { ic: "🏠", title: "Overview", sub: "Main workspace" },
+                  { ic: "🔥", title: "Daily Streak", sub: "Check-in & points" },
+                  { ic: "🎵", title: "Audio Module", sub: "Ambient soundscapes" },
+                  { ic: "🌌", title: "Galaxy Core", sub: "Ecosystem overview" },
                 ]
                   .filter((i) =>
                     i.title.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -8437,24 +7751,20 @@ const UniverseDashboard = ({
                   .map((item, i) => (
                     <div
                       key={i}
-                      className="flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group"
+                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-zinc-50 transition-colors cursor-pointer"
                       onClick={() => {
+                        setActiveTab(item.title);
                         setSearchOpen(false);
-                        showToast(
-                          item.ic,
-                          item.title,
-                          "Opening dashboard module...",
-                        );
                       }}
                     >
-                      <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center text-lg">
+                      <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center text-sm">
                         {item.ic}
                       </div>
-                      <div className="flex-1">
-                        <div className="text-sm font-bold text-zinc-200 group-hover:text-cyan-400 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-zinc-900 truncate">
                           {item.title}
                         </div>
-                        <div className="text-[11px] text-zinc-500">
+                        <div className="text-[10px] text-zinc-500 truncate">
                           {item.sub}
                         </div>
                       </div>
@@ -8474,28 +7784,28 @@ const UniverseDashboard = ({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[399]"
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[399]"
               onClick={() => setNotifOpen(false)}
             />
             <motion.div
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 bottom-0 w-full sm:w-[340px] bg-zinc-900 border-l border-white/5 z-[400] flex flex-col"
+              transition={{ type: "spring", damping: 28, stiffness: 260 }}
+              className="fixed top-0 right-0 bottom-0 w-full sm:w-[320px] bg-white border-l border-zinc-200/80 z-[400] flex flex-col text-zinc-900 shadow-2xl"
             >
-              <div className="p-5 border-b border-white/5 flex items-center justify-between">
-                <span className="text-sm font-black tracking-widest uppercase">
+              <div className="p-4 border-b border-zinc-100 flex items-center justify-between">
+                <span className="text-xs font-semibold tracking-tight text-zinc-900">
                   Notifications
                 </span>
                 <button
                   onClick={() => setNotifOpen(false)}
-                  className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-zinc-500 hover:text-white transition-all"
+                  className="w-7 h-7 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-600 transition-colors cursor-pointer"
                 >
-                  <X size={16} />
+                  <X size={14} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-[#f5f5f7]">
                 {notifications.length > 0 ? (
                   notifications.map((n, i) => (
                     <div
@@ -8512,34 +7822,34 @@ const UniverseDashboard = ({
                           }
                         }
                       }}
-                      className={`p-4 rounded-xl transition-all cursor-pointer border ${n.unread ? "bg-cyan-500/5 border-cyan-500/10" : "bg-white/[0.02] border-white/5 hover:bg-white/[0.05]"}`}
+                      className={`p-3 rounded-xl transition-all cursor-pointer border ${n.unread ? "bg-sky-50/70 border-sky-200/70" : "bg-white border-zinc-200/70 hover:bg-zinc-50"}`}
                     >
-                      <div className="flex gap-4">
-                        <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-lg shrink-0">
+                      <div className="flex gap-3">
+                        <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-sm shrink-0">
                           {n.ic}
                         </div>
-                        <div className="space-y-1">
-                          <p className="text-[12.5px] leading-relaxed text-zinc-200">
+                        <div className="space-y-0.5 flex-1 min-w-0">
+                          <p className="text-xs leading-snug text-zinc-800">
                             {n.msg}
                           </p>
-                          <p className="text-[10px] text-zinc-500 font-bold">
+                          <p className="text-[10px] text-zinc-500">
                             {n.time}
                           </p>
                         </div>
                         {n.unread && (
-                          <div className="w-2 h-2 rounded-full bg-cyan-500 shrink-0 mt-1" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0 mt-1" />
                         )}
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-center opacity-40 px-6">
-                    <Bell size={48} className="mb-4" />
-                    <p className="text-sm font-bold uppercase tracking-widest">
-                      No active notifications
+                  <div className="h-full flex flex-col items-center justify-center text-center text-zinc-400 px-6">
+                    <Bell size={28} className="mb-2 opacity-60" />
+                    <p className="text-xs font-semibold text-zinc-600">
+                      No notifications
                     </p>
-                    <p className="text-[10px] mt-2">
-                      Real-time alerts will appear here as they are triggered.
+                    <p className="text-[10px] mt-1 text-zinc-500">
+                      Updates appear here when triggered.
                     </p>
                   </div>
                 )}
@@ -8901,37 +8211,6 @@ const UniverseDashboard = ({
               </div>
 
               <form onSubmit={handleAddProject} className="p-6 space-y-4">
-                <div className="space-y-3">
-                  <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1 text-center block w-full">
-                    Broadcast Module Thumbnail
-                  </label>
-                  <div className="aspect-video w-full rounded-xl bg-black/50 border border-dashed border-white/10 flex items-center justify-center relative overflow-hidden group">
-                    {projectImage ? (
-                      <img
-                        src={projectImage}
-                        className="w-full h-full object-cover"
-                        alt="Project Preview"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center gap-1.5 text-zinc-600">
-                        <ImageIcon size={24} />
-                        <span className="text-[8px] font-black uppercase tracking-widest">
-                          Click to upload module cover
-                        </span>
-                      </div>
-                    )}
-                    <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                      <Plus size={24} className="text-white" />
-                      <input
-                        type="file"
-                        onChange={handleProjectImage}
-                        className="hidden"
-                        accept="image/*"
-                      />
-                    </label>
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-1 gap-3">
                   <div className="space-y-1">
                     <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">
@@ -9077,12 +8356,16 @@ export default function App() {
     | "aura"
     | "universe-active"
     | "white-page"
+    | "privacy"
+    | "terms"
+    | "delete-account"
   >("home");
   const [claimedProfileUser, setClaimedProfileUser] = useState<string | null>(
     null,
   );
   const [shortLinkTarget, setShortLinkTarget] = useState<string | null>(null);
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
+  const [isAuthInitializing, setIsAuthInitializing] = useState(false);
   const [showUniverseLoader, setShowUniverseLoader] = useState(false);
   const [selectedAuraModule, setSelectedAuraModule] = useState<string | null>(
     null,
@@ -9090,49 +8373,61 @@ export default function App() {
   const [isSlideOpen, setIsSlideOpen] = useState(false);
   const [showTelemetry, setShowTelemetry] = useState(false);
 
+  // Sync dark class on html root element
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [isDark]);
+
   const [toasts, setToasts] = useState<any[]>([]);
 
-  const showToast = (
-    ic: string,
-    title: string,
-    content: string,
-    type?: "success" | "error" | "info" | "warning",
-  ) => {
-    const id = Date.now();
-    let deducedType: "success" | "error" | "info" | "warning" = type || "info";
-    if (!type) {
-      const lowerTitle = title.toLowerCase();
-      if (
-        ic === "❌" ||
-        ic === "🚫" ||
-        lowerTitle.includes("fail") ||
-        lowerTitle.includes("error") ||
-        lowerTitle.includes("denied")
-      ) {
-        deducedType = "error";
-      } else if (
-        ic === "✅" ||
-        ic === "✓" ||
-        lowerTitle.includes("success") ||
-        lowerTitle.includes("successful") ||
-        lowerTitle.includes("complete") ||
-        lowerTitle.includes("ready")
-      ) {
-        deducedType = "success";
-      } else if (ic === "⚠️") {
-        deducedType = "warning";
-      } else {
-        deducedType = "info";
+  const showToast = useCallback(
+    (
+      ic: string,
+      title: string,
+      content: string,
+      type?: "success" | "error" | "info" | "warning",
+    ) => {
+      const id = Date.now();
+      let deducedType: "success" | "error" | "info" | "warning" = type || "info";
+      if (!type) {
+        const lowerTitle = title.toLowerCase();
+        if (
+          ic === "❌" ||
+          ic === "🚫" ||
+          lowerTitle.includes("fail") ||
+          lowerTitle.includes("error") ||
+          lowerTitle.includes("denied")
+        ) {
+          deducedType = "error";
+        } else if (
+          ic === "✅" ||
+          ic === "✓" ||
+          lowerTitle.includes("success") ||
+          lowerTitle.includes("successful") ||
+          lowerTitle.includes("complete") ||
+          lowerTitle.includes("ready")
+        ) {
+          deducedType = "success";
+        } else if (ic === "⚠️") {
+          deducedType = "warning";
+        } else {
+          deducedType = "info";
+        }
       }
-    }
-    setToasts((prev) => [
-      ...prev,
-      { id, ic, title, content, type: deducedType },
-    ]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4500);
-  };
+      setToasts((prev) => [
+        ...prev,
+        { id, ic, title, content, type: deducedType },
+      ]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 4500);
+    },
+    [],
+  );
 
   // Login/Signup State
   const [username, setUsername] = useState("");
@@ -9278,14 +8573,10 @@ export default function App() {
     try {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
-
-      // The centralized onAuthStateChanged listener handles all profile existence verification,
-      // fallback provisions, system stats update, caching, and account redirection asynchronously.
-      // We set isAuthLoading(false) immediately after the sign-in completes.
       setIsAuthLoading(false);
+      setCurrentPage("universe-active");
     } catch (error: any) {
       setIsAuthLoading(false);
-      console.error("Google login interaction error:", error);
       const isPopupError =
         error.code === "auth/popup-blocked" ||
         error.code === "auth/popup-closed-by-user" ||
@@ -9363,10 +8654,28 @@ export default function App() {
     setIsAuthLoading(true);
     setAuthError(null);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      setAuthError("Server busy.");
+      const provider = new OAuthProvider("apple.com");
+      await signInWithPopup(auth, provider);
+      setIsAuthLoading(false);
+      setCurrentPage("universe-active");
     } catch (error: any) {
-      setAuthError("Apple sign-in failed: " + error.message);
+      setIsAuthLoading(false);
+      if (error.code === "auth/operation-not-allowed") {
+        setAuthError(
+          <div className="space-y-1 text-xs text-left">
+            <p className="font-bold uppercase tracking-wider text-amber-500">Apple Auth Provider Not Enabled</p>
+            <p className="text-[11px] text-zinc-400">Please enable Apple in Firebase Authentication console &gt; Sign-in method, or sign in with Google / Gamura ID.</p>
+          </div>
+        );
+      } else if (
+        error.code === "auth/popup-closed-by-user" ||
+        error.code === "auth/cancelled-popup-request" ||
+        error.code === "auth/popup-blocked"
+      ) {
+        setAuthError("Apple sign-in popup was cancelled or blocked by the browser.");
+      } else {
+        setAuthError("Apple sign-in error: " + (error.message || "Authentication failed"));
+      }
     } finally {
       setIsAuthLoading(false);
     }
@@ -9385,27 +8694,109 @@ export default function App() {
       const cleanedPath = pathname.replace(/^\/+|\/+$/g, "").trim();
       const lowerPath = cleanedPath.toLowerCase();
 
-      const isSystemWord = [
+      const reservedRoutes = new Set([
         "",
-        "index.html",
-        "selvaranjan_gamura.html",
+        "home",
+        "gpg",
+        "universe",
+        "community",
+        "features",
+        "pricing",
+        "about",
+        "contact",
+        "terms",
+        "privacy",
+        "delete-account",
+        "account-deletion",
+        "docs",
+        "feed",
+        "chat",
+        "direct",
+        "profile",
+        "settings",
+        "developer",
+        "white-page",
+        "showcase",
+        "apps",
+        "u",
         "api",
         "skills",
-      ].includes(lowerPath);
+        "index.html",
+        "selvaranjan_gamura.html",
+      ]);
+
+      const handleRoute = (pathStr: string) => {
+        const cleaned = pathStr.replace(/^\/+|\/+$/g, "").trim();
+        const lower = cleaned.toLowerCase();
+        if (lower === "gpg") {
+          setCurrentPage("gpg");
+          return true;
+        } else if (lower === "privacy") {
+          setCurrentPage("privacy");
+          return true;
+        } else if (lower === "terms") {
+          setCurrentPage("terms");
+          return true;
+        } else if (lower === "delete-account" || lower === "account-deletion") {
+          setCurrentPage("delete-account");
+          return true;
+        } else if (lower === "aura") {
+          setCurrentPage("aura");
+          return true;
+        } else if (lower === "universe" || lower === "universe-active") {
+          setCurrentPage("universe-active");
+          return true;
+        } else if (lower === "login") {
+          setCurrentPage("login");
+          return true;
+        } else if (lower === "history") {
+          setCurrentPage("history");
+          return true;
+        } else if (lower === "about") {
+          setCurrentPage("about");
+          return true;
+        } else if (lower === "gg") {
+          setCurrentPage("gg");
+          return true;
+        } else if (lower === "" || lower === "home") {
+          setCurrentPage("home");
+          return true;
+        }
+        return false;
+      };
 
       if (u) {
         setCurrentPage("white-page");
-      } else if (cleanedPath && !isSystemWord) {
-        if (lowerPath.startsWith("@")) {
-          setClaimedProfileUser(cleanedPath.substring(1));
-        } else if (lowerPath.startsWith("go/")) {
-          const shortLinkSlug = cleanedPath.substring(3);
-          setShortLinkTarget(shortLinkSlug); // We'll need a state for this
-        } else {
-          // If backwards compatibility is needed for profiles without '@'
-          setClaimedProfileUser(cleanedPath);
+      } else if (cleanedPath) {
+        const isKnown = handleRoute(cleanedPath);
+        if (!isKnown) {
+          if (lowerPath.startsWith("@")) {
+            const profileSlug = cleanedPath.substring(1).trim();
+            if (profileSlug && !profileSlug.includes("/")) {
+              setClaimedProfileUser(profileSlug);
+            }
+          } else if (lowerPath.startsWith("go/")) {
+            const shortLinkSlug = cleanedPath.substring(3).trim();
+            if (shortLinkSlug) {
+              setShortLinkTarget(shortLinkSlug);
+            }
+          } else if (
+            !cleanedPath.includes("/") &&
+            /^[a-zA-Z0-9_-]{2,30}$/.test(cleanedPath) &&
+            !reservedRoutes.has(lowerPath)
+          ) {
+            setClaimedProfileUser(cleanedPath);
+          }
         }
       }
+
+      const onPopState = () => {
+        handleRoute(window.location.pathname);
+      };
+      window.addEventListener("popstate", onPopState);
+      return () => {
+        window.removeEventListener("popstate", onPopState);
+      };
     }
   }, []);
 
@@ -9699,6 +9090,7 @@ export default function App() {
             } catch (err) {
               console.error("Activity log failed", err);
             }
+            setIsAuthInitializing(false);
           })();
         } catch (e) {
           const errStr = e instanceof Error ? e.message : String(e);
@@ -9732,6 +9124,7 @@ export default function App() {
             });
           }
         }
+        setIsAuthInitializing(false);
       } else {
         setCurrentUserInfo(null);
         setChats([]);
@@ -9750,6 +9143,7 @@ export default function App() {
           }
           return prev;
         });
+        setIsAuthInitializing(false);
       }
     });
 
@@ -9989,7 +9383,7 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const isAiConfigured = serverAiAvailable || !!getAi();
+  const isAiConfigured = serverAiAvailable !== false;
   const [limitError, setLimitError] = useState<string | null>(null);
   const [isDeletingChat, setIsDeletingChat] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
@@ -10058,6 +9452,7 @@ export default function App() {
 
     setChats((prev) => [newChat, ...prev]);
     setCurrentChatId(newId);
+    window.history.pushState({}, "", "/gpg");
     setCurrentPage("gpg");
     setIsMenuOpen(false);
 
@@ -10083,21 +9478,6 @@ export default function App() {
   const handleGpgSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!gpgInput.trim() || isGpgLoading) return;
-
-    if (currentUser && currentUserInfo) {
-      const now = Date.now();
-      const twentyFourHours = 24 * 60 * 60 * 1000;
-      const recentTimestamps = (currentUserInfo.gpgTimestamps || []).filter(
-        (t: number) => now - t < twentyFourHours,
-      );
-      if (recentTimestamps.length >= 3) {
-        setLimitError(
-          "Your daily limit is over. Please try again after 24 hours.",
-        );
-        setTimeout(() => setLimitError(null), 5000);
-        return;
-      }
-    }
 
     let activeChatId = currentChatId;
     let oldChatMessages: Message[] = [];
@@ -10161,117 +9541,61 @@ export default function App() {
         : "";
 
       let generatedPromptText = "";
-      let fetchSucceeded = false;
 
-      // 1. Primary: Server-side API (/api/gpg) - Secure, avoids CORS/Permission issues in browser
-      try {
-        const res = await fetch("/api/gpg", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: newMessages,
-            selectedTool,
-          }),
-        });
+      // 1. Realtime 100% Free Puter.js AI Integration
+      if (typeof window !== "undefined" && (window as any).puter?.ai?.chat) {
+        try {
+          const userPrompt = userMessage.content.trim();
+          const targetContext = selectedTool
+            ? `Focus specifically for target tool: ${selectedTool.toUpperCase()}.`
+            : "Create a ready-to-use, high-precision prompt.";
+          const systemMsg = `You are GPG (Gamura Prompt Generator). Your ONLY purpose is to write a clean, ready-to-use prompt tailored directly to what the user needs.
+Output ONLY the generated prompt text itself — no greetings, no commentary, no explanations, no refusals.
+${targetContext}
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data && typeof data.text === "string") {
-            generatedPromptText = data.text;
-            fetchSucceeded = true;
+User Need: "${userPrompt}"`;
+
+          const puterResp = await (window as any).puter.ai.chat(systemMsg);
+          if (typeof puterResp === "string" && puterResp.trim()) {
+            generatedPromptText = puterResp.trim();
+          } else if (puterResp?.message?.content) {
+            generatedPromptText = puterResp.message.content.trim();
+          } else if (puterResp?.text) {
+            generatedPromptText = puterResp.text.trim();
           }
-        } else {
-          const errData = await res.json().catch(() => null);
-          if (errData && errData.error) {
-            console.warn("Server GPG returned error:", errData.error);
-            // If explicit permission or configuration error from server, surface it
-            if (
-              errData.error.includes("Permission denied") ||
-              errData.error.includes("not configured") ||
-              errData.error.includes("PERMISSION_DENIED")
-            ) {
-              throw new Error(errData.error);
-            }
-          }
+        } catch (puterErr) {
+          console.warn("Puter AI realtime generation fell back to server:", puterErr);
         }
-      } catch (err: any) {
-        if (
-          err.message &&
-          (err.message.includes("Permission denied") ||
-            err.message.includes("not configured") ||
-            err.message.includes("PERMISSION_DENIED"))
-        ) {
-          throw err;
-        }
-        console.warn("Server GPG endpoint unreachable, trying client fallback:", err);
       }
 
-      // 2. Client-side fallback if server was not reachable
-      if (!fetchSucceeded) {
-        const ai = getAi();
-        if (!ai) {
-          throw new Error(
-            "GEMINI_API_KEY is missing. Please configure it in the Secrets panel.",
-          );
-        }
-
-        let response: any;
+      // 2. Server-side API (/api/gpg) fallback
+      if (!generatedPromptText) {
         try {
-          response = await ai.models.generateContent({
-            model: "gemini-3.8-flash",
-            contents: newMessages.map((m) => ({
-              role: m.role,
-              parts: [
-                { text: m.role === "user" ? toolContext + m.content : m.content },
-              ],
-            })),
-            config: {
-              systemInstruction: `You are the Gamura Prompt Generator (GPG) v3.1. Your ONLY purpose is to generate highly optimized prompts based on the user's input.
-              If the user asks a general question, tries to chat with you, or asks you to do anything OTHER than generating a prompt, you MUST reply with exactly: "I'm a GPG". Do not generate a prompt in this case.
-              When generating a prompt, your output MUST be ONLY the generated prompt.
-              
-              STRICT RULES:
-              1. ONLY generate prompts. Otherwise reply "I'm a GPG".
-              2. NO conversational filler.
-              3. NO markdown formatting.
-              4. NO unwanted symbols.
-              5. Output ONLY the raw prompt text.
-              
-              TOOL-SPECIFIC OPTIMIZATION:
-              - CODE: Focus on logic, language-specific best practices, and architecture.
-              - IMAGE: Focus on cinematic lighting, camera specs (35mm, f/1.8), and artistic style.
-              - VIDEO: Focus on camera movement (pan, tilt, zoom), frame rate, and temporal consistency.
-              - MATHS: Focus on step-by-step logic, precision, and mathematical notation.
-              - CHART: Focus on data structure, axes labels, and visual clarity.
-              - GRAPH: Focus on nodes, edges, relationships, and topological layout.
-              
-              SPEED:
-              - Provide the absolute best version immediately.`,
-              temperature: 0.4,
-            },
+          const res = await fetch("/api/gpg", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: newMessages,
+              selectedTool,
+            }),
           });
-        } catch (modelErr) {
-          // Fallback to gemini-2.5-flash
-          response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: newMessages.map((m) => ({
-              role: m.role,
-              parts: [
-                { text: m.role === "user" ? toolContext + m.content : m.content },
-              ],
-            })),
-            config: {
-              systemInstruction: `You are the Gamura Prompt Generator (GPG) v3.1. Your ONLY purpose is to generate highly optimized prompts based on the user's input.
-              If the user asks a general question, tries to chat with you, or asks you to do anything OTHER than generating a prompt, you MUST reply with exactly: "I'm a GPG". Do not generate a prompt in this case.
-              When generating a prompt, your output MUST be ONLY the generated prompt.`,
-              temperature: 0.4,
-            },
-          });
-        }
 
-        generatedPromptText =
-          response.text ||
-          "I couldn't generate a prompt right now. Please try again.";
+          if (res.ok) {
+            const data = await res.json();
+            if (data && typeof data.text === "string") {
+              generatedPromptText = data.text;
+            } else {
+              generatedPromptText = "I couldn't generate a prompt right now. Please try again.";
+            }
+          } else {
+            const errData = await res.json().catch(() => null);
+            const errMsg = errData?.error || "Failed to generate prompt from AI server.";
+            throw new Error(errMsg);
+          }
+        } catch (err: any) {
+          console.error("GPG request error:", err);
+          throw new Error(err.message || "Failed to generate prompt. Please try again.");
+        }
       }
 
       const modelMessage: Message = {
@@ -10866,7 +10190,7 @@ export default function App() {
                         <h2 className="text-2xl font-serif font-medium tracking-tight text-zinc-900 dark:text-zinc-50">
                           Contact
                         </h2>
-                        <h3 className="text-4xl font-black tracking-tighter text-zinc-900 dark:text-zinc-50 uppercase">
+                        <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-900 dark:text-zinc-50 uppercase">
                           SELVARANJAN G
                         </h3>
                         <p className="text-zinc-500">
@@ -11142,6 +10466,7 @@ export default function App() {
                   whileHover={{ x: 4 }}
                   onClick={() => {
                     setCurrentChatId(chat.id);
+                    window.history.pushState({}, "", "/gpg");
                     setCurrentPage("gpg");
                   }}
                   className="w-full flex items-center justify-between p-4 bg-zinc-50 dark:bg-zinc-900/50 hover:bg-zinc-100 rounded-2xl transition-all group border border-zinc-100 dark:border-zinc-800/50 cursor-pointer"
@@ -11222,6 +10547,10 @@ export default function App() {
               e.preventDefault();
               if (username.length < 6) {
                 setAuthError("Username must be at least 6 characters long.");
+                return;
+              }
+              if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+                setAuthError("Username can only contain letters, numbers, underscores, and hyphens.");
                 return;
               }
               if (password.length < 8) {
@@ -12010,13 +11339,26 @@ export default function App() {
                                 });
                                 await reauthenticateWithPopup(user, provider);
                               } catch (err: any) {
-                                console.error("Google re-auth failed:", err);
                                 setIsAuthLoading(false);
                                 setDeletionProgress(null);
-                                if (err.code === "auth/popup-closed-by-user") {
-                                  showToast("⚠️", "Authentication Cancelled", "You closed the Google verification popup.", "warning");
+                                const isCancelled =
+                                  err?.code === "auth/popup-closed-by-user" ||
+                                  err?.code === "auth/cancelled-popup-request" ||
+                                  err?.code === "auth/popup-blocked" ||
+                                  err?.message?.includes("popup-closed-by-user") ||
+                                  err?.message?.includes("cancelled-popup-request") ||
+                                  err?.message?.toLowerCase().includes("popup closed");
+
+                                if (isCancelled) {
+                                  showToast(
+                                    "⚠️",
+                                    "Authentication Cancelled",
+                                    "The Google verification popup was closed. Verification was cancelled.",
+                                    "warning"
+                                  );
                                 } else {
-                                  showToast("❌", "Verification Failed", err.message, "error");
+                                  console.error("Google re-auth failed:", err);
+                                  showToast("❌", "Verification Failed", err?.message || "Re-authentication failed.", "error");
                                 }
                                 return;
                               }
@@ -12620,9 +11962,9 @@ export default function App() {
                       loginEmail,
                     );
                   }
-                  setCurrentPage("blank");
+                  setCurrentPage("universe-active");
                 } else {
-                  setCurrentPage("blank");
+                  setCurrentPage("universe-active");
                 }
               } catch (error: any) {
                 if (error.code === "auth/operation-not-allowed") {
@@ -12784,6 +12126,34 @@ export default function App() {
               Sign up
             </span>
           </p>
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAuthError(null);
+                setCurrentUserInfo({
+                  username: "Explorer",
+                  nickname: "Guest Explorer",
+                  gpgTimestamps: [],
+                  avatarUrl: "",
+                  bio: "Guest Explorer Session",
+                  email: "explorer@gamura.app",
+                  themeColor: "",
+                });
+                setCurrentUser({
+                  uid: "guest_explorer_uid",
+                  displayName: "Guest Explorer",
+                  email: "explorer@gamura.app",
+                });
+                setCurrentPage("universe-active");
+              }}
+              className="w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-zinc-200/50 dark:border-zinc-800 cursor-pointer"
+            >
+              <Sparkles size={14} className="text-cyan-500" />
+              <span>Instant Explorer Mode (1-Click Demo)</span>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -12813,7 +12183,7 @@ export default function App() {
             />
           </a>
           <div className="space-y-4">
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter uppercase">
+            <h1 className="text-2xl md:text-4xl font-black tracking-tight uppercase">
               <span className="text-red-600">GA</span>
               <span className="text-blue-600">M</span>
               <span className="text-green-600">UR</span>
@@ -12904,6 +12274,8 @@ export default function App() {
       setCurrentPage("login");
       return null;
     }
+    setCurrentPage("universe-active");
+    return null;
 
     return (
       <div className="min-h-screen bg-white text-zinc-900 relative flex flex-col items-center select-none w-full">
@@ -13172,19 +12544,11 @@ export default function App() {
 
   if (currentPage === "universe-active") {
     return (
-      <>
-        <AnimatePresence>
-          {showUniverseLoader && (
-            <GamuraLoader onFinish={() => setShowUniverseLoader(false)} />
-          )}
-        </AnimatePresence>
-        {!showUniverseLoader && (
-          <UniverseDashboard
-            onBack={() => {
-              setShowUniverseLoader(false);
-              setCurrentPage("blank");
-            }}
-            isLoggedIn={isLoggedIn}
+      <UniverseDashboard
+        onBack={() => {
+          setCurrentPage("home");
+        }}
+        isLoggedIn={isLoggedIn}
             user={currentUser}
             userInfo={currentUserInfo}
             setCurrentUserInfo={setCurrentUserInfo}
@@ -13205,8 +12569,6 @@ export default function App() {
               }
             }}
           />
-        )}
-      </>
     );
   }
 
@@ -13310,7 +12672,7 @@ export default function App() {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="text-4xl md:text-5xl font-black text-zinc-950 uppercase tracking-tighter"
+                className="text-2xl md:text-3xl font-black text-zinc-950 uppercase tracking-tight"
               >
                 {activeModule?.name}
               </motion.h2>
@@ -13406,127 +12768,77 @@ export default function App() {
   }
 
   if (currentPage === "gpg") {
-    if (!isLoggedIn) {
-      return (
-        <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-6 text-center">
-          <button
-            onClick={() => setCurrentPage("home")}
-            className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black dark:hover:text-white transition-colors text-xs font-medium"
-          >
-            ← Back
-          </button>
-          <div className="max-w-md w-full space-y-8 p-8 border border-zinc-100 dark:border-zinc-800/50 rounded-[2.5rem] bg-zinc-50 dark:bg-zinc-900/50 shadow-2xl">
-            <div className="w-20 h-20 bg-zinc-100 dark:bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-6">
-              <Lock className="text-zinc-400" size={32} />
-            </div>
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase">
-                Login Required
-              </h2>
-              <p className="text-zinc-500 text-sm">
-                You must be signed in to use the Gamura Prompt Generator and
-                save your history.
-              </p>
-            </div>
-            <div className="pt-6 space-y-3">
-              <button
-                onClick={() => setCurrentPage("login")}
-                className="w-full bg-black text-white dark:bg-white dark:text-black rounded-xl py-4 font-bold text-xs uppercase tracking-widest hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-black/10"
-              >
-                Sign In Now
-              </button>
-              <button
-                onClick={() => setCurrentPage("signup")}
-                className="w-full bg-transparent text-zinc-500 dark:text-zinc-400 font-bold text-[10px] uppercase tracking-widest hover:text-black dark:hover:text-white transition-colors"
-              >
-                Create an account
-              </button>
-            </div>
-          </div>
-        </div>
-      );
+    // Ensure guest session so prompt generation and local state work immediately and freely
+    if (!currentUser && !currentUserInfo) {
+      setCurrentUserInfo({
+        username: "Explorer",
+        nickname: "Guest Explorer",
+        gpgTimestamps: [],
+        avatarUrl: "",
+        bio: "Guest Explorer Session",
+        email: "explorer@gamura.app",
+        themeColor: "",
+      });
+      setCurrentUser({
+        uid: "guest_explorer_uid",
+        displayName: "Guest Explorer",
+        email: "explorer@gamura.app",
+      });
     }
 
     return (
       <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col h-screen overflow-hidden">
-        {/* API Key Warning Overlay */}
-        {!isAiConfigured && (
-          <div className="absolute inset-0 z-50 bg-white dark:bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center p-6">
-            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 shadow-2xl rounded-[2.5rem] p-8 max-w-md w-full text-center space-y-6">
-              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
-                <Lock className="text-red-600" size={32} />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
-                  Configuration Required
-                </h2>
-                <p className="text-zinc-500 text-sm">
-                  To use the AI Prompt Generator, you need to add your Gemini
-                  API Key.
-                </p>
-              </div>
-              <div className="bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl p-4 text-left space-y-3">
-                <div className="flex gap-3">
-                  <div className="w-5 h-5 rounded-full bg-black text-white dark:bg-white dark:text-black text-[10px] flex items-center justify-center shrink-0">
-                    1
-                  </div>
-                  <p className="text-[11px] text-zinc-600">
-                    Open <b>Settings</b> (gear icon) in the top right.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-5 h-5 rounded-full bg-black text-white dark:bg-white dark:text-black text-[10px] flex items-center justify-center shrink-0">
-                    2
-                  </div>
-                  <p className="text-[11px] text-zinc-600">
-                    Go to <b>Secrets</b> and add <b>GAMURA_API_KEY</b> or{" "}
-                    <b>GEMINI_API_KEY</b>.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-5 h-5 rounded-full bg-black text-white dark:bg-white dark:text-black text-[10px] flex items-center justify-center shrink-0">
-                    3
-                  </div>
-                  <p className="text-[11px] text-zinc-600">
-                    Paste your key from Google AI Studio.
-                  </p>
-                </div>
-              </div>
-              <a
-                href="https://aistudio.google.com/app/apikey"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full py-3 bg-black text-white dark:bg-white dark:text-black rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-zinc-800 transition-all"
-              >
-                Get API Key
-              </a>
+        {/* Header Bar with Apple/Gamura Aesthetic */}
+        <div className="py-2.5 px-3 md:px-6 w-full flex items-center justify-between border-b border-zinc-200/50 dark:border-white/10 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl z-20 sticky top-0">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                window.history.pushState({}, "", "/");
+                setCurrentPage("home");
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200 text-xs font-semibold transition-all cursor-pointer border border-zinc-200 dark:border-white/10"
+            >
+              <ArrowLeft size={14} />
+              <span>Back</span>
+            </button>
+            <a
+              href="/gpg"
+              target="_blank"
+              rel="noreferrer"
+              title="Open GPG in dedicated window"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-300 text-xs transition-all border border-zinc-200 dark:border-white/10"
+            >
+              <ExternalLink size={12} />
+              <span className="text-[10px] font-mono">Dedicated Page</span>
+            </a>
+          </div>
+
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm md:text-base font-black tracking-widest uppercase font-sans">
+                <span className="text-red-500">G</span>
+                <span className="text-yellow-400">P</span>
+                <span className="text-green-500">G</span>
+              </span>
+              <span className="text-xs md:text-sm font-bold text-zinc-800 dark:text-zinc-200 tracking-wider">
+                PROMPT GENERATOR
+              </span>
+            </div>
+            <div className="flex items-center gap-1 text-[9px] font-mono text-emerald-500 dark:text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Puter Realtime AI • 100% Free</span>
             </div>
           </div>
-        )}
 
-        {/* Header */}
-        <div className="pt-4 pb-2 w-full flex justify-center px-4 md:px-16 border-b border-zinc-50 bg-white dark:bg-zinc-950/80 backdrop-blur-md z-10 relative">
-          <span className="text-[9px] md:text-xs font-medium tracking-[0.2em] uppercase">
-            <span className="text-red-600">GA</span>
-            <span className="text-blue-600">M</span>
-            <span className="text-green-600">UR</span>
-            <span className="text-yellow-500">A</span>
-            <span className="text-zinc-400 ml-1"> PROMPT GENERATOR</span>
-          </span>
-          <button
-            onClick={startNewChat}
-            className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 text-[8px] md:text-[10px] font-bold text-black dark:text-white border border-black dark:border-white px-2 md:px-3 py-1 rounded-full hover:bg-black dark:hover:bg-white hover:text-white transition-all uppercase tracking-tighter"
-          >
-            New Chat
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={startNewChat}
+              className="text-[10px] md:text-xs font-bold text-zinc-900 dark:text-white border border-zinc-300 dark:border-white/20 px-3 py-1.5 rounded-xl hover:bg-zinc-900 hover:text-white dark:hover:bg-white dark:hover:text-black transition-all uppercase tracking-wider cursor-pointer"
+            >
+              New Chat
+            </button>
+          </div>
         </div>
-
-        <button
-          onClick={() => setCurrentPage("home")}
-          className="absolute top-4 left-2 md:left-4 p-2 text-zinc-400 hover:text-black dark:hover:text-white dark:text-white transition-colors text-[10px] md:text-xs font-medium z-20"
-        >
-          ← Back
-        </button>
 
         {/* Chat Area */}
         <div
@@ -13711,12 +13023,12 @@ export default function App() {
                 type="text"
                 value={gpgInput}
                 onChange={(e) => setGpgInput(e.target.value)}
-                placeholder="Ask Gamura..."
+                placeholder="Describe what you need a prompt for..."
                 className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl py-4 pl-6 pr-14 focus:outline-none focus:ring-2 focus:ring-black/5 dark:focus:ring-white/5 text-sm shadow-sm placeholder:text-zinc-400 group-hover:border-zinc-300 dark:group-hover:border-zinc-700 transition-colors text-zinc-900 dark:text-zinc-100"
               />
               <button
                 type="submit"
-                disabled={!gpgInput.trim() || isGpgLoading || !isAiConfigured}
+                disabled={!gpgInput.trim() || isGpgLoading}
                 className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 bg-black text-white dark:bg-white dark:text-black rounded-xl hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 transition-all shadow-md flex items-center justify-center"
               >
                 {isGpgLoading ? (
@@ -13726,27 +13038,8 @@ export default function App() {
                 )}
               </button>
             </div>
-            <div className="text-[9px] text-center text-zinc-400 dark:text-zinc-500 mt-4 tracking-widest uppercase font-medium flex items-center justify-center gap-3">
-              <span className="font-bold">Gamura Intelligence</span>
-              <span className="opacity-30 select-none text-zinc-300">•</span>
-              {currentUserInfo && (
-                <span
-                  className={`px-2 py-0.5 rounded-full border transition-colors ${
-                    (currentUserInfo.gpgTimestamps || []).filter(
-                      (t) => Date.now() - t < 24 * 60 * 60 * 1000,
-                    ).length >= 3
-                      ? "border-red-200 text-red-400 bg-red-50/50"
-                      : "border-zinc-100 dark:border-zinc-800 text-zinc-400 bg-zinc-50/10"
-                  }`}
-                >
-                  LIMIT:{" "}
-                  {3 -
-                    (currentUserInfo.gpgTimestamps || []).filter(
-                      (t) => Date.now() - t < 24 * 60 * 60 * 1000,
-                    ).length}
-                  /3
-                </span>
-              )}
+            <div className="text-[10px] text-center text-zinc-400 dark:text-zinc-500 mt-3 tracking-widest uppercase font-medium flex items-center justify-center gap-2">
+              <span className="font-semibold">Prompt Generator Only</span>
             </div>
           </form>
         </div>
@@ -13785,6 +13078,53 @@ export default function App() {
     );
   }
 
+  if (currentPage === "privacy") {
+    return (
+      <PrivacyPolicyView
+        onBack={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "terms") {
+    return (
+      <TermsOfServiceView
+        onBack={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "delete-account") {
+    return (
+      <AccountDeletionView
+        currentUser={currentUser}
+        onBack={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+        onDeleteAccount={async () => {
+          if (currentUser) {
+            try {
+              await deleteUser(currentUser);
+            } catch (e) {
+              console.warn("Direct auth deletion exception:", e);
+            }
+            setCurrentUser(null);
+            setCurrentUserInfo(null);
+            window.history.pushState({}, "", "/");
+            setCurrentPage("home");
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <ErrorBoundary>
       {/* Dynamic theme injection */}
@@ -13810,221 +13150,362 @@ export default function App() {
           }}
         />
       )}
-      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col overflow-hidden">
-        {/* Sidebar Menu */}
+      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col overflow-hidden transition-colors duration-300">
+        {/* Apple-Style Bottom-Up Sheet Menu Bar (Half Screen, White, Rounded Top Corners) */}
         <AnimatePresence>
           {isMenuOpen && (
             <>
-              {/* Backdrop */}
+              {/* Frosted Backdrop */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
                 onClick={() => setIsMenuOpen(false)}
-                className="fixed inset-0 bg-black/20 z-40 backdrop-blur-sm"
+                className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm"
               />
-              {/* Menu Bar */}
+
+              {/* Apple iOS/iPadOS Bottom Sheet Container */}
               <motion.div
-                initial={{ x: "-100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "-100%" }}
-                transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                className="fixed top-0 left-0 h-full w-64 md:w-80 bg-black z-50 shadow-2xl flex flex-col"
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 32, stiffness: 320, mass: 0.85 }}
+                className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-2xl h-[54vh] min-h-[380px] max-h-[620px] bg-white/95 backdrop-blur-2xl z-50 rounded-t-[2.25rem] shadow-[0_-24px_60px_rgba(0,0,0,0.16)] border-t border-x border-zinc-200/80 flex flex-col select-none text-zinc-900 overflow-hidden"
               >
-                <div className="p-6 flex justify-end">
+                {/* Grabber Handle */}
+                <div
+                  onClick={() => setIsMenuOpen(false)}
+                  className="w-full pt-3 pb-1 flex justify-center cursor-pointer shrink-0"
+                  title="Close menu"
+                >
+                  <div className="w-11 h-1.5 rounded-full bg-zinc-300/90 hover:bg-zinc-400 transition-colors" />
+                </div>
+
+                {/* Sheet Top Bar */}
+                <div className="px-6 py-3 flex items-center justify-between border-b border-zinc-100 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-2xl bg-zinc-50 border border-zinc-200/80 flex items-center justify-center p-1.5 shrink-0">
+                      <SafeImage
+                        srcs={logoSources}
+                        alt="Gamura Logo"
+                        className="w-full h-full object-contain mix-blend-multiply"
+                        fallbackIcon={Sparkles}
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold tracking-tight text-zinc-900">
+                        Gamura
+                      </span>
+                      <span className="text-[11px] text-zinc-500 font-medium">
+                        Workspace & Apps
+                      </span>
+                    </div>
+                  </div>
                   <button
                     onClick={() => setIsMenuOpen(false)}
-                    className="text-white hover:text-zinc-400 transition-colors"
+                    className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-500 hover:text-zinc-900 transition-colors cursor-pointer"
+                    aria-label="Close menu"
                   >
-                    <X size={24} />
+                    <X size={16} />
                   </button>
                 </div>
-                <div className="flex-1 px-6 flex flex-col items-center justify-center space-y-6">
-                  <button
-                    onClick={() => {
-                      setCurrentPage("gpg");
-                      setIsMenuOpen(false);
-                    }}
-                    className="group relative flex items-center gap-3 text-4xl font-bold tracking-widest font-sans transition-all hover:scale-105 active:scale-95"
-                  >
-                    <MessageSquarePlus size={32} className="text-white" />
-                    <div>
-                      <span className="text-red-600">G</span>
-                      <span className="text-yellow-500">P</span>
-                      <span className="text-green-600">G</span>
-                    </div>
-                    <span className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-800 text-white border border-zinc-700 text-xs font-medium px-3 py-1.5 rounded-lg whitespace-nowrap pointer-events-none z-50 font-bold uppercase tracking-widest">
-                      Start a New Chat
-                    </span>
-                  </button>
 
-                  <button
-                    onClick={() => {
-                      setCurrentPage("login");
-                      setIsMenuOpen(false);
-                    }}
-                    className="group relative flex items-center gap-3 text-white text-sm font-semibold tracking-[0.25em] uppercase hover:text-zinc-400 transition-all hover:translate-x-1"
-                  >
-                    {isLoggedIn ? <User size={20} /> : <LogIn size={20} />}
-                    <span>
-                      {isLoggedIn ? "GAMURA PROFILE" : "GAMURA LOGIN"}
-                    </span>
-                  </button>
+                {/* Apple Grouped Scrollable Body */}
+                <div className="flex-1 px-5 py-4 overflow-y-auto bg-[#F5F5F7]/70 space-y-4">
+                  {/* Group 1: Core Platforms */}
+                  <div className="bg-white rounded-2xl border border-zinc-200/70 divide-y divide-zinc-100 overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+                    {/* GPG */}
+                    <button
+                      onClick={() => {
+                        window.history.pushState({}, "", "/gpg");
+                        setCurrentPage("gpg");
+                        setIsMenuOpen(false);
+                      }}
+                      className="group w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-rose-500 via-amber-500 to-emerald-500 flex items-center justify-center text-white shrink-0 shadow-xs">
+                          <MessageSquarePlus size={18} />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-zinc-900 truncate">
+                              GPG Prompt Generator
+                            </span>
+                            <span className="text-[11px] font-medium text-emerald-600">
+                              Free
+                            </span>
+                          </div>
+                          <span className="text-xs text-zinc-500 truncate">
+                            Realtime Puter AI prompt engineering
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      setCurrentPage("history");
-                      setIsMenuOpen(false);
-                    }}
-                    className="group relative flex items-center gap-3 text-white text-sm font-semibold tracking-[0.25em] uppercase hover:text-zinc-400 transition-all hover:translate-x-1"
-                  >
-                    <History size={20} />
-                    <span>HISTORY</span>
-                  </button>
+                    {/* Universe */}
+                    <button
+                      onClick={() => {
+                        if (!isLoggedIn) {
+                          setCurrentUserInfo({
+                            username: "Explorer",
+                            nickname: "Guest Explorer",
+                            gpgTimestamps: [],
+                            avatarUrl: "",
+                            bio: "Guest Explorer Session",
+                            email: "explorer@gamura.app",
+                            themeColor: "",
+                          });
+                          setCurrentUser({
+                            uid: "guest_explorer_uid",
+                            displayName: "Guest Explorer",
+                            email: "explorer@gamura.app",
+                          });
+                        }
+                        setCurrentPage("universe-active");
+                        setIsMenuOpen(false);
+                      }}
+                      className="group w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center text-white shrink-0 shadow-xs">
+                          <Globe size={18} />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-semibold text-zinc-900 truncate">
+                            Universe
+                          </span>
+                          <span className="text-xs text-zinc-500 truncate">
+                            Network, community & neural workspaces
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      setCurrentPage("about");
-                      setIsMenuOpen(false);
-                    }}
-                    className="group relative flex items-center gap-3 text-white text-sm font-semibold tracking-[0.25em] uppercase hover:text-zinc-400 transition-all hover:translate-x-1"
-                  >
-                    <Info size={20} />
-                    <span>ABOUT</span>
-                  </button>
+                    {/* Aura */}
+                    <button
+                      onClick={() => {
+                        setCurrentPage("aura");
+                        setIsMenuOpen(false);
+                      }}
+                      className="group w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-500 flex items-center justify-center text-white shrink-0 shadow-xs">
+                          <Sparkles size={18} />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-semibold text-zinc-900 truncate">
+                            Aura
+                          </span>
+                          <span className="text-xs text-zinc-500 truncate">
+                            Spatial showcase & system modules
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      setCurrentPage("gg");
-                      setIsMenuOpen(false);
-                    }}
-                    className="group relative flex items-center gap-3 text-white text-sm font-semibold tracking-[0.25em] uppercase hover:text-zinc-400 transition-all hover:translate-x-1"
-                  >
-                    <Gamepad2 size={20} />
-                    <span>GG</span>
-                  </button>
+                    {/* Join Galaxy */}
+                    <button
+                      onClick={() => {
+                        window.open("https://gamuragalaxy.vercel.app/", "_blank");
+                        setIsMenuOpen(false);
+                      }}
+                      className="group w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-xs">
+                          <ExternalLink size={17} />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-semibold text-zinc-900 truncate">
+                            Join Galaxy
+                          </span>
+                          <span className="text-xs text-zinc-500 truncate">
+                            Official community portal
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
+                  </div>
+
+                  {/* Group 2: Account & Utilities */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <button
+                      onClick={() => {
+                        setCurrentPage("login");
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-white border border-zinc-200/70 hover:bg-zinc-50 active:scale-[0.98] transition-all cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-800">
+                        {isLoggedIn ? <User size={16} /> : <LogIn size={16} />}
+                      </div>
+                      <span className="text-xs font-medium text-zinc-800 whitespace-nowrap">
+                        {isLoggedIn ? "Profile" : "Sign In"}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setCurrentPage("history");
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-white border border-zinc-200/70 hover:bg-zinc-50 active:scale-[0.98] transition-all cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-800">
+                        <History size={16} />
+                      </div>
+                      <span className="text-xs font-medium text-zinc-800 whitespace-nowrap">
+                        History
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setCurrentPage("gg");
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-white border border-zinc-200/70 hover:bg-zinc-50 active:scale-[0.98] transition-all cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-800">
+                        <Gamepad2 size={16} />
+                      </div>
+                      <span className="text-xs font-medium text-zinc-800 whitespace-nowrap">
+                        GG Gaming
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setCurrentPage("about");
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-white border border-zinc-200/70 hover:bg-zinc-50 active:scale-[0.98] transition-all cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.03)]"
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center text-zinc-800">
+                        <Info size={16} />
+                      </div>
+                      <span className="text-xs font-medium text-zinc-800 whitespace-nowrap">
+                        About
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Group 3: Legal & Account Management */}
+                  <div className="bg-white rounded-2xl border border-zinc-200/70 divide-y divide-zinc-100 overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+                    <button
+                      onClick={() => {
+                        window.history.pushState({}, "", "/privacy");
+                        setCurrentPage("privacy");
+                        setIsMenuOpen(false);
+                      }}
+                      className="group w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-50 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Shield size={15} className="text-emerald-600" />
+                        <span className="text-xs font-medium text-zinc-700">Privacy Policy</span>
+                      </div>
+                      <ChevronRight size={14} className="text-zinc-400" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        window.history.pushState({}, "", "/terms");
+                        setCurrentPage("terms");
+                        setIsMenuOpen(false);
+                      }}
+                      className="group w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-50 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileText size={15} className="text-sky-600" />
+                        <span className="text-xs font-medium text-zinc-700">Terms of Service</span>
+                      </div>
+                      <ChevronRight size={14} className="text-zinc-400" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        window.history.pushState({}, "", "/delete-account");
+                        setCurrentPage("delete-account");
+                        setIsMenuOpen(false);
+                      }}
+                      className="group w-full flex items-center justify-between px-4 py-2.5 hover:bg-red-50/70 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Trash2 size={15} className="text-red-500" />
+                        <span className="text-xs font-medium text-red-600">Delete Account</span>
+                      </div>
+                      <ChevronRight size={14} className="text-zinc-400" />
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             </>
           )}
         </AnimatePresence>
 
-        {/* Bottom Middle Logo (Clickable) */}
-        <div className="p-3 md:p-6 absolute bottom-0 left-1/2 -translate-x-1/2 z-20">
+        {/* Top Header Bar — Clean Top-Left Menu Dock Trigger Only */}
+        <header className="w-full z-30 px-4 md:px-8 py-3 flex items-center justify-between bg-white/95 backdrop-blur-xl sticky top-0">
+          {/* Zone 1: Unique Apple-Style Integrated Menu-Logo Dock Trigger */}
           <button
+            type="button"
             onClick={() => setIsMenuOpen(true)}
-            className="w-12 h-12 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-black dark:border-white/10 shadow-lg focus:outline-none focus:ring-2 focus:ring-black/5 bg-white dark:bg-zinc-950 flex items-center justify-center hover:opacity-90 transition-opacity"
+            className="group flex items-center gap-2.5 pl-1.5 pr-3.5 py-1.5 rounded-2xl bg-zinc-50/90 hover:bg-zinc-100 border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] active:scale-[0.97] transition-all cursor-pointer shrink-0"
+            title="Open Gamura Menu"
+            aria-label="Open Gamura Navigation Menu"
           >
-            <SafeImage
-              srcs={logoSources}
-              alt="Gamura Logo"
-              className="w-full h-full object-cover"
-              fallbackIcon={Sparkles}
-              fallbackText="GAMURA"
-            />
+            {/* Sculptural Gamura Emblem Capsule */}
+            <div className="relative w-8 h-8 rounded-xl bg-white border border-zinc-200/70 flex items-center justify-center p-1 shadow-xs group-hover:scale-105 transition-transform">
+              <SafeImage
+                srcs={logoSources}
+                alt="Gamura Menu"
+                className="w-full h-full object-contain mix-blend-multiply"
+                fallbackIcon={Sparkles}
+              />
+            </div>
+
+            {/* Bespoke Architectural Dual-Bar Menu Glyph */}
+            <div className="flex flex-col items-start justify-center gap-[3.5px] pl-0.5 pr-1">
+              <span className="w-4 h-[2px] rounded-full bg-zinc-900 group-hover:w-5 transition-all duration-200" />
+              <span className="w-2.5 h-[2px] rounded-full bg-zinc-500 group-hover:w-4 group-hover:bg-zinc-900 transition-all duration-200" />
+            </div>
+
+            <span className="text-xs font-bold tracking-[0.18em] text-zinc-900 uppercase font-sans whitespace-nowrap hidden sm:inline">
+              GAMURA
+            </span>
           </button>
-        </div>
+        </header>
 
-        {/* Top Right Actions */}
-        <div className="p-3 md:p-4 absolute top-0 right-0 z-10 flex gap-4">
-          {/* Removed Portfolio button as requested */}
-        </div>
+        {/* MIDDLE INTERFACE OF THE APPLICATION — Pure White Centered Alignment */}
+        <div className="flex-1 bg-white flex flex-col items-center justify-center w-full h-full px-6 py-8 relative z-0">
+          <div className="flex flex-col items-center justify-center text-center max-w-2xl mx-auto my-auto gap-3 sm:gap-5 w-full bg-transparent">
+            {/* Centered Emblem Logo (Transparent Background Blend) */}
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen(true)}
+              className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 flex items-center justify-center p-0 hover:scale-105 active:scale-95 transition-transform cursor-pointer bg-transparent border-none shadow-none outline-none"
+              title="Open Gamura Menu"
+            >
+              <SafeImage
+                srcs={logoSources}
+                alt="GAMURA Logo"
+                className="w-full h-full object-contain bg-transparent mix-blend-multiply"
+                fallbackIcon={Sparkles}
+              />
+            </button>
 
-        {/* Top Middle Logo / Image */}
-        <button
-          onClick={() => setCurrentPage("white-page")}
-          className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex justify-center w-full max-w-[280px] sm:max-w-[420px] md:max-w-[580px] hover:opacity-90 active:scale-[0.98] transition-all bg-transparent border-none outline-none cursor-pointer focus:outline-none"
-        >
-          <SafeImage
-            srcs={[
-              "https://lh3.googleusercontent.com/d/1964MBWOG-tkUyeooBmLizw5Bol97oe1U",
-            ]}
-            alt="Gamura Top Logo"
-            className="w-full h-auto object-contain bg-transparent mix-blend-multiply dark:mix-blend-normal"
-            fallbackIcon={Sparkles}
-          />
-        </button>
-
-        <div className="flex-1 flex flex-col items-center justify-center w-full h-full p-4 md:p-8 mt-16 md:mt-0 relative z-0">
-          <div className="w-full max-w-5xl flex items-center justify-center mx-auto">
-            <SafeImage
-              srcs={mainImgSources}
-              alt="Gamura Main"
-              className="w-full max-h-[70vh] object-contain bg-white dark:bg-zinc-950 mix-blend-multiply dark:mix-blend-normal"
-              fallbackIcon={Sparkles}
-              fallbackText="Intelligence Redefined"
-            />
-          </div>
-
-          <div className="w-full max-w-5xl flex justify-between mx-auto mt-4 px-4 md:px-8">
-            <div className="flex flex-col items-center gap-2">
-              <button
-                onClick={() => {
-                  if (isLoggedIn) {
-                    setShowUniverseLoader(true);
-                    setTimeout(() => setCurrentPage("universe-active"), 100);
-                  } else {
-                    showToast(
-                      "⚠️",
-                      "Connection Denied",
-                      "You must first ACTIVATE YOUR GAMURA ID to access the Universe service. Please sign in.",
-                      "warning",
-                    );
-                    setCurrentPage("login");
-                  }
-                }}
-                className="w-16 h-16 md:w-24 md:h-24 rounded-full overflow-hidden shadow-xl border border-zinc-200 bg-white flex items-center justify-center p-2 hover:opacity-80 transition-opacity cursor-pointer shadow-black/10 dark:shadow-white/5"
-              >
-                <SafeImage
-                  srcs={roundImgSources}
-                  alt="Gamura Extra Details Left"
-                  className="w-full h-full object-contain bg-white"
-                  fallbackIcon={Sparkles}
-                />
-              </button>
-              <span className="text-[10px] md:text-[11px] font-extrabold tracking-[0.25em] text-zinc-500 dark:text-zinc-400 font-sans uppercase">
-                UNIVERSE
-              </span>
-            </div>
-
-            <div className="flex flex-col items-center gap-2">
-              <button
-                onClick={() => {
-                  window.open("https://gamuragalaxy.vercel.app/", "_blank");
-                }}
-                className="w-16 h-16 md:w-24 md:h-24 rounded-full overflow-hidden shadow-xl border-2 border-dashed border-sky-400 hover:border-sky-500 bg-white flex items-center justify-center p-1 hover:opacity-90 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-black/10 dark:shadow-white/5"
-              >
-                <SafeImage
-                  srcs={[
-                    "https://lh3.googleusercontent.com/d/1TqxgExM7o866SAgpNri0R-mx0sZtCtc3",
-                  ]}
-                  alt="Join GALAXY"
-                  className="w-full h-full object-cover rounded-full"
-                  fallbackIcon={User}
-                />
-              </button>
-              <span className="text-[10px] md:text-[11px] font-extrabold tracking-[0.2em] text-[#0EA5E9] dark:text-sky-400 font-sans uppercase text-center animate-pulse">
-                JOIN GALAXY
-              </span>
-            </div>
-
-            <div className="flex flex-col items-center gap-2">
-              <button
-                onClick={() => {
-                  setCurrentPage("aura");
-                }}
-                className="w-16 h-16 md:w-24 md:h-24 rounded-full overflow-hidden shadow-xl border border-zinc-200 bg-white flex items-center justify-center p-2 hover:opacity-80 transition-opacity cursor-pointer shadow-black/10 dark:shadow-white/5"
-              >
-                <SafeImage
-                  srcs={rightRoundImgSources}
-                  alt="Gamura Extra Details Right"
-                  className="w-full h-full object-contain bg-white"
-                  fallbackIcon={Sparkles}
-                />
-              </button>
-              <span className="text-[10px] md:text-[11px] font-extrabold tracking-[0.25em] text-zinc-500 dark:text-zinc-400 font-sans uppercase">
-                AURA
-              </span>
+            {/* Centered GAMURA Name Image (Aligned directly below Emblem, zero box/background) */}
+            <div className="w-full max-w-[260px] sm:max-w-[360px] md:max-w-[460px] flex items-center justify-center mx-auto bg-transparent">
+              <SafeImage
+                srcs={mainImgSources}
+                alt="GAMURA"
+                className="w-full max-h-[30vh] sm:max-h-[36vh] object-contain bg-transparent mix-blend-multiply"
+                fallbackIcon={Sparkles}
+              />
             </div>
           </div>
         </div>

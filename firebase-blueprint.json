@@ -120,9 +120,57 @@
         "updatedAt": { "type": "object" }
       },
       "required": ["username"]
+    },
+    "UserStreak": {
+      "title": "UserStreak",
+      "description": "Daily login streak tracking and points",
+      "type": "object",
+      "properties": {
+        "streakCount": { "type": "number" },
+        "points": { "type": "number" },
+        "claimedToday": { "type": "boolean" },
+        "lastLogin": { "type": "string" },
+        "badges": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "GamuraShortLink": {
+      "title": "GamuraShortLink",
+      "description": "Short links routing table",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string" },
+        "url": { "type": "string" },
+        "uid": { "type": "string" },
+        "clicks": { "type": "number" },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["slug", "url", "uid"]
+    },
+    "Broadcast": {
+      "title": "Broadcast",
+      "description": "Operational broadcasts and system notices",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "object" }
+      }
     }
   },
   "firestore": {
+    "/user_streaks/{userId}": {
+      "schema": { "$ref": "#/entities/UserStreak" },
+      "description": "Store user streaks and achievements"
+    },
+    "/gamura_shortlinks/{linkId}": {
+      "schema": { "$ref": "#/entities/GamuraShortLink" },
+      "description": "Store shortlinks with click tracking"
+    },
+    "/broadcasts/{broadcastId}": {
+      "schema": { "$ref": "#/entities/Broadcast" },
+      "description": "Operational broadcast announcements"
+    },
     "/gamura_developers/{username}": {
       "schema": { "$ref": "#/entities/GamuraDeveloper" },
       "description": "Store developer accounts and public urls"

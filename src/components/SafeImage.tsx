@@ -38,10 +38,10 @@ export const SafeImage: React.FC<SafeImageProps> = ({
     <img
       src={srcs[idx]}
       alt={alt}
-      className={`${className} transition-opacity duration-500`}
+      className={`${className} transition-opacity duration-300`}
       onError={() => setIdx(prev => prev + 1)}
       referrerPolicy="no-referrer"
-      crossOrigin="anonymous"
+      loading="lazy"
       {...props}
     />
   );
