@@ -911,19 +911,24 @@ export default function GamuraPdfStudio({
             </h1>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (view !== "home") {
-                setView("home");
-              } else {
-                onBackHome();
-              }
-            }}
-            className="min-h-[40px] px-3.5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0"
-          >
-            {view === "home" ? "Gamura" : "All Tools"}
-          </button>
+          {view === "home" ? (
+            <a
+              href="/launch"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
+            >
+              <span>Launch Store</span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setView("home")}
+              className="min-h-[40px] px-3.5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0"
+            >
+              All Tools
+            </button>
+          )}
         </div>
       </header>
 

@@ -4,9 +4,9 @@ import {
   Home,
   MessageSquarePlus,
   Link2,
-  Globe,
   LayoutGrid,
   FileText,
+  ExternalLink,
   type LucideIcon,
 } from "lucide-react";
 
@@ -15,12 +15,18 @@ export const G_PDF_LOGO_LOCAL = "/assets/aistudio/1794644548783_b0cc329b.png";
 export const G_PDF_LOGO_FALLBACK =
   "https://lh3.googleusercontent.com/d/1uYVL1_8XGFCk_V7e1b4lxCy9C1CzF3su";
 
+export const G_LINK_ROUTE_URL = "/launch";
+export const G_LINK_LOGO_LOCAL = "/assets/aistudio/1794679627931_b0492bbb.png";
+export const G_LINK_LOGO_FALLBACK =
+  "https://lh3.googleusercontent.com/d/1FqBAdXuyDDSSuYtd3iZzf9x5PM8orKrd";
+
 export interface AppleDockItem {
   id: string;
   label: string;
   icon?: LucideIcon;
   imageSrc?: string;
   imageFallbackSrc?: string;
+  imageScaleClass?: string;
   onClick?: () => void;
   href?: string;
   target?: string;
@@ -32,7 +38,6 @@ interface AppleBottomDockProps {
   onNavigateHome: () => void;
   onNavigateGpg: () => void;
   onNavigateClaim: () => void;
-  onNavigateUniverse: () => void;
   onOpenMoreMenu: () => void;
   extraItems?: AppleDockItem[];
 }
@@ -42,7 +47,7 @@ export const DEFAULT_DOCK_CONFIG = [
   { id: "gpg", label: "GPG" },
   { id: "claim", label: "Free URL" },
   { id: "gpdf", label: "G PDF" },
-  { id: "universe", label: "Universe" },
+  { id: "glink", label: "Launch" },
 ] as const;
 
 export default function AppleBottomDock({
@@ -50,7 +55,6 @@ export default function AppleBottomDock({
   onNavigateHome,
   onNavigateGpg,
   onNavigateClaim,
-  onNavigateUniverse,
   onOpenMoreMenu,
   extraItems = [],
 }: AppleBottomDockProps) {
@@ -81,14 +85,19 @@ export default function AppleBottomDock({
       icon: FileText,
       imageSrc: G_PDF_LOGO_LOCAL,
       imageFallbackSrc: G_PDF_LOGO_FALLBACK,
+      imageScaleClass: "scale-[1.48]",
       href: G_PDF_ROUTE_URL,
       target: "_blank",
     },
     {
-      id: "universe",
-      label: "Universe",
-      icon: Globe,
-      onClick: onNavigateUniverse,
+      id: "glink",
+      label: "Launch",
+      icon: ExternalLink,
+      imageSrc: G_LINK_LOGO_LOCAL,
+      imageFallbackSrc: G_LINK_LOGO_FALLBACK,
+      imageScaleClass: "scale-[1.15] p-0.5",
+      href: G_LINK_ROUTE_URL,
+      target: "_blank",
     },
     ...extraItems,
   ];
@@ -102,7 +111,7 @@ export default function AppleBottomDock({
       }}
       className="fixed bottom-3.5 sm:bottom-5 left-1/2 -translate-x-1/2 z-30 w-auto max-w-[calc(100vw-16px)] pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="flex items-center px-2 py-1.5 gap-0.5 sm:gap-1 rounded-[30px] bg-white/90 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_18px_45px_-10px_rgba(0,0,0,0.14),0_2px_8px_rgba(0,0,0,0.05)]">
+      <div className="flex items-center px-2 py-1.5 gap-0.5 sm:gap-1 rounded-[30px] bg-white/92 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_18px_45px_-10px_rgba(0,0,0,0.14),0_2px_8px_rgba(0,0,0,0.05)]">
         <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto no-scrollbar">
           {dockItems.map((item) => {
             const Icon = item.icon;
@@ -115,7 +124,7 @@ export default function AppleBottomDock({
                   ? item.imageFallbackSrc
                   : undefined;
 
-            const itemClasses = `relative min-h-[50px] min-w-[50px] sm:min-w-[66px] px-2 sm:px-3.5 py-1.5 rounded-[22px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer select-none whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
+            const itemClasses = `relative min-h-[52px] min-w-[50px] sm:min-w-[66px] px-2 sm:px-3.5 py-1.5 rounded-[22px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer select-none whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
               isActive
                 ? "text-[#0071E3]"
                 : "text-[#6E6E73] hover:text-[#1D1D1F]"
@@ -135,9 +144,9 @@ export default function AppleBottomDock({
                   />
                 )}
 
-                <span className="relative z-10 h-7 sm:h-7 flex items-center justify-center">
+                <span className="relative z-10 h-8 flex items-center justify-center">
                   {resolvedSrc ? (
-                    <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-[9px] bg-white border border-zinc-200/90 shadow-[0_2px_6px_rgba(0,0,0,0.08)] overflow-hidden flex items-center justify-center">
+                    <span className="w-8 h-8 rounded-[10px] bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.08)] overflow-hidden flex items-center justify-center">
                       <img
                         src={resolvedSrc}
                         alt={item.label}
@@ -148,12 +157,14 @@ export default function AppleBottomDock({
                             [item.id]: (prev[item.id] || 0) + 1,
                           }))
                         }
-                        className="w-full h-full object-contain scale-[1.48] mix-blend-multiply select-none pointer-events-none"
+                        className={`w-full h-full object-contain mix-blend-multiply select-none pointer-events-none ${
+                          item.imageScaleClass || "scale-[1.2]"
+                        }`}
                       />
                     </span>
                   ) : Icon ? (
                     <Icon
-                      size={18}
+                      size={19}
                       strokeWidth={isActive ? 2.3 : 1.9}
                       className="transition-transform duration-150"
                     />
@@ -227,10 +238,10 @@ export default function AppleBottomDock({
           onClick={onOpenMoreMenu}
           title="More Apps & Settings"
           aria-label="Open More Apps Menu"
-          className="min-h-[50px] min-w-[48px] sm:min-w-[62px] px-2 sm:px-3 py-1.5 rounded-[22px] flex flex-col items-center justify-center gap-1 text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors cursor-pointer select-none whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]"
+          className="min-h-[52px] min-w-[48px] sm:min-w-[62px] px-2 sm:px-3 py-1.5 rounded-[22px] flex flex-col items-center justify-center gap-1 text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors cursor-pointer select-none whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]"
         >
-          <span className="h-7 flex items-center justify-center">
-            <LayoutGrid size={18} strokeWidth={2} />
+          <span className="h-8 flex items-center justify-center">
+            <LayoutGrid size={19} strokeWidth={2} />
           </span>
           <span className="text-[10px] font-medium tracking-tight leading-none whitespace-nowrap">
             More

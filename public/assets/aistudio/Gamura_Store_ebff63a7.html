@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gamura Store</title>
+<style>
+:root{--bg:#fff;--bg2:#f1f3f4;--tx:#1f1f1f;--tx2:#5f6368;--ac:#0b8f5e;--ln:#e3e5e8;--card:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#131314;--bg2:#1e1f20;--tx:#e8eaed;--tx2:#9aa0a6;--ac:#3bff8b;--ln:#2d2f31;--card:#1b1c1d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#131314;--bg2:#1e1f20;--tx:#e8eaed;--tx2:#9aa0a6;--ac:#3bff8b;--ln:#2d2f31;--card:#1b1c1d;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"SF Pro Text","Google Sans",Roboto,"Segoe UI",sans-serif}
+body{max-width:520px;margin:0 auto;min-height:100vh;padding-bottom:84px}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:10px 14px 6px}
+.search{display:flex;align-items:center;gap:10px;background:var(--bg2);border-radius:28px;padding:11px 16px;color:var(--tx2)}
+.search input{flex:1;border:0;background:none;outline:0;font:inherit;color:var(--tx);min-width:0}
+.logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#3bff8b,#0b8f5e);display:grid;place-items:center;color:#04281a;font-weight:800;font-size:16px;flex:none}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:8px 14px 0;scrollbar-width:none;border-bottom:1px solid var(--ln)}
+.tabs::-webkit-scrollbar,.row::-webkit-scrollbar{display:none}
+.tab{padding:10px 12px;font-weight:600;color:var(--tx2);white-space:nowrap;border-bottom:3px solid transparent}
+.tab.on{color:var(--ac);border-color:var(--ac)}
+h2{font-size:19px;margin:22px 16px 10px;display:flex;justify-content:space-between;align-items:center;font-weight:700;letter-spacing:-.2px}
+h2 span{color:var(--ac);font-size:13px;font-weight:600}
+.hero{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:14px 16px 4px;scrollbar-width:none}
+.hcard{flex:0 0 86%;scroll-snap-align:center;border-radius:22px;padding:18px;min-height:170px;color:#fff;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;text-align:left}
+.hcard small{opacity:.85;font-weight:600;letter-spacing:.6px;font-size:11px}
+.hcard b{font-size:24px;margin:2px 0;letter-spacing:-.4px}.hcard i{font-style:normal;opacity:.9;font-size:13px}
+.hcard .ghost{position:absolute;right:-10px;top:-14px;font-size:140px;font-weight:900;opacity:.16}
+.row{display:flex;gap:14px;overflow-x:auto;padding:0 16px;scrollbar-width:none}
+.tile{flex:0 0 108px;text-align:left}
+.ic{border-radius:22%;display:grid;place-items:center;color:#fff;font-weight:800;flex:none}
+.tile .ic{width:108px;height:108px;font-size:44px;box-shadow:0 2px 8px #0002}
+.tile p{margin:8px 0 0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile small{color:var(--tx2);font-size:12px}
+.list{padding:0 16px}
+.item{display:flex;gap:14px;align-items:center;padding:10px 0;width:100%;text-align:left}
+.item .ic{width:64px;height:64px;font-size:26px}
+.item .m{flex:1;min-width:0}.item .m b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .m small{color:var(--tx2);font-size:12.5px;display:block}
+.pill{border:1px solid var(--ln);color:var(--ac);font-weight:700;font-size:13px;border-radius:20px;padding:7px 16px}
+.pill.fill{background:var(--ac);color:#fff;border-color:var(--ac)}
+:root[data-theme="dark"] .pill.fill{color:#04281a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pill.fill{color:#04281a}}
+nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;display:flex;background:var(--bg2);padding:8px 6px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--ln);z-index:6}
+nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--tx2)}
+nav button svg{width:24px;height:24px;padding:3px 14px;box-sizing:content-box;border-radius:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+nav button.on{color:var(--tx)}nav button.on svg{background:color-mix(in srgb,var(--ac) 22%,transparent);color:var(--ac)}
+.sheet{position:fixed;inset:0;background:var(--bg);z-index:10;overflow-y:auto;max-width:520px;margin:0 auto;padding:env(safe-area-inset-top,0px) 0 40px;transform:translateY(100%);transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+.sheet.open{transform:none}
+.back{padding:14px 16px;font-size:22px}
+.dh{display:flex;gap:16px;padding:0 16px;align-items:center}
+.dh .ic{width:84px;height:84px;font-size:36px}
+.dh h1{margin:0;font-size:22px;letter-spacing:-.3px}.dh a{color:var(--ac);font-weight:600;font-size:14px}
+.stats{display:flex;justify-content:space-around;margin:20px 8px 6px;text-align:center}
+.stats div{flex:1;border-right:1px solid var(--ln)}.stats div:last-child{border:0}
+.stats b{display:block;font-size:15px}.stats small{color:var(--tx2);font-size:12px}
+.cta{display:flex;gap:10px;padding:14px 16px}
+.cta .pill{flex:1;padding:12px;font-size:15px;border-radius:24px;text-align:center;position:relative;overflow:hidden}
+.bar{position:absolute;left:0;top:0;bottom:0;background:#fff4;width:0}
+.shots{display:flex;gap:10px;overflow-x:auto;padding:0 16px;scrollbar-width:none}
+.shot{flex:0 0 150px;height:268px;border-radius:16px;padding:14px;color:#fff;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.shot b{font-size:16px}.shot em{font-style:normal;font-size:40px;font-weight:900;opacity:.35}
+.sec{padding:0 16px;color:var(--tx2);font-size:14px;line-height:1.55}
+.safe{margin:12px 16px;border:1px solid var(--ln);border-radius:14px;padding:14px;font-size:13px;color:var(--tx2);line-height:1.5}
+.rate{display:flex;gap:18px;align-items:center;padding:0 16px}.rate big{font-size:52px;font-weight:300;color:var(--tx)}
+.bars{flex:1}.bars div{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--tx2);margin:3px 0}.bars i{flex:1;height:7px;background:var(--bg2);border-radius:4px;overflow:hidden}.bars u{display:block;height:100%;background:var(--ac)}
+form{padding:0 16px;display:grid;gap:10px}
+form input,form select,form textarea{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--ln);background:var(--card);color:var(--tx);font:inherit}
+.empty{text-align:center;color:var(--tx2);padding:50px 24px}
+.toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#202124;color:#fff;padding:10px 18px;border-radius:22px;font-size:14px;z-index:20;opacity:0;transition:.25s;pointer-events:none}.toast.on{opacity:1}
+</style></head><body>
+<div class="top"><div class="search"><div class="logo">G</div><input id="q" placeholder="Search Gamura Store" aria-label="Search"><span id="av" style="width:28px;height:28px;border-radius:50%;background:#3b8bff;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700">SR</span></div></div>
+<div class="tabs" id="tabs"></div>
+<main id="main"></main>
+<nav id="nav"></nav>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+<script>
+/* ===== EDIT HERE: add new Gamura apps to this list (or use the Developer tab) ===== */
+const BUILTIN=[
+{id:"gamura",name:"Gamura",cat:"Platform",tag:"The home of the Gamura ecosystem",desc:"Gamura is the main hub of the ecosystem: gaming, tools and creator features in one cinematic, fast web experience. Create your profile, explore features and jump into every Gamura app from one place.",url:"https://gamura.vercel.app/",c1:"#3bff8b",c2:"#0b8f5e",rating:4.9,dl:"10K+",size:"Web · 2 MB"},
+{id:"galaxy",name:"Gamura Galaxy",cat:"Games",tag:"Explore the Gamura universe",desc:"Gamura Galaxy is the gaming universe of Gamura. Discover games, challenges and community content inside a glowing galaxy-style interface.",url:"https://gamuragalaxy.vercel.app/",c1:"#3b8bff",c2:"#1b3fa8",rating:4.8,dl:"5K+",size:"Web · 3 MB"},
+{id:"gcp",name:"GCP · Gamura Code Preview",cat:"Developer tools",tag:"Write code. See it live.",desc:"Gamura Code Preview (GCP) lets you write HTML, CSS and JavaScript and instantly preview the result in your browser. Built for students and developers who ship fast.",url:"https://gamuracp.vercel.app/",c1:"#ffd93b",c2:"#d98a00",rating:4.7,dl:"3K+",size:"Web · 1 MB"},
+{id:"world",name:"Gamura World",cat:"Platform",tag:"The official hub for every Gamura venture",desc:"Gamura World is the unified project hub that connects all Gamura ventures: apps, games, tools and news in one world.",url:"https://gamuraworld.vercel.app/",c1:"#ff4444",c2:"#a3121f",rating:4.8,dl:"2K+",size:"Web · 2 MB"}];
+const S={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+let custom=S.get("gs_custom",[]),inst=S.get("gs_inst",[]),tab="foryou",page="home";
+const all=()=>BUILTIN.concat(custom);
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const icon=(a,s)=>`<div class="ic" style="background:linear-gradient(145deg,${a.c1},${a.c2});${s||""}">${esc(a.name.trim()[0].toUpperCase())}</div>`;
+const TABS=[["foryou","For you"],["top","Top charts"],["cats","Categories"],["new","New"]];
+const ICONS={home:'<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',lib:'<rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',dev:'<path d="M12 5v14M5 12h14"/>'};
+function nav(){$("#nav").innerHTML=[["home","Home"],["search","Search"],["lib","My apps"],["dev","Developer"]].map(([k,l])=>`<button class="${page===k?"on":""}" onclick="go('${k}')"><svg viewBox="0 0 24 24">${ICONS[k]}</svg>${l}</button>`).join("")}
+function go(p){page=p;if(p==="search")$("#q").focus();render()}
+function tile(a){return`<button class="tile" onclick="openApp('${a.id}')">${icon(a)}<p>${esc(a.name)}</p><small>${a.rating} ★</small></button>`}
+function item(a,n){return`<button class="item" onclick="openApp('${a.id}')">${n?`<b style="width:18px;color:var(--tx2)">${n}</b>`:""}${icon(a)}<div class="m"><b>${esc(a.name)}</b><small>${esc(a.cat)} · ${esc(a.tag)}</small><small>${a.rating} ★ · ${esc(a.size)}</small></div><span class="pill">${inst.includes(a.id)?"Open":"Install"}</span></button>`}
+function render(){
+nav();const q=$("#q").value.trim().toLowerCase();let h="";
+$("#tabs").style.display=(page==="home"&&!q)?"flex":"none";
+$("#tabs").innerHTML=TABS.map(([k,l])=>`<button class="tab ${tab===k?"on":""}" onclick="tab='${k}';render()">${l}</button>`).join("");
+const A=all();
+if(q){const r=A.filter(a=>(a.name+a.cat+a.tag).toLowerCase().includes(q));h=r.length?`<div class="list" style="padding-top:10px">${r.map(a=>item(a)).join("")}</div>`:`<div class="empty">No results for “${esc(q)}”</div>`}
+else if(page==="home"){
+if(tab==="foryou"){h=`<div class="hero">${A.slice(0,5).map(a=>`<button class="hcard" onclick="openApp('${a.id}')" style="background:linear-gradient(135deg,${a.c1},${a.c2})"><span class="ghost">${esc(a.name[0])}</span><small>FEATURED</small><b>${esc(a.name)}</b><i>${esc(a.tag)}</i></button>`).join("")}</div>
+<h2>Gamura originals <span>${A.length} apps</span></h2><div class="row">${A.map(tile).join("")}</div>
+<h2>Suggested for you</h2><div class="list">${A.slice().reverse().map(a=>item(a)).join("")}</div>`}
+else if(tab==="top"){h=`<h2>Top free apps</h2><div class="list">${A.slice().sort((a,b)=>b.rating-a.rating).map((a,i)=>item(a,i+1)).join("")}</div>`}
+else if(tab==="cats"){const cs=[...new Set(A.map(a=>a.cat))];h=cs.map(c=>`<h2>${esc(c)}</h2><div class="row">${A.filter(a=>a.cat===c).map(tile).join("")}</div>`).join("")}
+else{h=`<h2>New &amp; updated</h2><div class="list">${A.slice().reverse().map(a=>item(a)).join("")}</div>`}}
+else if(page==="search"){h=`<h2>Popular searches</h2><div class="list">${A.map(a=>`<button class="item" onclick="$('#q').value='${esc(a.name.replace(/'/g,""))}';render()" style="padding:12px 0"><span style="color:var(--tx2)">⌕</span> ${esc(a.name)}</button>`).join("")}</div>`}
+else if(page==="lib"){const L=A.filter(a=>inst.includes(a.id));h=`<h2>Installed</h2>`+(L.length?`<div class="list">${L.map(a=>item(a)).join("")}</div>`:`<div class="empty">Nothing installed yet.<br>Open an app and tap Install.</div>`)}
+else if(page==="dev"){h=`<h2>Publish an app</h2><form onsubmit="addApp(event)"><input id="f1" placeholder="App name" required maxlength="40"><input id="f2" type="url" placeholder="App link (https://…)" required><input id="f3" placeholder="Short tagline" maxlength="60"><select id="f4"><option>Platform</option><option>Games</option><option>Developer tools</option><option>Productivity</option><option>Creative</option><option>Education</option><option>Utilities</option></select><textarea id="f5" rows="3" placeholder="Description"></textarea><div style="display:flex;gap:10px;align-items:center">Colors <input id="f6" type="color" value="#3bff8b" style="height:44px"><input id="f7" type="color" value="#0b8f5e" style="height:44px"></div><button class="pill fill" style="padding:13px;border-radius:24px;font-size:15px">Add to Gamura Store</button></form>
+<h2>Your added apps</h2>${custom.length?`<div class="list">${custom.map(a=>`<div class="item">${icon(a)}<div class="m"><b>${esc(a.name)}</b><small>${esc(a.cat)}</small></div><button class="pill" onclick="delApp('${a.id}')">Remove</button></div>`).join("")}</div>`:`<div class="empty" style="padding:20px">No custom apps yet.</div>`}`}
+$("#main").innerHTML=h}
+function addApp(e){e.preventDefault();const n=$("#f1").value.trim();custom.push({id:"c"+Date.now(),name:n,cat:$("#f4").value,tag:$("#f3").value||"New on Gamura Store",desc:$("#f5").value||n+" is now available on Gamura Store.",url:$("#f2").value,c1:$("#f6").value,c2:$("#f7").value,rating:4.5,dl:"New",size:"Web · 1 MB"});S.set("gs_custom",custom);toast(n+" added");page="home";tab="new";render();scrollTo(0,0)}
+function delApp(id){custom=custom.filter(a=>a.id!==id);inst=inst.filter(i=>i!==id);S.set("gs_custom",custom);S.set("gs_inst",inst);render()}
+function toast(t){const x=$("#toast");x.textContent=t;x.classList.add("on");setTimeout(()=>x.classList.remove("on"),1800)}
+function openApp(id){const a=all().find(x=>x.id===id);if(!a)return;const on=inst.includes(id);
+const sh=["Discover","Play","Create"],dist=[72,18,6,3,1];
+$("#sheet").innerHTML=`<button class="back" onclick="closeSheet()" aria-label="Back">←</button>
+<div class="dh">${icon(a)}<div><h1>${esc(a.name)}</h1><a>Gamura Studios</a><div style="color:var(--tx2);font-size:12px">${esc(a.cat)}</div></div></div>
+<div class="stats"><div><b>${a.rating} ★</b><small>Rating</small></div><div><b>${esc(a.dl)}</b><small>Downloads</small></div><div><b>${esc(a.size.split(" · ")[1]||"1 MB")}</b><small>Size</small></div><div><b>3+</b><small>Rated for</small></div></div>
+<div class="cta"><button class="pill fill" id="ib" onclick="doInstall('${a.id}')"><span class="bar" id="ibar"></span><span id="ibt">${on?"Open":"Install"}</span></button>${on?`<button class="pill" style="flex:0 0 auto" onclick="uninst('${a.id}')">Uninstall</button>`:""}</div>
+<div class="shots">${sh.map((s,i)=>`<div class="shot" style="background:linear-gradient(${150+i*40}deg,${a.c1},${a.c2})"><em>${esc(a.name[0])}${i+1}</em><b>${s} with<br>${esc(a.name.split(" ")[0])}</b></div>`).join("")}</div>
+<h2>About this app</h2><div class="sec">${esc(a.desc)}</div>
+<h2>Data safety</h2><div class="safe">No data is shared with third parties. Gamura apps run in your browser and keep your data on your device unless you sign in.</div>
+<h2>Ratings</h2><div class="rate"><div><big>${a.rating}</big><div style="color:var(--ac)">★★★★★</div></div><div class="bars">${dist.map((d,i)=>`<div>${5-i}<i><u style="width:${d}%"></u></i></div>`).join("")}</div></div>
+<h2>More from Gamura Studios</h2><div class="row">${all().filter(x=>x.id!==id).map(tile).join("")}</div>`;
+$("#sheet").classList.add("open");$("#sheet").scrollTop=0}
+function closeSheet(){$("#sheet").classList.remove("open");render()}
+function doInstall(id){const a=all().find(x=>x.id===id);if(inst.includes(id)){window.open(a.url,"_blank","noopener");return}
+const b=$("#ibar"),t=$("#ibt");let p=0;t.textContent="Installing…";const iv=setInterval(()=>{p+=7+Math.random()*9;b.style.width=Math.min(p,100)+"%";if(p>=100){clearInterval(iv);inst.push(id);S.set("gs_inst",inst);toast(a.name+" installed");openApp(id)}},120)}
+function uninst(id){inst=inst.filter(i=>i!==id);S.set("gs_inst",inst);openApp(id)}
+$("#q").addEventListener("input",render);render();
+</script></body></html>

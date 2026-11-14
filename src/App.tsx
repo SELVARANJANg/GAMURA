@@ -191,6 +191,10 @@ import GamuraPdfStudio, {
   G_PDF_LOGO_SRC,
   G_PDF_LOGO_FALLBACK,
 } from "./components/GamuraPdfStudio";
+import GamuraStoreLaunch, {
+  LAUNCH_LOGO_SRC,
+  LAUNCH_LOGO_FALLBACK,
+} from "./components/GamuraStoreLaunch";
 
 const GAMURA_G_LOGO =
   "https://lh3.googleusercontent.com/d/1QJprWSIgOa32ADyWHBikyBibzN80Vetv";
@@ -8686,6 +8690,7 @@ export default function App() {
     | "white-page"
     | "claim"
     | "gpdf"
+    | "launch"
     | "privacy"
     | "terms"
     | "delete-account";
@@ -8696,6 +8701,8 @@ export default function App() {
     "gpg",
     "gpdf",
     "g-pdf",
+    "launch",
+    "store",
     "claim",
     "universe",
     "universe-active",
@@ -8752,6 +8759,7 @@ export default function App() {
 
     if (lower === "gpg") return { page: "gpg", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "gpdf" || lower === "g-pdf") return { page: "gpdf", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "launch" || lower === "store") return { page: "launch", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "terms") return { page: "terms", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13440,6 +13448,17 @@ ${targetContext}`;
     );
   }
 
+  if (currentPage === "launch") {
+    return (
+      <GamuraStoreLaunch
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
   return (
     <ErrorBoundary>
       {/* Dynamic theme injection */}
@@ -13700,6 +13719,39 @@ ${targetContext}`;
                       <ExternalLink size={15} className="text-zinc-400 group-hover:text-zinc-700 transition-all shrink-0" />
                     </a>
 
+                    {/* Gamura Launch Store (Opens new URL page) */}
+                    <a
+                      href="/launch"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="group w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-white border border-zinc-200/80 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                          <img
+                            src={LAUNCH_LOGO_SRC}
+                            alt="Gamura Launch"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src =
+                                LAUNCH_LOGO_FALLBACK;
+                            }}
+                            className="w-full h-full object-contain scale-[1.15] p-0.5 mix-blend-multiply"
+                          />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-semibold text-zinc-900 truncate">
+                            Gamura Launch Store
+                          </span>
+                          <span className="text-xs text-zinc-500 truncate">
+                            Discover, install &amp; open all Gamura apps
+                          </span>
+                        </div>
+                      </div>
+                      <ExternalLink size={15} className="text-zinc-400 group-hover:text-zinc-700 transition-all shrink-0" />
+                    </a>
+
                     {/* Join Galaxy */}
                     <button
                       onClick={() => {
@@ -13913,25 +13965,6 @@ ${targetContext}`;
           onNavigateClaim={() => {
             window.history.pushState({}, "", "/claim");
             setCurrentPage("claim");
-          }}
-          onNavigateUniverse={() => {
-            if (!isLoggedIn) {
-              setCurrentUserInfo({
-                username: "Explorer",
-                nickname: "Guest Explorer",
-                gpgTimestamps: [],
-                avatarUrl: "",
-                bio: "Guest Explorer Session",
-                email: "explorer@gamura.app",
-                themeColor: "",
-              });
-              setCurrentUser({
-                uid: "guest_explorer_uid",
-                displayName: "Guest Explorer",
-                email: "explorer@gamura.app",
-              });
-            }
-            setCurrentPage("universe-active");
           }}
           onOpenMoreMenu={() => setIsMenuOpen(true)}
         />
