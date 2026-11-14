@@ -185,6 +185,12 @@ import {
   TermsOfServiceView,
   AccountDeletionView,
 } from "./components/LegalViews";
+import AppleBottomDock from "./components/AppleBottomDock";
+import GamuraAuraHub, { AuraEngineControlPanel } from "./components/GamuraAuraHub";
+import GamuraPdfStudio, {
+  G_PDF_LOGO_SRC,
+  G_PDF_LOGO_FALLBACK,
+} from "./components/GamuraPdfStudio";
 
 const GAMURA_G_LOGO =
   "https://lh3.googleusercontent.com/d/1QJprWSIgOa32ADyWHBikyBibzN80Vetv";
@@ -2671,115 +2677,14 @@ const AuraSettingsView = ({
   userInfo: any;
   setCurrentUserInfo: any;
 }) => {
-  const [accent, setAccent] = useState(
-    userInfo?.themeColor || localStorage.getItem("gamura_aura_accent") || "#0071E3",
-  );
-  const [isSaving, setIsSaving] = useState(false);
-
-  const colors = [
-    { name: "Apple Blue", hex: "#0071E3" },
-    { name: "Sky", hex: "#0EA5E9" },
-    { name: "Emerald", hex: "#10B981" },
-    { name: "Indigo", hex: "#6366F1" },
-    { name: "Violet", hex: "#8B5CF6" },
-    { name: "Rose", hex: "#F43F5E" },
-    { name: "Amber", hex: "#F59E0B" },
-  ];
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      localStorage.setItem("gamura_aura_accent", accent);
-      const isAuthUser = Boolean(
-        user && auth.currentUser && user.uid !== "guest_explorer_uid",
-      );
-      if (isAuthUser) {
-        await setDoc(
-          doc(db, "users", user.uid),
-          { themeColor: accent },
-          { merge: true },
-        );
-        const updatedUserInfo = { ...(userInfo || {}), themeColor: accent };
-        setCurrentUserInfo(updatedUserInfo);
-        try {
-          localStorage.setItem(
-            `gamura_user_info_${user.uid}`,
-            JSON.stringify(updatedUserInfo),
-          );
-        } catch (e) {}
-      }
-      showToast(
-        "🎨",
-        "Aura Theme Saved",
-        "Accent color updated across your Universe workspace.",
-        "success",
-      );
-    } catch (e: any) {
-      showToast("❌", "Save Failed", e.message, "error");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   return (
-    <div className="w-full bg-white border border-zinc-200/80 rounded-3xl p-6 sm:p-10 shadow-xs font-sans text-[#1D1D1F] flex flex-col items-center justify-center animate-in fade-in duration-500">
-      <div className="w-full max-w-md text-center space-y-6">
-        <div
-          className="inline-flex p-3.5 rounded-2xl bg-[#F5F5F7] border border-zinc-200/80"
-          style={{ color: accent }}
-        >
-          <Settings className="w-7 h-7" />
-        </div>
-
-        <div className="space-y-1.5">
-          <h2 className="text-2xl font-bold text-[#1D1D1F] tracking-tight">
-            Aura Appearance
-          </h2>
-          <p className="text-xs text-[#6E6E73]">
-            Customize your primary accent color across Gamura Universe
-          </p>
-        </div>
-
-        <div className="py-6 px-4 bg-[#F5F5F7] border border-zinc-200/70 rounded-2xl space-y-4">
-          <p className="text-xs font-semibold text-[#6E6E73]">
-            Select Primary Accent
-          </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {colors.map((c) => (
-              <button
-                key={c.hex}
-                onClick={() => setAccent(c.hex)}
-                className={`w-10 h-10 rounded-full transition-all cursor-pointer shadow-xs ${
-                  accent === c.hex
-                    ? "scale-110 ring-2 ring-offset-2 ring-[#1D1D1F]"
-                    : "hover:scale-105 opacity-85 hover:opacity-100"
-                }`}
-                style={{ backgroundColor: c.hex }}
-                title={c.name}
-              />
-            ))}
-          </div>
-          <div className="pt-2">
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="w-full py-3 rounded-xl text-white text-xs font-semibold shadow-xs transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
-              style={{ backgroundColor: accent }}
-            >
-              {isSaving ? "Saving..." : "Apply Aura Theme"}
-            </button>
-          </div>
-        </div>
-
-        <button
-          onClick={onBack}
-          className="mx-auto inline-flex items-center justify-center gap-2 text-[#1D1D1F] bg-[#F5F5F7] hover:bg-zinc-200/80 border border-zinc-200/80 rounded-xl px-5 py-2.5 text-xs font-semibold transition-all cursor-pointer"
-        >
-          <ArrowLeft size={14} />
-          Back to Overview
-        </button>
-      </div>
-    </div>
+    <AuraEngineControlPanel
+      user={user}
+      userInfo={userInfo}
+      setCurrentUserInfo={setCurrentUserInfo}
+      onBack={onBack}
+      showToast={showToast}
+    />
   );
 };
 
@@ -8780,6 +8685,7 @@ export default function App() {
     | "universe-active"
     | "white-page"
     | "claim"
+    | "gpdf"
     | "privacy"
     | "terms"
     | "delete-account";
@@ -8788,6 +8694,8 @@ export default function App() {
     "",
     "home",
     "gpg",
+    "gpdf",
+    "g-pdf",
     "claim",
     "universe",
     "universe-active",
@@ -8843,6 +8751,7 @@ export default function App() {
     const lower = cleanedPath.toLowerCase();
 
     if (lower === "gpg") return { page: "gpg", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "gpdf" || lower === "g-pdf") return { page: "gpdf", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "terms") return { page: "terms", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13075,197 +12984,54 @@ ${targetContext}`;
   }
 
   if (currentPage === "aura") {
-    const AURA_MODULES = [
-      {
-        id: "users",
-        name: "User Directory",
-        ic: "👥",
-        pos: { x: 50, y: 18.5 },
-        desc: "Coming Soon",
-      },
-      {
-        id: "global",
-        name: "Global Network",
-        ic: "🌐",
-        pos: { x: 72.3, y: 27.7 },
-        desc: "Coming Soon",
-      },
-      {
-        id: "analytics",
-        name: "Neural Analytics",
-        ic: "📊",
-        pos: { x: 81.5, y: 50 },
-        desc: "Coming Soon",
-      },
-      {
-        id: "cloud",
-        name: "Cloud Fabric",
-        ic: "☁️",
-        pos: { x: 72.3, y: 72.3 },
-        desc: "Coming Soon",
-      },
-      {
-        id: "settings",
-        name: "Core Protocols",
-        ic: "⚙️",
-        pos: { x: 50, y: 81.5 },
-        desc: "Coming Soon",
-      },
-      {
-        id: "security",
-        name: "Shield Systems",
-        ic: "🛡️",
-        pos: { x: 27.7, y: 72.3 },
-        desc: "Coming Soon",
-      },
-      {
-        id: "signal",
-        name: "Spectral Signal",
-        ic: "📡",
-        pos: { x: 18.5, y: 50 },
-        desc: "Coming Soon",
-      },
-      {
-        id: "nodes",
-        name: "Node Synapse",
-        ic: "🔗",
-        pos: { x: 27.7, y: 27.7 },
-        desc: "Coming Soon",
-      },
-    ];
-
-    if (selectedAuraModule) {
-      const activeModule = AURA_MODULES.find(
-        (m) => m.id === selectedAuraModule,
-      );
-      return (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="min-h-screen bg-white flex flex-col items-center justify-center relative select-none p-8"
-        >
-          <div className="absolute top-8 left-8">
-            <button
-              onClick={() => setSelectedAuraModule(null)}
-              className="flex items-center gap-3 px-4 py-2 rounded-full border border-zinc-100 hover:bg-zinc-50 hover:border-zinc-200 transition-all group cursor-pointer"
-            >
-              <ChevronLeft
-                size={18}
-                className="text-zinc-400 group-hover:text-zinc-900 transition-colors"
-              />
-              <span className="text-[10px] font-bold text-zinc-400 group-hover:text-zinc-900 uppercase tracking-widest">
-                Return to Core
-              </span>
-            </button>
-          </div>
-
-          <div className="max-w-2xl w-full flex flex-col items-center gap-8 text-center">
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="w-24 h-24 rounded-3xl bg-zinc-50 border border-zinc-100 flex items-center justify-center text-4xl shadow-sm"
-            >
-              {activeModule?.ic}
-            </motion.div>
-
-            <div className="flex flex-col gap-3">
-              <motion.h2
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="text-2xl md:text-3xl font-black text-zinc-950 uppercase tracking-tight"
-              >
-                {activeModule?.name}
-              </motion.h2>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="text-[10px] font-black uppercase tracking-[0.5em] text-zinc-300 mb-2"
-              >
-                Aura System Identification
-              </motion.div>
-            </div>
-
-            {activeModule?.id === "global" && (
-              <motion.button
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.45 }}
-                onClick={() => setCurrentPage("portfolio")}
-                className="px-10 py-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-3xl text-sm font-black uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-3 border border-white/10"
-              >
-                <Briefcase size={20} />
-                Access Developer Portfolio
-              </motion.button>
-            )}
-
-            <motion.p
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.4 }}
-              className="text-lg text-zinc-500 font-medium leading-relaxed"
-            >
-              {activeModule?.desc}
-            </motion.p>
-          </div>
-        </motion.div>
-      );
-    }
-
     return (
-      <div className="min-h-screen bg-white text-zinc-900 relative flex flex-col items-center select-none w-full">
-        {/* Top bar */}
-        <div className="w-full max-w-7xl px-4 md:px-8 py-3 md:py-4 flex items-center border-b border-zinc-50 relative bg-white transition-all">
-          {/* Back button on the left */}
-          <button
-            onClick={() => setCurrentPage("home")}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-50 hover:bg-zinc-100 text-zinc-800 transition-all font-sans text-[10px] font-bold uppercase tracking-[0.15em] cursor-pointer border border-zinc-200 z-20 shadow-sm"
-          >
-            <ChevronLeft size={14} />
-            Back to Hub
-          </button>
-        </div>
-
-        {/* Content area: centered image on pure white */}
-        <div className="flex-1 bg-white w-full flex items-center justify-center p-12">
-          <div className="relative w-full max-w-[640px] md:max-w-[720px] aspect-square">
-            <img
-              src="https://lh3.googleusercontent.com/d/1iCaP3BYXSeXCQqsxyHy0dGhqgCfpYgIp"
-              alt="Aura Logo"
-              className="w-full h-full object-contain mix-blend-multiply"
-            />
-            {/* 8 clickable pods positioned in a circle */}
-            {AURA_MODULES.map((mod, idx) => (
-              <motion.button
-                key={idx}
-                initial={{ scale: 1 }}
-                whileHover={{
-                  scale: 1.15,
-                  backgroundColor: "rgba(0,0,0,0.02)",
-                }}
-                whileTap={{ scale: 0.85, backgroundColor: "rgba(0,0,0,0.08)" }}
-                onClick={() => {
-                  setSelectedAuraModule(mod.id);
-                  addActivity(`Explored Aura: ${mod.name}`, mod.ic);
-                }}
-                className="absolute w-[12%] h-[12%] -translate-x-1/2 -translate-y-1/2 rounded-full cursor-pointer z-10 flex items-center justify-center group"
-                style={{ left: `${mod.pos.x}%`, top: `${mod.pos.y}%` }}
-                title={mod.name}
-              >
-                {/* Visual feedback on hover */}
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  whileHover={{ opacity: 1, scale: 1.25 }}
-                  className="absolute inset-0 rounded-full border border-black/5 bg-white/10 backdrop-blur-sm shadow-[0_0_20px_rgba(0,0,0,0.03)]"
-                />
-                <span className="hidden">Click to enter {mod.name}</span>
-              </motion.button>
-            ))}
-          </div>
-        </div>
-      </div>
+      <GamuraAuraHub
+        user={currentUser}
+        userInfo={currentUserInfo}
+        setCurrentUserInfo={setCurrentUserInfo}
+        selectedModule={selectedAuraModule}
+        onSelectModule={setSelectedAuraModule}
+        onBackHome={() => {
+          setSelectedAuraModule(null);
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+        onOpenPortfolio={() => setCurrentPage("portfolio")}
+        onOpenClaimUrl={(prefill) => {
+          if (prefill) setClaimPrefillHandle(prefill);
+          window.history.pushState(
+            {},
+            "",
+            prefill ? `/claim?handle=${encodeURIComponent(prefill)}` : "/claim",
+          );
+          setCurrentPage("claim");
+        }}
+        onOpenGpg={() => {
+          window.history.pushState({}, "", "/gpg");
+          setCurrentPage("gpg");
+        }}
+        onOpenUniverse={() => {
+          if (!isLoggedIn) {
+            setCurrentUserInfo({
+              username: "Explorer",
+              nickname: "Guest Explorer",
+              gpgTimestamps: [],
+              avatarUrl: "",
+              bio: "Guest Explorer Session",
+              email: "explorer@gamura.app",
+              themeColor: "",
+            });
+            setCurrentUser({
+              uid: "guest_explorer_uid",
+              displayName: "Guest Explorer",
+              email: "explorer@gamura.app",
+            });
+          }
+          setCurrentPage("universe-active");
+        }}
+        showToast={showToast}
+        addActivity={addActivity}
+      />
     );
   }
 
@@ -13663,6 +13429,17 @@ ${targetContext}`;
     );
   }
 
+  if (currentPage === "gpdf") {
+    return (
+      <GamuraPdfStudio
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
   return (
     <ErrorBoundary>
       {/* Dynamic theme injection */}
@@ -13842,6 +13619,8 @@ ${targetContext}`;
                     {/* Aura */}
                     <button
                       onClick={() => {
+                        window.history.pushState({}, "", "/aura");
+                        setSelectedAuraModule(null);
                         setCurrentPage("aura");
                         setIsMenuOpen(false);
                       }}
@@ -13887,6 +13666,39 @@ ${targetContext}`;
                       </div>
                       <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-700 group-hover:translate-x-0.5 transition-all shrink-0" />
                     </button>
+
+                    {/* G PDF Studio (Opens new URL page) */}
+                    <a
+                      href="/gpdf"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="group w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-white border border-zinc-200/80 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                          <img
+                            src={G_PDF_LOGO_SRC}
+                            alt="G PDF"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src =
+                                G_PDF_LOGO_FALLBACK;
+                            }}
+                            className="w-full h-full object-contain scale-[1.4] mix-blend-multiply"
+                          />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-semibold text-zinc-900 truncate">
+                            G PDF Studio
+                          </span>
+                          <span className="text-xs text-zinc-500 truncate">
+                            Create, edit, merge, compress &amp; canvas modify
+                          </span>
+                        </div>
+                      </div>
+                      <ExternalLink size={15} className="text-zinc-400 group-hover:text-zinc-700 transition-all shrink-0" />
+                    </a>
 
                     {/* Join Galaxy */}
                     <button
@@ -14057,7 +13869,7 @@ ${targetContext}`;
         </header>
 
         {/* MIDDLE INTERFACE OF THE APPLICATION — Pure White Centered Alignment */}
-        <div className="flex-1 bg-white flex flex-col items-center justify-center w-full h-full px-6 py-8 relative z-0">
+        <div className="flex-1 bg-white flex flex-col items-center justify-center w-full h-full px-6 pt-8 pb-28 relative z-0">
           <div className="flex flex-col items-center justify-center text-center max-w-2xl mx-auto my-auto gap-3 sm:gap-5 w-full bg-transparent">
             {/* Centered Emblem Logo (Transparent Background Blend) */}
             <button
@@ -14086,8 +13898,46 @@ ${targetContext}`;
           </div>
         </div>
 
+        {/* Unique Extensible Apple-Style Rounded Bottom Dock */}
+        <AppleBottomDock
+          activeId="home"
+          onNavigateHome={() => {
+            window.history.pushState({}, "", "/");
+            setCurrentPage("home");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          onNavigateGpg={() => {
+            window.history.pushState({}, "", "/gpg");
+            setCurrentPage("gpg");
+          }}
+          onNavigateClaim={() => {
+            window.history.pushState({}, "", "/claim");
+            setCurrentPage("claim");
+          }}
+          onNavigateUniverse={() => {
+            if (!isLoggedIn) {
+              setCurrentUserInfo({
+                username: "Explorer",
+                nickname: "Guest Explorer",
+                gpgTimestamps: [],
+                avatarUrl: "",
+                bio: "Guest Explorer Session",
+                email: "explorer@gamura.app",
+                themeColor: "",
+              });
+              setCurrentUser({
+                uid: "guest_explorer_uid",
+                displayName: "Guest Explorer",
+                email: "explorer@gamura.app",
+              });
+            }
+            setCurrentPage("universe-active");
+          }}
+          onOpenMoreMenu={() => setIsMenuOpen(true)}
+        />
+
         {/* TOASTS CONTAINER FOR APP (LOGIN, SIGNUP, SYSTEM GATEWAY) */}
-        <div className="fixed bottom-8 right-8 z-[1000] flex flex-col gap-3 pointer-events-none">
+        <div className="fixed bottom-24 right-4 sm:right-8 z-[1000] flex flex-col gap-3 pointer-events-none">
           <AnimatePresence>
             {toasts.map((t) => {
               const scheme = {

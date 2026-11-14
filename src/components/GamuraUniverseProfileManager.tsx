@@ -9,6 +9,7 @@ import {
   getDoc,
   serverTimestamp,
   onSnapshot,
+  limit,
 } from "firebase/firestore";
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "../firebase";
@@ -117,6 +118,7 @@ export default function GamuraUniverseProfileManager({
   const [showPublishSuccess, setShowPublishSuccess] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [liveDirectory, setLiveDirectory] = useState<any[]>([]);
   const handleInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -255,6 +257,33 @@ export default function GamuraUniverseProfileManager({
     return () => unsubDoc();
   }, [effectiveUser?.uid, effectiveUser?.email, initialHandle]);
 
+  // Subscribe to live public claimed URLs directory
+  useEffect(() => {
+    const qDir = query(
+      collection(db, "gamura_developers"),
+      where("published", "==", true),
+      limit(12)
+    );
+    const unsubDir = onSnapshot(
+      qDir,
+      (snap) => {
+        const seen = new Set<string>();
+        const rows: any[] = [];
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          const uname = String(data.username || "").trim().toLowerCase();
+          if (uname && !uname.includes("/") && !seen.has(uname)) {
+            seen.add(uname);
+            rows.push({ id: d.id, ...data, username: uname });
+          }
+        });
+        setLiveDirectory(rows);
+      },
+      () => {}
+    );
+    return () => unsubDir();
+  }, []);
+
   // Real-time handle availability check
   useEffect(() => {
     const clean = username.trim().toLowerCase();
@@ -366,16 +395,28 @@ export default function GamuraUniverseProfileManager({
       return;
     }
 
-    if (!auth.currentUser) {
-      const msg = "Please sign in with Google or your Gamura account below to permanently lock and publish your live URL.";
-      setSaveError(msg);
-      if (showToast) showToast("🔐", "Sign In to Claim", msg, "info");
-      return;
+    let activeAuthUser = auth.currentUser;
+    if (!activeAuthUser) {
+      setSaving(true);
+      try {
+        const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+        activeAuthUser = cred.user;
+      } catch (err: any) {
+        setSaving(false);
+        const msg =
+          err?.code === "auth/popup-closed-by-user"
+            ? "Sign-in popup closed. Sign in with Google to lock and publish your URL."
+            : err?.message || "Please sign in with Google to permanently claim your URL.";
+        setSaveError(msg);
+        if (showToast) showToast("🔐", "Sign In to Claim", msg, "info");
+        return;
+      }
     }
 
     setSaving(true);
     try {
-      const uid = auth.currentUser.uid;
+      const uid = activeAuthUser.uid;
+      const email = activeAuthUser.email || `${cleanUser}@gamura.app`;
       const payload: any = {
         username: cleanUser,
         displayName: displayName.trim() || cleanUser,
@@ -389,7 +430,7 @@ export default function GamuraUniverseProfileManager({
         blocks: blocks || [],
         published: true,
         uid,
-        email: auth.currentUser.email || `${cleanUser}@gamura.app`,
+        email,
         plan: profile?.plan || "Starter",
         clicks: profile?.clicks || 0,
         views: profile?.views || 1,
@@ -1181,6 +1222,55 @@ export default function GamuraUniverseProfileManager({
           </button>
         </div>
       </div>
+
+      {/* Live Claimed Community URLs Directory */}
+      {liveDirectory.length > 0 && (
+        <div className="bg-white border border-zinc-200/80 p-5 sm:p-6 rounded-3xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-[#1D1D1F]">
+                Live Claimed Gamura URLs
+              </h3>
+              <p className="text-xs text-[#6E6E73]">
+                Explore active public creator pages across the Gamura network.
+              </p>
+            </div>
+            <span className="text-xs font-semibold text-[#0071E3] tabular-nums">
+              {liveDirectory.length} Live
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {liveDirectory.map((item) => (
+              <a
+                key={item.username}
+                href={`/@${item.username}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group p-3.5 rounded-2xl bg-[#F5F5F7] hover:bg-zinc-200/60 border border-zinc-200/70 transition-colors flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-[#0071E3] text-white text-xs font-bold flex items-center justify-center uppercase shrink-0">
+                    {(item.displayName || item.username).slice(0, 2)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-[#1D1D1F] truncate">
+                      {item.displayName || item.username}
+                    </div>
+                    <div className="text-[11px] font-medium text-[#0071E3] truncate">
+                      /@{item.username}
+                    </div>
+                  </div>
+                </div>
+                <ExternalLink
+                  size={13}
+                  className="text-[#6E6E73] group-hover:text-[#0071E3] shrink-0"
+                />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

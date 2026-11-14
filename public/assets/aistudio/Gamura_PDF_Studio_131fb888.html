@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gamura PDF Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{--bg:#f5f5f7;--card:#fff;--tx:#1d1d1f;--sub:#6e6e73;--line:rgba(0,0,0,.1);--ac:#059669;--fill:rgba(120,120,128,.12);--glass:rgba(245,245,247,.72);color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--card:#1c1c1e;--tx:#f5f5f7;--sub:#98989d;--line:rgba(255,255,255,.14);--ac:#34d399;--fill:rgba(120,120,128,.32);--glass:rgba(0,0,0,.7);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#000;--card:#1c1c1e;--tx:#f5f5f7;--sub:#98989d;--line:rgba(255,255,255,.14);--ac:#34d399;--fill:rgba(120,120,128,.32);--glass:rgba(0,0,0,.7);color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--glass);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);z-index:10}
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;display:flex;align-items:center;padding:10px 16px;background:var(--glass);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
+.nav h1{flex:1;margin:0;font-size:17px;font-weight:600;text-align:center}
+.nav button,.nav i{width:72px}
+.nav button{border:0;background:none;color:var(--ac);font:inherit;font-size:17px;cursor:pointer;text-align:left;padding:0}
+.wrap{max-width:960px;margin:0 auto;padding:20px 16px 56px}
+.hero h2{font-size:clamp(34px,7vw,56px);letter-spacing:-.03em;line-height:1.05;margin:14px 0 10px;font-weight:700}
+.hero p{color:var(--sub);font-size:19px;margin:0 0 28px;max-width:560px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}
+.tile{appearance:none;border:0;text-align:left;font:inherit;color:var(--tx);background:var(--card);border-radius:22px;padding:22px;cursor:pointer;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.tile:active{transform:scale(.97)}.tile:hover{transform:translateY(-2px)}
+.ic{width:50px;height:50px;border-radius:13px;display:grid;place-items:center;font-size:25px;margin-bottom:16px}
+.tile h3{margin:0 0 4px;font-size:19px;letter-spacing:-.01em}.tile p{margin:0;color:var(--sub);font-size:14px}
+.card{background:var(--card);border-radius:20px;padding:20px;margin-bottom:14px}
+.btn{appearance:none;border:0;border-radius:980px;padding:11px 22px;font:inherit;font-weight:600;font-size:15px;background:var(--ac);color:#fff;cursor:pointer;transition:opacity .2s}
+.btn:active{opacity:.7}.btn:disabled{opacity:.35;pointer-events:none}
+.btn.sec{background:var(--fill);color:var(--tx)}.btn.sm{padding:6px 13px;font-size:13px}
+input[type=text],textarea,select{width:100%;font:inherit;padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--tx)}
+textarea{min-height:150px;resize:vertical}
+input[type=range]{width:100%;accent-color:var(--ac)}input[type=color]{width:44px;height:36px;border:0;background:none;padding:0}
+label{display:block;font-size:13px;font-weight:600;color:var(--sub);margin:12px 0 6px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:0 0 auto}.row>.f{flex:1 1 140px}
+.drop{border:2px dashed var(--line);border-radius:18px;padding:30px 16px;text-align:center;color:var(--sub);cursor:pointer;transition:.2s}
+.drop b{display:block;color:var(--tx);font-size:17px;margin-bottom:2px}.drop.hot{border-color:var(--ac);background:var(--fill)}
+.seg{display:inline-flex;background:var(--fill);border-radius:10px;padding:2px;margin-bottom:14px;flex-wrap:wrap}
+.seg button{border:0;background:none;color:var(--tx);padding:7px 14px;border-radius:8px;font:inherit;font-size:14px;font-weight:500;cursor:pointer}
+.seg .on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.pgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin:14px 0}
+.pg{background:var(--bg);border-radius:14px;padding:8px;text-align:center;font-size:12px;color:var(--sub)}
+.pg .im{height:160px;display:grid;place-items:center;overflow:hidden}
+.pg img{max-width:100%;max-height:100%;box-shadow:0 2px 10px rgba(0,0,0,.25);transition:transform .25s}
+.pg .row{justify-content:center;gap:4px;margin-top:6px}
+.pg button{border:0;background:var(--fill);color:var(--tx);border-radius:8px;width:28px;height:28px;cursor:pointer}
+.li{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}.li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.li small{color:var(--sub)}
+.stat{font-size:30px;font-weight:700;letter-spacing:-.02em}.sub{color:var(--sub);font-size:14px}
+.ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:4px 16px}
+#u-cv{display:block;max-width:100%;max-height:70vh;width:auto;height:auto;margin:0 auto 14px;border-radius:12px;touch-action:none;background:var(--fill);cursor:crosshair}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;background:rgba(30,30,30,.94);color:#fff;padding:12px 20px;border-radius:980px;font-size:14px;transition:.3s;z-index:30;max-width:90vw;text-align:center}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+#busy{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.4);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);z-index:40;color:#fff;font-weight:600;font-size:17px;text-align:center;padding:20px}
+#busy.on{display:grid}[hidden]{display:none!important}
+</style></head><body>
+<div class="nav"><button id="back" onclick="go('home')">‹ Studio</button><h1 id="ttl">Gamura PDF Studio</h1><i></i></div>
+<div class="wrap">
+
+<section class="view" id="v-home"><div class="hero"><h2>Every PDF tool.<br>One beautiful place.</h2><p>Create, edit, merge, compress and design. Everything runs in your browser, so your files never leave your device.</p></div><div class="grid" id="tiles"></div></section>
+
+<section class="view" id="v-create" hidden><div class="card">
+<label>Title (optional)</label><input type="text" id="c-title" placeholder="My document">
+<label>Text</label><textarea id="c-text" placeholder="Type or paste your text…"></textarea>
+<div class="row"><div class="f"><label>Page size</label><select id="c-size"><option>A4</option><option>Letter</option></select></div><div class="f"><label>Font size</label><select id="c-fs"><option>11</option><option selected>12</option><option>14</option><option>16</option></select></div></div>
+<label>Add images (each becomes a page)</label><div class="drop" id="c-drop"><b>Add images</b><span id="c-count">PNG, JPG, WebP</span></div>
+<p class="sub">Text uses the standard Latin font. For other scripts, add them as images instead.</p>
+<button class="btn" id="c-go">Create PDF</button></div></section>
+
+<section class="view" id="v-edit" hidden><div class="card">
+<div class="drop" id="e-drop"><b>Choose a PDF</b>or drop it here</div>
+<div id="e-work" hidden><p class="sub">Rotate, reorder or delete pages, then export.</p><div class="pgs" id="e-grid"></div>
+<div class="row"><div class="f"><label>Watermark text</label><input type="text" id="e-wm" placeholder="CONFIDENTIAL"></div><label class="f" style="margin-top:34px"><input type="checkbox" id="e-num"> Add page numbers</label></div>
+<p><button class="btn" id="e-go">Export PDF</button></p></div></div></section>
+
+<section class="view" id="v-merge" hidden>
+<div class="seg" id="m-seg"><button class="on" data-k="merge">Merge</button><button data-k="split">Split</button><button data-k="img">PDF to images</button></div>
+<div class="card" id="m-merge"><div class="drop" id="m-drop"><b>Add PDFs</b>Choose two or more</div><div id="m-list"></div><p><button class="btn" id="m-go" disabled>Merge PDFs</button></p></div>
+<div class="card" id="m-split" hidden><div class="drop" id="s-drop"><b>Choose a PDF</b><span id="s-info">to extract pages from</span></div>
+<label>Pages to keep (for example 1-3,5)</label><input type="text" id="s-rng" placeholder="1-3,5"><p><button class="btn" id="s-go" disabled>Extract pages</button></p></div>
+<div class="card" id="m-img" hidden><div class="drop" id="i-drop"><b>Choose a PDF</b>to turn into PNG images</div><div id="i-list"></div></div></section>
+
+<section class="view" id="v-comp" hidden><div class="card">
+<div class="drop" id="k-drop"><b>Choose a PDF</b><span id="k-info">to make it smaller</span></div>
+<label>Compression level</label><div class="seg" id="k-seg"><button data-k="low">Maximum</button><button class="on" data-k="med">Balanced</button><button data-k="high">Quality</button></div>
+<p class="sub">Pages are re-rendered as optimized images, so text won’t be selectable in the result.</p>
+<button class="btn" id="k-go" disabled>Compress</button>
+<div id="k-out" hidden style="margin-top:18px"><div class="stat" id="k-stat"></div><p class="sub" id="k-sub"></p><button class="btn" id="k-save">Save compressed PDF</button></div></div></section>
+
+<section class="view" id="v-ultra" hidden><div class="card" id="u-start"><div class="drop" id="u-drop"><b>Upload an image</b>Edit it like a canvas, then export as PNG or PDF</div></div>
+<div id="u-work" hidden><div class="card"><canvas id="u-cv"></canvas>
+<div class="seg" id="u-seg"><button class="on" data-k="pen">Pen</button><button data-k="eraser">Eraser</button><button data-k="text">Text</button></div>
+<div class="row"><input type="color" id="u-col" value="#10b981"><div class="f"><input type="range" id="u-sz" min="2" max="40" value="6"></div><div class="f"><input type="text" id="u-text" placeholder="Text to place, then tap the image"></div></div>
+<div class="row" style="margin-top:12px"><button class="btn sec sm" id="u-undo">Undo</button><button class="btn sec sm" id="u-clr">Clear drawing</button><button class="btn sec sm" id="u-rot">Rotate</button><button class="btn sec sm" id="u-flip">Flip</button><button class="btn sec sm" id="u-doc">Document mode</button><button class="btn sec sm" id="u-rst">Reset filters</button></div></div>
+<div class="card"><div class="ctl"><div><label>Brightness</label><input type="range" id="u-b" min="50" max="150" value="100"></div><div><label>Contrast</label><input type="range" id="u-c" min="50" max="170" value="100"></div><div><label>Saturation</label><input type="range" id="u-s" min="0" max="200" value="100"></div></div>
+<div class="row" style="margin-top:12px"><label><input type="checkbox" id="u-g"> Black &amp; white</label><label><input type="checkbox" id="u-se"> Sepia</label></div></div>
+<div class="row"><button class="btn" id="u-pdf">Save as PDF</button><button class="btn sec" id="u-png">Save as PNG</button></div></div></section>
+</div>
+<div id="toast"></div><div id="busy"></div>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const {PDFDocument,StandardFonts,rgb,degrees}=PDFLib;
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+let dl=null;(async()=>{try{dl=await window.claude.use('downloads')}catch(e){}})();
+const fmt=b=>b>1048576?(b/1048576).toFixed(2)+' MB':(b/1024).toFixed(1)+' KB';
+const buf=f=>f.arrayBuffer(),esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const mk=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c};
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2800)}
+async function save(name,data){if(!dl){toast('Saving isn’t available in this view');return}try{await dl.save({filename:name,data});toast('Saved ✓')}catch(e){if(!e||e.code!=='declined')toast('Couldn’t save: '+((e&&e.message)||'error'))}}
+async function work(msg,fn){const b=$('#busy');b.textContent=msg;b.classList.add('on');try{await fn()}catch(e){toast(e.message||'Something went wrong')}finally{b.classList.remove('on')}}
+function picker(z,acc,multi,cb){const i=document.createElement('input');i.type='file';i.accept=acc;i.multiple=multi;i.hidden=true;z.parentNode.append(i);z.onclick=()=>i.click();i.onchange=()=>{cb([...i.files]);i.value=''};
+z.ondragover=e=>{e.preventDefault();z.classList.add('hot')};z.ondragleave=()=>z.classList.remove('hot');z.ondrop=e=>{e.preventDefault();z.classList.remove('hot');cb([...e.dataTransfer.files])}}
+function seg(sel,cb){const s=$(sel);s.onclick=e=>{const b=e.target.closest('button');if(!b)return;[...s.children].forEach(c=>c.classList.toggle('on',c===b));cb(b.dataset.k)}}
+const T={create:['PDF Creator','Build PDFs from text and images','📝','#34c759,#0a8f4a'],edit:['PDF Editor','Reorder, rotate, delete, watermark, number','✏️','#ff9f0a,#ff6a00'],merge:['Merge & Convert','Merge, split, or turn pages into images','🧩','#0a84ff,#5e5ce6'],comp:['Compress','Shrink file size with a before and after','🗜️','#bf5af2,#ff375f'],ultra:['Ultra Modifier','Edit any image on a canvas, export to PDF','🎨','#30d5c8,#059669']};
+$('#tiles').innerHTML=Object.entries(T).map(([k,v])=>`<button class="tile" onclick="go('${k}')"><div class="ic" style="background:linear-gradient(135deg,${v[3]})">${v[2]}</div><h3>${v[0]}</h3><p>${v[1]}</p></button>`).join('');
+function go(k){$$('.view').forEach(v=>v.hidden=v.id!=='v-'+k);$('#back').style.visibility=k==='home'?'hidden':'visible';$('#ttl').textContent=k==='home'?'Gamura PDF Studio':T[k][0];scrollTo(0,0)}go('home');
+async function imgBytes(f){if(f.type==='image/png'||f.type==='image/jpeg')return{b:await buf(f),t:f.type==='image/png'?'png':'jpg'};const bm=await createImageBitmap(f),c=mk(bm.width,bm.height);c.getContext('2d').drawImage(bm,0,0);return{b:await buf(await new Promise(r=>c.toBlob(r,'image/png'))),t:'png'}}
+const openPdf=async ab=>pdfjsLib.getDocument({data:new Uint8Array(ab.slice(0))}).promise;
+async function renderPage(d,i,s){const p=await d.getPage(i),v=p.getViewport({scale:s}),c=mk(Math.ceil(v.width),Math.ceil(v.height));await p.render({canvasContext:c.getContext('2d'),viewport:v}).promise;return c}
+const isPdf=f=>/pdf/i.test(f.type)||/\.pdf$/i.test(f.name);
+
+/* ---- Creator ---- */
+let cImgs=[];picker($('#c-drop'),'image/*',true,fs=>{cImgs.push(...fs);$('#c-count').textContent=cImgs.length+' image(s) added'});
+$('#c-go').onclick=()=>work('Creating PDF…',async()=>{
+ const text=$('#c-text').value,title=$('#c-title').value.trim();if(!text.trim()&&!title&&!cImgs.length)throw Error('Add some text or images first');
+ const doc=await PDFDocument.create(),font=await doc.embedFont(StandardFonts.Helvetica),bold=await doc.embedFont(StandardFonts.HelveticaBold);
+ const sz=$('#c-size').value==='A4'?[595.28,841.89]:[612,792],fs=+$('#c-fs').value,m=56,lh=fs*1.5,mw=sz[0]-2*m;
+ if(title||text.trim()){let pg=doc.addPage(sz),y=sz[1]-m;
+  const line=s=>{if(y<m+lh){pg=doc.addPage(sz);y=sz[1]-m}pg.drawText(s,{x:m,y:y-fs,size:fs,font});y-=lh};
+  try{if(title){pg.drawText(title,{x:m,y:y-24,size:24,font:bold});y-=46}
+  for(const para of text.split('\n')){let cur='';for(const w of para.split(' ')){const t=cur?cur+' '+w:w;if(font.widthOfTextAtSize(t,fs)>mw&&cur){line(cur);cur=w}else cur=t}line(cur)}}
+  catch(e){throw Error('This text has characters the standard font can’t draw. Use images for other scripts.')}}
+ for(const f of cImgs){const{b,t}=await imgBytes(f),im=t==='png'?await doc.embedPng(b):await doc.embedJpg(b),pg=doc.addPage(sz),k=Math.min((sz[0]-40)/im.width,(sz[1]-40)/im.height),w=im.width*k,h=im.height*k;pg.drawImage(im,{x:(sz[0]-w)/2,y:(sz[1]-h)/2,width:w,height:h})}
+ await save('gamura-document.pdf',await doc.save())});
+
+/* ---- Editor ---- */
+let eSrc,eBytes,ePg=[],eTh={};
+picker($('#e-drop'),'application/pdf',false,([f])=>{if(!f)return;work('Loading pages…',async()=>{eBytes=await buf(f);eSrc=await openPdf(eBytes);eTh={};ePg=[...Array(eSrc.numPages)].map((_,i)=>({i,r:0}));for(let i=0;i<eSrc.numPages;i++)eTh[i]=(await renderPage(eSrc,i+1,.35)).toDataURL('image/jpeg',.7);$('#e-work').hidden=false;drawE()})});
+function drawE(){$('#e-grid').innerHTML=ePg.map((p,n)=>`<div class="pg"><div class="im"><img src="${eTh[p.i]}" style="transform:rotate(${p.r}deg)"></div>Page ${p.i+1}<div class="row"><button data-a="l" data-n="${n}">↺</button><button data-a="r" data-n="${n}">↻</button><button data-a="<" data-n="${n}">←</button><button data-a=">" data-n="${n}">→</button><button data-a="x" data-n="${n}">✕</button></div></div>`).join('');$('#e-go').disabled=!ePg.length}
+$('#e-grid').onclick=e=>{const b=e.target.closest('button');if(!b)return;const n=+b.dataset.n,a=b.dataset.a,p=ePg;if(a==='l')p[n].r=(p[n].r+270)%360;else if(a==='r')p[n].r=(p[n].r+90)%360;else if(a==='x')p.splice(n,1);else if(a==='<'&&n>0)[p[n-1],p[n]]=[p[n],p[n-1]];else if(a==='>'&&n<p.length-1)[p[n+1],p[n]]=[p[n],p[n+1]];drawE()};
+$('#e-go').onclick=()=>work('Exporting…',async()=>{const src=await PDFDocument.load(eBytes,{ignoreEncryption:true}),out=await PDFDocument.create(),font=await out.embedFont(StandardFonts.HelveticaBold),wm=$('#e-wm').value.trim(),num=$('#e-num').checked;
+ const cp=await out.copyPages(src,ePg.map(p=>p.i));
+ try{cp.forEach((pg,k)=>{pg.setRotation(degrees((pg.getRotation().angle+ePg[k].r)%360));out.addPage(pg);const{width:w,height:h}=pg.getSize();
+  if(wm){const s=Math.min(72,w*.9/(wm.length*.6)),tw=font.widthOfTextAtSize(wm,s);pg.drawText(wm,{x:w/2-tw*.35,y:h/2-tw*.35,size:s,font,color:rgb(.5,.5,.5),opacity:.22,rotate:degrees(45)})}
+  if(num)pg.drawText(String(k+1),{x:w/2-4,y:20,size:10,font,color:rgb(.3,.3,.3)})})}catch(e){throw Error('Watermark has unsupported characters')}
+ await save('gamura-edited.pdf',await out.save())});
+
+/* ---- Merge & Convert ---- */
+seg('#m-seg',v=>['merge','split','img'].forEach(k=>$('#m-'+k).hidden=k!==v));
+let mf=[];picker($('#m-drop'),'application/pdf',true,fs=>{mf.push(...fs.filter(isPdf));ml()});
+function ml(){$('#m-list').innerHTML=mf.map((f,i)=>`<div class="li"><span>${esc(f.name)}</span><small>${fmt(f.size)}</small><button class="btn sec sm" data-a="u" data-i="${i}">↑</button><button class="btn sec sm" data-a="d" data-i="${i}">↓</button><button class="btn sec sm" data-a="x" data-i="${i}">✕</button></div>`).join('');$('#m-go').disabled=mf.length<2}
+$('#m-list').onclick=e=>{const b=e.target.closest('button');if(!b)return;const i=+b.dataset.i,a=b.dataset.a;if(a==='x')mf.splice(i,1);else{const j=a==='u'?i-1:i+1;if(j>=0&&j<mf.length)[mf[i],mf[j]]=[mf[j],mf[i]]}ml()};
+$('#m-go').onclick=()=>work('Merging…',async()=>{const out=await PDFDocument.create();for(const f of mf){const s=await PDFDocument.load(await buf(f),{ignoreEncryption:true});(await out.copyPages(s,s.getPageIndices())).forEach(p=>out.addPage(p))}await save('gamura-merged.pdf',await out.save())});
+let sf,sn=0;picker($('#s-drop'),'application/pdf',false,([f])=>{if(!f)return;work('Reading…',async()=>{sf=await buf(f);sn=(await PDFDocument.load(sf,{ignoreEncryption:true})).getPageCount();$('#s-info').textContent=f.name+' · '+sn+' pages';$('#s-go').disabled=false})});
+function range(s,n){const o=[];for(const p of s.split(',')){const m=p.trim().match(/^(\d+)(?:-(\d+))?$/);if(!m)throw Error('Use a format like 1-3,5');const a=+m[1],b=+(m[2]||m[1]);if(a<1||b>n||a>b)throw Error('Pages must be between 1 and '+n);for(let i=a;i<=b;i++)o.push(i-1)}return o}
+$('#s-go').onclick=()=>work('Extracting…',async()=>{const s=await PDFDocument.load(sf,{ignoreEncryption:true}),out=await PDFDocument.create(),ix=range($('#s-rng').value,sn);(await out.copyPages(s,ix)).forEach(p=>out.addPage(p));await save('gamura-extract.pdf',await out.save())});
+let iBlobs=[];picker($('#i-drop'),'application/pdf',false,([f])=>{if(!f)return;work('Rendering pages…',async()=>{const d=await openPdf(await buf(f));iBlobs=[];for(let i=1;i<=d.numPages;i++){$('#busy').textContent='Rendering page '+i+' of '+d.numPages+'…';const c=await renderPage(d,i,2);iBlobs.push({u:c.toDataURL('image/jpeg',.5),b:await new Promise(r=>c.toBlob(r,'image/png'))})}
+ $('#i-list').innerHTML='<div class="pgs">'+iBlobs.map((x,i)=>`<div class="pg"><div class="im"><img src="${x.u}"></div>Page ${i+1}<div class="row"><button class="btn sm" style="width:auto;border-radius:980px;padding:0 12px" data-i="${i}">Save PNG</button></div></div>`).join('')+'</div>'})});
+$('#i-list').onclick=e=>{const b=e.target.closest('button');if(b)save('gamura-page-'+(+b.dataset.i+1)+'.png',iBlobs[+b.dataset.i].b)};
+
+/* ---- Compress ---- */
+let kb,kq='med',kres,kn;seg('#k-seg',v=>kq=v);
+picker($('#k-drop'),'application/pdf',false,async([f])=>{if(!f)return;kb=await buf(f);kn=f.name;$('#k-info').textContent=f.name+' · '+fmt(kb.byteLength);$('#k-go').disabled=false;$('#k-out').hidden=true});
+$('#k-go').onclick=()=>work('Compressing…',async()=>{const P={low:[.9,.5],med:[1.3,.65],high:[1.9,.82]}[kq],d=await openPdf(kb),out=await PDFDocument.create();
+ for(let i=1;i<=d.numPages;i++){$('#busy').textContent='Compressing page '+i+' of '+d.numPages+'…';const pg=await d.getPage(i),v=pg.getViewport({scale:1}),c=await renderPage(d,i,P[0]),im=await out.embedJpg(await buf(await new Promise(r=>c.toBlob(r,'image/jpeg',P[1])))),np=out.addPage([v.width,v.height]);np.drawImage(im,{x:0,y:0,width:v.width,height:v.height})}
+ kres=await out.save();const a=kb.byteLength,b=kres.byteLength,p=Math.round((1-b/a)*100);$('#k-out').hidden=false;
+ $('#k-stat').textContent=fmt(a)+' → '+fmt(b);$('#k-sub').textContent=p>0?'Saved '+p+'%':'Already well optimized. Try the Maximum level or keep the original.'});
+$('#k-save').onclick=()=>save('compressed-'+kn.replace(/[^\w.-]+/g,'_'),kres);
+
+/* ---- Ultra Modifier ---- */
+let src,ink,fb,hist=[],ut='pen',drawing=false,last;const cv=$('#u-cv');
+picker($('#u-drop'),'image/*',false,async([f])=>{if(!f)return;try{const bm=await createImageBitmap(f),k=Math.min(1,1600/Math.max(bm.width,bm.height));src=mk(Math.round(bm.width*k),Math.round(bm.height*k));src.getContext('2d').drawImage(bm,0,0,src.width,src.height);ink=mk(src.width,src.height);hist=[];$('#u-start').hidden=true;$('#u-work').hidden=false;filt();comp()}catch(e){toast('Couldn’t open that image')}});
+function filt(){fb=mk(src.width,src.height);const x=fb.getContext('2d'),d=src.getContext('2d').getImageData(0,0,src.width,src.height),p=d.data,b=$('#u-b').value/100,c=$('#u-c').value/100,s=$('#u-s').value/100,g=$('#u-g').checked,se=$('#u-se').checked;
+ for(let i=0;i<p.length;i+=4){let r=(p[i]*b-128)*c+128,e=(p[i+1]*b-128)*c+128,u=(p[i+2]*b-128)*c+128;const l=.299*r+.587*e+.114*u;r=l+(r-l)*s;e=l+(e-l)*s;u=l+(u-l)*s;if(g){r=e=u=l}if(se){const R=.393*r+.769*e+.189*u,G=.349*r+.686*e+.168*u,B=.272*r+.534*e+.131*u;r=R;e=G;u=B}p[i]=r;p[i+1]=e;p[i+2]=u}x.putImageData(d,0,0)}
+function comp(){if(cv.width!==src.width||cv.height!==src.height){cv.width=src.width;cv.height=src.height}const x=cv.getContext('2d');x.clearRect(0,0,cv.width,cv.height);x.drawImage(fb,0,0);x.drawImage(ink,0,0)}
+['u-b','u-c','u-s','u-g','u-se'].forEach(id=>$('#'+id).oninput=()=>{filt();comp()});
+seg('#u-seg',v=>ut=v);
+const pt=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
+const cp=c=>{const n=mk(c.width,c.height);n.getContext('2d').drawImage(c,0,0);return n};
+function stroke(a,b,c,d){const k=ink.getContext('2d');k.globalCompositeOperation=ut==='eraser'?'destination-out':'source-over';k.strokeStyle=$('#u-col').value;k.lineWidth=+$('#u-sz').value*Math.max(1,cv.width/700);k.lineCap=k.lineJoin='round';k.beginPath();k.moveTo(a,b);k.lineTo(c,d);k.stroke();comp()}
+cv.onpointerdown=e=>{if(!src)return;const[x,y]=pt(e),k=ink.getContext('2d');hist.push(cp(ink));if(hist.length>25)hist.shift();
+ if(ut==='text'){k.globalCompositeOperation='source-over';k.fillStyle=$('#u-col').value;k.font='600 '+(+$('#u-sz').value*3+14)*Math.max(1,cv.width/700)+'px -apple-system,Helvetica,sans-serif';k.fillText($('#u-text').value||'Gamura',x,y);comp();return}
+ drawing=true;last=[x,y];cv.setPointerCapture(e.pointerId);stroke(x,y,x,y)};
+cv.onpointermove=e=>{if(drawing){const[x,y]=pt(e);stroke(last[0],last[1],x,y);last=[x,y]}};cv.onpointerup=cv.onpointercancel=()=>drawing=false;
+$('#u-undo').onclick=()=>{if(!hist.length)return;const h=hist.pop(),k=ink.getContext('2d');k.globalCompositeOperation='source-over';k.clearRect(0,0,ink.width,ink.height);k.drawImage(h,0,0);comp()};
+$('#u-clr').onclick=()=>{hist.push(cp(ink));ink.getContext('2d').clearRect(0,0,ink.width,ink.height);comp()};
+const xf=m=>{[src,ink]=[src,ink].map(c=>{const n=m?mk(c.height,c.width):mk(c.width,c.height),x=n.getContext('2d');if(m){x.translate(n.width,0);x.rotate(Math.PI/2)}else{x.translate(n.width,0);x.scale(-1,1)}x.drawImage(c,0,0);return n});hist=[];filt();comp()};
+$('#u-rot').onclick=()=>xf(1);$('#u-flip').onclick=()=>xf(0);
+const sl=(b,c,s,g,se)=>{$('#u-b').value=b;$('#u-c').value=c;$('#u-s').value=s;$('#u-g').checked=g;$('#u-se').checked=se;filt();comp()};
+$('#u-doc').onclick=()=>sl(112,150,100,true,false);$('#u-rst').onclick=()=>sl(100,100,100,false,false);
+const blob=t=>new Promise(r=>cv.toBlob(r,t,.92));
+$('#u-png').onclick=async()=>save('gamura-image.png',await blob('image/png'));
+$('#u-pdf').onclick=()=>work('Building PDF…',async()=>{const d=await PDFDocument.create(),im=await d.embedJpg(await buf(await blob('image/jpeg'))),w=cv.width*.75,h=cv.height*.75,p=d.addPage([w,h]);p.drawImage(im,{x:0,y:0,width:w,height:h});await save('gamura-image.pdf',await d.save())});
+</script></body></html>
