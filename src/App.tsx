@@ -195,6 +195,12 @@ import GamuraStoreLaunch, {
   LAUNCH_LOGO_SRC,
   LAUNCH_LOGO_FALLBACK,
 } from "./components/GamuraStoreLaunch";
+import UniverseAppsView from "./components/UniverseAppsView";
+import {
+  UNIVERSE_APPS_EVENT,
+  UNIVERSE_APPS_KEY,
+  getUniverseInstalledApps,
+} from "./utils/gamuraStoreApps";
 
 const GAMURA_G_LOGO =
   "https://lh3.googleusercontent.com/d/1QJprWSIgOa32ADyWHBikyBibzN80Vetv";
@@ -5727,6 +5733,26 @@ const UniverseDashboard = ({
   const [projectLink, setProjectLink] = useState("");
   const [projectImage, setProjectImage] = useState("");
   const [sortActiveFirst, setSortActiveFirst] = useState(false);
+  const [universeAppsCount, setUniverseAppsCount] = useState<number>(() =>
+    getUniverseInstalledApps().length,
+  );
+
+  useEffect(() => {
+    const syncCount = () => {
+      setUniverseAppsCount(getUniverseInstalledApps().length);
+    };
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === null || e.key === UNIVERSE_APPS_KEY) {
+        syncCount();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(UNIVERSE_APPS_EVENT, syncCount);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(UNIVERSE_APPS_EVENT, syncCount);
+    };
+  }, []);
 
   // Derive display name and ID early for scope safety
   const displayName =
@@ -7004,6 +7030,11 @@ const UniverseDashboard = ({
       items: [
         { name: "Overview", icon: <LayoutGrid size={16} /> },
         {
+          name: "Apps",
+          icon: <LayoutGrid size={16} />,
+          badge: universeAppsCount > 0 ? `${universeAppsCount}` : undefined,
+        },
+        {
           name: "Users",
           icon: <Users size={16} />,
           badge: allUsers.length > 0 ? `${allUsers.length}` : undefined,
@@ -7380,12 +7411,13 @@ const UniverseDashboard = ({
       `}</style>
 
       {/* APPLE-STYLE COMPACT WHITE BOTTOM TAB DOCK */}
-      <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white/95 backdrop-blur-2xl border-t border-zinc-200/80 px-2 h-14 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.04)]">
+      <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white/95 backdrop-blur-2xl border-t border-zinc-200/80 px-1.5 h-14 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.04)]">
         {[
-          { name: "Overview", label: "Home", icon: <Home size={16} /> },
-          { name: "Daily Streak", label: "Streak", icon: <Flame size={16} /> },
-          { name: "Audio Module", label: "Audio", icon: <Music size={16} /> },
-          { name: "Neutral Link", label: "Links", icon: <Link size={16} /> },
+          { name: "Overview", label: "Home", icon: <Home size={16} />, count: 0 },
+          { name: "Apps", label: "Apps", icon: <LayoutGrid size={16} />, count: universeAppsCount },
+          { name: "Daily Streak", label: "Streak", icon: <Flame size={16} />, count: 0 },
+          { name: "Audio Module", label: "Audio", icon: <Music size={16} />, count: 0 },
+          { name: "Neutral Link", label: "Links", icon: <Link size={16} />, count: 0 },
         ].map((item) => (
           <button
             key={item.name}
@@ -7393,19 +7425,26 @@ const UniverseDashboard = ({
               setActiveTab(item.name);
               setMobileOpen(false);
             }}
-            className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+            className={`relative flex flex-col items-center justify-center gap-0.5 px-2.5 py-1 rounded-xl transition-all cursor-pointer ${
               activeTab === item.name
                 ? "text-zinc-950 font-semibold"
                 : "text-zinc-400 hover:text-zinc-700"
             }`}
           >
-            {item.icon}
+            <div className="relative">
+              {item.icon}
+              {item.count > 0 && (
+                <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-1 rounded-full bg-[#059669] text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                  {item.count}
+                </span>
+              )}
+            </div>
             <span className="text-[10px] tracking-tight">{item.label}</span>
           </button>
         ))}
         <button
           onClick={() => setMobileOpen(true)}
-          className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1 rounded-xl transition-all cursor-pointer ${
+          className={`flex flex-col items-center justify-center gap-0.5 px-2.5 py-1 rounded-xl transition-all cursor-pointer ${
             mobileOpen ? "text-zinc-950 font-semibold" : "text-zinc-400 hover:text-zinc-700"
           }`}
           aria-label="Open Universe Menu"
@@ -7480,6 +7519,31 @@ const UniverseDashboard = ({
                 }}
                 className="flex-1 overflow-y-auto touch-pan-y px-4 sm:px-5 py-3.5 space-y-4 bg-[#f5f5f7]"
               >
+                <a
+                  href="/join-selvaranjan"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-white via-emerald-50/70 to-sky-50/70 border border-emerald-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-md transition-all group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-zinc-900 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Sparkles size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-zinc-950 tracking-tight truncate">
+                        Join Selvaranjan on Gamura
+                      </div>
+                      <div className="text-[10px] text-zinc-500 font-medium truncate">
+                        Open Developer Network in a new page
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-7 h-7 rounded-full bg-[#E2F5ED] text-[#059669] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <ArrowUpRight size={14} />
+                  </div>
+                </a>
+
                 {navGroups.map((group, gIdx) => (
                   <div key={gIdx} className="space-y-1.5">
                     {group.label && (
@@ -7627,6 +7691,18 @@ const UniverseDashboard = ({
           </div>
 
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
+            <a
+              href="/join-selvaranjan"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 sm:px-3 h-8 rounded-full bg-gradient-to-r from-emerald-50 to-sky-50 hover:from-emerald-100 hover:to-sky-100 border border-emerald-200/80 text-zinc-900 text-[11px] font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+              title="Join Selvaranjan on Gamura"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-[#059669] shrink-0" />
+              <span className="sm:hidden">Join Selvaranjan</span>
+              <span className="hidden sm:inline">Join Selvaranjan on Gamura</span>
+              <ArrowUpRight size={12} className="text-[#059669] shrink-0" />
+            </a>
             <button
               onClick={() => {
                 setNotifOpen(!notifOpen);
@@ -7669,7 +7745,9 @@ const UniverseDashboard = ({
                   : "960px",
           }}
         >
-          {activeTab === "Network Graph" ? (
+          {activeTab === "Apps" ? (
+            <UniverseAppsView showToast={showToast} />
+          ) : activeTab === "Network Graph" ? (
             <NetworkGraphView
               currentUser={user}
               showToast={showToast}
@@ -8688,6 +8766,7 @@ export default function App() {
     | "aura"
     | "universe-active"
     | "white-page"
+    | "join-selvaranjan"
     | "claim"
     | "gpdf"
     | "launch"
@@ -8723,6 +8802,7 @@ export default function App() {
     "settings",
     "developer",
     "white-page",
+    "join-selvaranjan",
     "showcase",
     "apps",
     "u",
@@ -8775,6 +8855,7 @@ export default function App() {
     if (lower === "about") return { page: "about", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "gg") return { page: "gg", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "white-page") return { page: "white-page", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "join-selvaranjan") return { page: "join-selvaranjan", claimed: null, shortSlug: null, prefillHandle: "" };
     if (u && (lower === "" || lower === "home")) {
       return { page: "white-page", claimed: null, shortSlug: null, prefillHandle: "" };
     }
@@ -12678,8 +12759,15 @@ ${targetContext}`;
     );
   }
 
-  if (currentPage === "white-page") {
-    return <SelvaranjanGamura onBack={() => setCurrentPage("home")} />;
+  if (currentPage === "white-page" || currentPage === "join-selvaranjan") {
+    return (
+      <SelvaranjanGamura
+        onBack={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
   }
 
   if (currentPage === "blank") {

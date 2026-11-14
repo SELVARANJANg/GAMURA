@@ -11,100 +11,31 @@ import {
   X,
   Trash2,
   Check,
-  Download,
+  Share,
+  Globe,
+  Smartphone,
+  Layers,
 } from "lucide-react";
+import StoreAppGlyph from "./StoreAppGlyph";
+import {
+  type StoreAppItem,
+  BUILTIN_STORE_APPS,
+  CUSTOM_STORE_APPS_KEY,
+  LEGACY_INSTALLED_KEY,
+  UNIVERSE_APPS_KEY,
+  MOBILE_APPS_KEY,
+  readStoreJson,
+  writeStoreJson,
+  addAppToUniverse,
+  removeAppFromUniverse,
+  addMobileInstalledId,
+  removeMobileInstalledId,
+  downloadStandaloneAppPackage,
+} from "../utils/gamuraStoreApps";
 
 export const LAUNCH_LOGO_SRC = "/assets/aistudio/1794679627931_b0492bbb.png";
 export const LAUNCH_LOGO_FALLBACK =
   "https://lh3.googleusercontent.com/d/1FqBAdXuyDDSSuYtd3iZzf9x5PM8orKrd";
-
-export interface StoreAppItem {
-  id: string;
-  name: string;
-  cat: string;
-  tag: string;
-  desc: string;
-  url: string;
-  c1: string;
-  c2: string;
-  rating: number;
-  dl: string;
-  size: string;
-  isBuiltin?: boolean;
-}
-
-const BUILTIN_APPS: StoreAppItem[] = [
-  {
-    id: "gamura",
-    name: "Gamura",
-    cat: "Platform",
-    tag: "The home of the Gamura ecosystem",
-    desc: "Gamura is the main hub of the ecosystem: gaming, tools and creator features in one cinematic, fast web experience. Create your profile, explore features and jump into every Gamura app from one place.",
-    url: "https://gamura.vercel.app/",
-    c1: "#3bff8b",
-    c2: "#0b8f5e",
-    rating: 4.9,
-    dl: "10K+",
-    size: "Web · 2 MB",
-    isBuiltin: true,
-  },
-  {
-    id: "galaxy",
-    name: "Gamura Galaxy",
-    cat: "Games",
-    tag: "Explore the Gamura universe",
-    desc: "Gamura Galaxy is the gaming universe of Gamura. Discover games, challenges and community content inside a glowing galaxy-style interface.",
-    url: "https://gamuragalaxy.vercel.app/",
-    c1: "#3b8bff",
-    c2: "#1b3fa8",
-    rating: 4.8,
-    dl: "5K+",
-    size: "Web · 3 MB",
-    isBuiltin: true,
-  },
-  {
-    id: "gcp",
-    name: "GCP · Gamura Code Preview",
-    cat: "Developer tools",
-    tag: "Write code. See it live.",
-    desc: "Gamura Code Preview (GCP) lets you write HTML, CSS and JavaScript and instantly preview the result in your browser. Built for students and developers who ship fast.",
-    url: "https://gamuracp.vercel.app/",
-    c1: "#ffd93b",
-    c2: "#d98a00",
-    rating: 4.7,
-    dl: "3K+",
-    size: "Web · 1 MB",
-    isBuiltin: true,
-  },
-  {
-    id: "world",
-    name: "Gamura World",
-    cat: "Platform",
-    tag: "The official hub for every Gamura venture",
-    desc: "Gamura World is the unified project hub that connects all Gamura ventures: apps, games, tools and news in one world.",
-    url: "https://gamuraworld.vercel.app/",
-    c1: "#ff4444",
-    c2: "#a3121f",
-    rating: 4.8,
-    dl: "2K+",
-    size: "Web · 2 MB",
-    isBuiltin: true,
-  },
-  {
-    id: "gpdf",
-    name: "Gamura PDF Studio",
-    cat: "Productivity",
-    tag: "Create, edit, merge & compress PDFs",
-    desc: "Gamura PDF Studio gives you five fast browser-side PDF tools: PDF Creator, PDF Editor, Merge & Convert, Compress, and Ultra Modifier canvas studio.",
-    url: "/gpdf",
-    c1: "#10b981",
-    c2: "#047857",
-    rating: 4.9,
-    dl: "4K+",
-    size: "Web · 2 MB",
-    isBuiltin: true,
-  },
-];
 
 const APPLE_FONT_STYLE: React.CSSProperties = {
   fontFamily:
@@ -113,42 +44,7 @@ const APPLE_FONT_STYLE: React.CSSProperties = {
 
 type StorePage = "home" | "search" | "lib" | "dev";
 type HomeTab = "foryou" | "top" | "cats" | "new";
-
-function readStorage<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStorage(key: string, val: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(val));
-  } catch {
-    // ignore storage errors
-  }
-}
-
-function AppTileIcon({
-  app,
-  sizeClass = "w-16 h-16 text-2xl",
-}: {
-  app: StoreAppItem;
-  sizeClass?: string;
-}) {
-  return (
-    <div
-      style={{
-        background: `linear-gradient(145deg, ${app.c1}, ${app.c2})`,
-      }}
-      className={`${sizeClass} rounded-[22%] flex items-center justify-center text-white font-bold shadow-[0_3px_10px_rgba(0,0,0,0.12)] shrink-0 select-none`}
-    >
-      {app.name.trim().charAt(0).toUpperCase() || "G"}
-    </div>
-  );
-}
+type InstallDestination = "universe" | "mobile" | "both";
 
 export default function GamuraStoreLaunch({
   onBackHome,
@@ -159,13 +55,19 @@ export default function GamuraStoreLaunch({
   const [page, setPage] = useState<StorePage>("home");
   const [tab, setTab] = useState<HomeTab>("foryou");
   const [queryText, setQueryText] = useState("");
+
   const [customApps, setCustomApps] = useState<StoreAppItem[]>(() =>
-    readStorage<StoreAppItem[]>("gs_custom", []),
+    readStoreJson<StoreAppItem[]>(CUSTOM_STORE_APPS_KEY, []),
   );
-  const [installedIds, setInstalledIds] = useState<string[]>(() =>
-    readStorage<string[]>("gs_inst", []),
+  const [universeApps, setUniverseApps] = useState<StoreAppItem[]>(() =>
+    readStoreJson<StoreAppItem[]>(UNIVERSE_APPS_KEY, []),
   );
+  const [mobileIds, setMobileIds] = useState<string[]>(() =>
+    readStoreJson<string[]>(MOBILE_APPS_KEY, []),
+  );
+
   const [selectedApp, setSelectedApp] = useState<StoreAppItem | null>(null);
+  const [promptApp, setPromptApp] = useState<StoreAppItem | null>(null);
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [installPct, setInstallPct] = useState(0);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -176,26 +78,46 @@ export default function GamuraStoreLaunch({
   const [fTag, setFTag] = useState("");
   const [fCat, setFCat] = useState("Platform");
   const [fDesc, setFDesc] = useState("");
-  const [fC1, setFC1] = useState("#3bff8b");
-  const [fC2, setFC2] = useState("#0b8f5e");
+  const [fC1, setFC1] = useState("#34d399");
+  const [fC2, setFC2] = useState("#059669");
 
   useEffect(() => {
     const prev = document.title;
-    document.title = "Gamura Launch · Gamura Store";
+    document.title = "Gamura Launch Store";
     return () => {
       document.title = prev;
     };
   }, []);
 
+  // Keep synced with storage changes across tabs (e.g. uninstall from Universe tab)
+  useEffect(() => {
+    const syncState = () => {
+      setUniverseApps(readStoreJson<StoreAppItem[]>(UNIVERSE_APPS_KEY, []));
+      setMobileIds(readStoreJson<string[]>(MOBILE_APPS_KEY, []));
+      setCustomApps(readStoreJson<StoreAppItem[]>(CUSTOM_STORE_APPS_KEY, []));
+    };
+    window.addEventListener("storage", syncState);
+    return () => window.removeEventListener("storage", syncState);
+  }, []);
+
   const showToast = (msg: string) => {
     setToastMsg(msg);
-    window.setTimeout(() => setToastMsg(null), 2200);
+    window.setTimeout(() => setToastMsg(null), 2400);
   };
 
   const allApps = useMemo(
-    () => [...BUILTIN_APPS, ...customApps],
+    () => [...BUILTIN_STORE_APPS, ...customApps],
     [customApps],
   );
+
+  const installedIdSet = useMemo(() => {
+    const ids = new Set<string>(mobileIds);
+    universeApps.forEach((a) => ids.add(a.id));
+    return ids;
+  }, [mobileIds, universeApps]);
+
+  const isInUniverse = (id: string) => universeApps.some((a) => a.id === id);
+  const isInMobile = (id: string) => mobileIds.includes(id);
 
   const filteredApps = useMemo(() => {
     const q = queryText.trim().toLowerCase();
@@ -210,37 +132,110 @@ export default function GamuraStoreLaunch({
     [allApps],
   );
 
-  const handleInstall = (app: StoreAppItem) => {
-    if (installedIds.includes(app.id) || installingId === app.id) return;
-    setInstallingId(app.id);
-    setInstallPct(8);
-    let progress = 8;
-    const timer = window.setInterval(() => {
-      progress += 14 + Math.random() * 14;
-      if (progress >= 100) {
-        window.clearInterval(timer);
-        setInstallPct(100);
-        setInstalledIds((prev) => {
-          const next = prev.includes(app.id) ? prev : [...prev, app.id];
-          writeStorage("gs_inst", next);
-          return next;
-        });
-        setInstallingId(null);
-        setInstallPct(0);
-        showToast(`${app.name} installed`);
-      } else {
-        setInstallPct(Math.min(96, Math.round(progress)));
-      }
-    }, 110);
+  // Clicking GET or Download opens the destination prompt question
+  const handleGetClick = (
+    app: StoreAppItem,
+    e?: React.MouseEvent<HTMLElement>,
+  ) => {
+    if (e) e.stopPropagation();
+    if (installingId === app.id) return;
+    if (installedIdSet.has(app.id)) {
+      setSelectedApp(app);
+      return;
+    }
+    setPromptApp(app);
   };
 
-  const handleUninstall = (id: string) => {
-    setInstalledIds((prev) => {
-      const next = prev.filter((item) => item !== id);
-      writeStorage("gs_inst", next);
-      return next;
-    });
-    showToast("Removed from My apps");
+  // Run animated install after user answers where they want to use the app
+  const executeInstallWithDestination = (
+    app: StoreAppItem,
+    destination: InstallDestination,
+  ) => {
+    setPromptApp(null);
+    setInstallingId(app.id);
+    setInstallPct(12);
+
+    let progress = 12;
+    const timer = window.setInterval(() => {
+      progress += 18 + Math.random() * 14;
+      if (progress >= 100) {
+        window.clearInterval(timer);
+        setInstallingId(null);
+        setInstallPct(0);
+
+        if (destination === "universe" || destination === "both") {
+          const updatedU = addAppToUniverse(app);
+          setUniverseApps(updatedU);
+        }
+        if (destination === "mobile" || destination === "both") {
+          const updatedM = addMobileInstalledId(app.id);
+          setMobileIds(updatedM);
+          downloadStandaloneAppPackage(app);
+        }
+
+        // Sync legacy installed key for full compatibility
+        const legacy = readStoreJson<string[]>(LEGACY_INSTALLED_KEY, []);
+        if (!legacy.includes(app.id)) {
+          writeStoreJson(LEGACY_INSTALLED_KEY, [...legacy, app.id]);
+        }
+
+        if (destination === "universe") {
+          showToast(`${app.name} added to Universe Apps ✓`);
+        } else if (destination === "mobile") {
+          showToast(`${app.name} downloaded for Mobile App ✓`);
+        } else {
+          showToast(`${app.name} installed in Universe & Mobile ✓`);
+        }
+      } else {
+        setInstallPct(Math.min(95, Math.round(progress)));
+      }
+    }, 95);
+  };
+
+  const handleUninstallAll = (app: StoreAppItem) => {
+    const nextU = removeAppFromUniverse(app.id);
+    const nextM = removeMobileInstalledId(app.id);
+    setUniverseApps(nextU);
+    setMobileIds(nextM);
+    const legacy = readStoreJson<string[]>(LEGACY_INSTALLED_KEY, []).filter(
+      (id) => id !== app.id,
+    );
+    writeStoreJson(LEGACY_INSTALLED_KEY, legacy);
+    showToast(`${app.name} uninstalled`);
+  };
+
+  const handleToggleUniverse = (app: StoreAppItem) => {
+    if (isInUniverse(app.id)) {
+      setUniverseApps(removeAppFromUniverse(app.id));
+      showToast(`Removed ${app.name} from Universe Apps`);
+    } else {
+      setUniverseApps(addAppToUniverse(app));
+      showToast(`Added ${app.name} to Universe Apps ✓`);
+    }
+  };
+
+  const handleShareApp = async (app: StoreAppItem) => {
+    const fullUrl = app.url.startsWith("/")
+      ? `${window.location.origin}${app.url}`
+      : app.url;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: app.name,
+          text: app.tag,
+          url: fullUrl,
+        });
+        return;
+      }
+    } catch {
+      // fallback to clipboard
+    }
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      showToast("App link copied ✓");
+    } catch {
+      showToast(fullUrl);
+    }
   };
 
   const handlePublishApp = (e: React.FormEvent) => {
@@ -264,14 +259,17 @@ export default function GamuraStoreLaunch({
       url: normalizedUrl,
       c1: fC1,
       c2: fC2,
-      rating: 4.6,
+      iconKind: "letter",
+      rating: 4.8,
+      age: "3+",
+      chart: "New",
       dl: "New",
       size: "Web · 1 MB",
     };
 
     const next = [...customApps, created];
     setCustomApps(next);
-    writeStorage("gs_custom", next);
+    writeStoreJson(CUSTOM_STORE_APPS_KEY, next);
     setFName("");
     setFUrl("");
     setFTag("");
@@ -284,51 +282,81 @@ export default function GamuraStoreLaunch({
 
   const handleDeleteCustom = (id: string) => {
     const nextCustom = customApps.filter((a) => a.id !== id);
-    const nextInst = installedIds.filter((i) => i !== id);
     setCustomApps(nextCustom);
-    setInstalledIds(nextInst);
-    writeStorage("gs_custom", nextCustom);
-    writeStorage("gs_inst", nextInst);
+    writeStoreJson(CUSTOM_STORE_APPS_KEY, nextCustom);
+    setUniverseApps(removeAppFromUniverse(id));
+    setMobileIds(removeMobileInstalledId(id));
     if (selectedApp?.id === id) setSelectedApp(null);
-    showToast("App removed");
+    showToast("App removed from Store");
   };
 
   const renderAppRow = (app: StoreAppItem, rank?: number) => {
-    const isInstalled = installedIds.includes(app.id);
+    const isInstalled = installedIdSet.has(app.id);
+    const isInstalling = installingId === app.id;
     return (
-      <button
+      <div
         key={app.id}
-        type="button"
         onClick={() => setSelectedApp(app)}
-        className="w-full flex items-center gap-3.5 py-3 px-3 rounded-2xl hover:bg-[#F5F5F7] transition-colors text-left cursor-pointer"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setSelectedApp(app);
+          }
+        }}
+        className="w-full flex items-center gap-3.5 py-3.5 px-2.5 sm:px-3 rounded-2xl hover:bg-[#F5F5F7] transition-colors text-left cursor-pointer"
       >
         {rank !== undefined && (
           <span className="w-5 text-xs font-bold text-[#6E6E73] tabular-nums shrink-0 text-center">
             {rank}
           </span>
         )}
-        <AppTileIcon app={app} sizeClass="w-14 h-14 text-xl" />
+        <StoreAppGlyph app={app} sizeClass="w-14 h-14 text-2xl" iconPx={26} />
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-[#1D1D1F] truncate">
+          <div className="text-[15px] font-bold text-[#1D1D1F] truncate">
             {app.name}
           </div>
-          <div className="text-xs text-[#6E6E73] truncate">
-            {app.cat} · {app.tag}
+          <div className="text-xs sm:text-[13px] text-[#6E6E73] truncate">
+            {app.tag}
           </div>
-          <div className="text-[11px] text-[#6E6E73] mt-0.5 tabular-nums">
-            {app.rating} ★ · {app.size}
+          <div className="text-[11px] text-[#6E6E73] mt-0.5 tabular-nums flex items-center gap-1.5">
+            <span>{app.cat}</span>
+            <span aria-hidden="true">·</span>
+            <span>{app.rating} ★</span>
+            {isInUniverse(app.id) && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="text-[#059669] font-semibold">Universe</span>
+              </>
+            )}
           </div>
         </div>
-        <span
-          className={`px-4 py-1.5 rounded-full text-xs font-semibold shrink-0 whitespace-nowrap border transition-colors ${
-            isInstalled
-              ? "bg-[#0b8f5e] text-white border-[#0b8f5e]"
-              : "bg-white text-[#0b8f5e] border-zinc-200/80"
-          }`}
-        >
-          {isInstalled ? "Open" : "Install"}
-        </span>
-      </button>
+
+        {isInstalling ? (
+          <div className="px-4 py-1.5 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums shrink-0">
+            {installPct}%
+          </div>
+        ) : isInstalled ? (
+          <a
+            href={app.url}
+            target={app.url.startsWith("/") ? "_self" : "_blank"}
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="px-5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide shrink-0 whitespace-nowrap transition-colors"
+          >
+            OPEN
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => handleGetClick(app, e)}
+            className="px-5 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide shrink-0 whitespace-nowrap cursor-pointer transition-colors"
+          >
+            GET
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -337,10 +365,14 @@ export default function GamuraStoreLaunch({
       key={app.id}
       type="button"
       onClick={() => setSelectedApp(app)}
-      className="w-[116px] sm:w-[124px] shrink-0 text-left group cursor-pointer space-y-2"
+      className="w-[116px] sm:w-[126px] shrink-0 text-left group cursor-pointer space-y-2"
     >
       <div className="group-hover:scale-[1.03] transition-transform">
-        <AppTileIcon app={app} sizeClass="w-[116px] h-[116px] sm:w-[124px] sm:h-[124px] text-4xl" />
+        <StoreAppGlyph
+          app={app}
+          sizeClass="w-[116px] h-[116px] sm:w-[126px] sm:h-[126px] text-4xl"
+          iconPx={46}
+        />
       </div>
       <div>
         <div className="text-xs font-semibold text-[#1D1D1F] truncate">
@@ -363,7 +395,6 @@ export default function GamuraStoreLaunch({
       {/* Top Apple Header Bar with Launch Logo Top-Left */}
       <header className="sticky top-0 z-30 bg-white/88 backdrop-blur-2xl border-b border-black/[0.06]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-3">
-          {/* Top-Left Launch Logo + Back Home */}
           <button
             type="button"
             onClick={onBackHome}
@@ -382,8 +413,7 @@ export default function GamuraStoreLaunch({
             </span>
           </button>
 
-          {/* Search Input */}
-          <div className="flex-1 flex items-center gap-2.5 bg-[#F5F5F7] border border-zinc-200/80 focus-within:bg-white focus-within:border-[#0b8f5e] rounded-full px-3.5 py-2 transition-all min-w-0">
+          <div className="flex-1 flex items-center gap-2.5 bg-[#F5F5F7] border border-zinc-200/80 focus-within:bg-white focus-within:border-[#059669] rounded-full px-3.5 py-2 transition-all min-w-0">
             <Search size={15} className="text-[#6E6E73] shrink-0" />
             <input
               value={queryText}
@@ -408,14 +438,14 @@ export default function GamuraStoreLaunch({
             href="/gpdf"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:inline-flex min-h-[38px] items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0b8f5e] hover:bg-[#09774e] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
+            className="hidden sm:inline-flex min-h-[38px] items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
           >
             <span>G PDF Studio</span>
             <ExternalLink size={12} />
           </a>
         </div>
 
-        {/* Store Filter Tabs on Home */}
+        {/* Filter Tabs */}
         {page === "home" && !queryText.trim() && (
           <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center gap-2 overflow-x-auto no-scrollbar border-t border-black/[0.04]">
             {[
@@ -430,7 +460,7 @@ export default function GamuraStoreLaunch({
                 onClick={() => setTab(t.id)}
                 className={`px-3 py-2.5 text-xs sm:text-sm font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
                   tab === t.id
-                    ? "text-[#0b8f5e] border-[#0b8f5e]"
+                    ? "text-[#059669] border-[#059669]"
                     : "text-[#6E6E73] border-transparent hover:text-[#1D1D1F]"
                 }`}
               >
@@ -459,18 +489,18 @@ export default function GamuraStoreLaunch({
                 Gamura Launch Store
               </h1>
               <p className="text-xs sm:text-sm text-[#6E6E73]">
-                Discover, install, and launch every Gamura web app in one fast
-                Apple-style marketplace.
+                Download apps directly into your Universe Apps dock or save to
+                your mobile device.
               </p>
             </div>
           </div>
         )}
 
-        {/* Search Results View */}
+        {/* Search Results */}
         {queryText.trim() ? (
           <div className="bg-white border border-zinc-200/80 rounded-3xl p-4 sm:p-6 shadow-xs space-y-2">
             <h2 className="text-base font-bold text-[#1D1D1F] px-2 pb-1">
-              Search Results ({filteredApps.length})
+              Discover ({filteredApps.length})
             </h2>
             {filteredApps.length > 0 ? (
               <div className="divide-y divide-zinc-100">
@@ -486,7 +516,7 @@ export default function GamuraStoreLaunch({
           <>
             {tab === "foryou" && (
               <div className="space-y-6">
-                {/* Featured Horizontal Snap Carousel */}
+                {/* Featured Carousel */}
                 <div className="flex gap-3.5 overflow-x-auto no-scrollbar pb-1 snap-x snap-mandatory">
                   {allApps.slice(0, 5).map((app) => (
                     <button
@@ -514,13 +544,13 @@ export default function GamuraStoreLaunch({
                   ))}
                 </div>
 
-                {/* Gamura Originals Horizontal Row */}
+                {/* Gamura Originals */}
                 <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-bold tracking-tight text-[#1D1D1F]">
                       Gamura originals
                     </h2>
-                    <span className="text-xs font-semibold text-[#0b8f5e]">
+                    <span className="text-xs font-semibold text-[#059669]">
                       {allApps.length} apps
                     </span>
                   </div>
@@ -529,13 +559,13 @@ export default function GamuraStoreLaunch({
                   </div>
                 </div>
 
-                {/* Suggested for you */}
+                {/* Apple App Store Style List */}
                 <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-2">
-                  <h2 className="text-lg font-bold tracking-tight text-[#1D1D1F] px-2 pb-1">
-                    Suggested for you
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-[#6E6E73] px-2 pb-1">
+                    Discover
                   </h2>
                   <div className="divide-y divide-zinc-100">
-                    {[...allApps].reverse().map((app) => renderAppRow(app))}
+                    {allApps.map((app) => renderAppRow(app))}
                   </div>
                 </div>
               </div>
@@ -605,15 +635,69 @@ export default function GamuraStoreLaunch({
             </div>
           </div>
         ) : page === "lib" ? (
-          <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-3">
-            <h2 className="text-lg font-bold tracking-tight text-[#1D1D1F]">
-              Installed apps
-            </h2>
-            {allApps.filter((a) => installedIds.includes(a.id)).length > 0 ? (
+          <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold tracking-tight text-[#1D1D1F]">
+                Installed apps
+              </h2>
+              <span className="text-xs text-[#6E6E73]">
+                {installedIdSet.size} installed
+              </span>
+            </div>
+
+            {allApps.filter((a) => installedIdSet.has(a.id)).length > 0 ? (
               <div className="divide-y divide-zinc-100">
                 {allApps
-                  .filter((a) => installedIds.includes(a.id))
-                  .map((app) => renderAppRow(app))}
+                  .filter((a) => installedIdSet.has(a.id))
+                  .map((app) => (
+                    <div
+                      key={app.id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3.5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedApp(app)}
+                        className="flex items-center gap-3.5 text-left min-w-0 flex-1 cursor-pointer"
+                      >
+                        <StoreAppGlyph
+                          app={app}
+                          sizeClass="w-14 h-14 text-2xl"
+                          iconPx={26}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-[#1D1D1F] truncate">
+                            {app.name}
+                          </div>
+                          <div className="text-xs text-[#6E6E73] truncate">
+                            {[
+                              isInUniverse(app.id) ? "In Universe Apps" : "",
+                              isInMobile(app.id) ? "In Mobile App" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        </div>
+                      </button>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <a
+                          href={app.url}
+                          target={app.url.startsWith("/") ? "_self" : "_blank"}
+                          rel="noopener noreferrer"
+                          className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold transition-colors"
+                        >
+                          OPEN
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => handleUninstallAll(app)}
+                          className="px-3.5 py-1.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold cursor-pointer transition-colors"
+                        >
+                          Uninstall
+                        </button>
+                      </div>
+                    </div>
+                  ))}
               </div>
             ) : (
               <div className="py-12 text-center space-y-2">
@@ -621,13 +705,14 @@ export default function GamuraStoreLaunch({
                   Nothing installed yet.
                 </p>
                 <p className="text-xs text-[#6E6E73]">
-                  Open any app from Home and tap Install.
+                  Tap GET on any app to install it in Universe Page or your
+                  mobile app.
                 </p>
               </div>
             )}
           </div>
         ) : (
-          /* Developer Publish Tab */
+          /* Developer Tab */
           <div className="space-y-5">
             <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-7 shadow-xs space-y-4">
               <div>
@@ -635,7 +720,7 @@ export default function GamuraStoreLaunch({
                   Publish an app
                 </h2>
                 <p className="text-xs text-[#6E6E73]">
-                  Add a web app to your Gamura Launch Store catalog.
+                  Add a web application to the Gamura Launch Store catalog.
                 </p>
               </div>
 
@@ -647,7 +732,7 @@ export default function GamuraStoreLaunch({
                     value={fName}
                     onChange={(e) => setFName(e.target.value)}
                     placeholder="App name"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#0b8f5e]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#059669]"
                   />
                   <input
                     required
@@ -655,7 +740,7 @@ export default function GamuraStoreLaunch({
                     value={fUrl}
                     onChange={(e) => setFUrl(e.target.value)}
                     placeholder="App link (https://…)"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#0b8f5e]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#059669]"
                   />
                 </div>
 
@@ -665,12 +750,12 @@ export default function GamuraStoreLaunch({
                     value={fTag}
                     onChange={(e) => setFTag(e.target.value)}
                     placeholder="Short tagline"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#0b8f5e]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#059669]"
                   />
                   <select
                     value={fCat}
                     onChange={(e) => setFCat(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#0b8f5e]"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#059669]"
                   >
                     {[
                       "Platform",
@@ -693,7 +778,7 @@ export default function GamuraStoreLaunch({
                   value={fDesc}
                   onChange={(e) => setFDesc(e.target.value)}
                   placeholder="Description"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#0b8f5e]"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#059669]"
                 />
 
                 <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-[#6E6E73]">
@@ -716,7 +801,7 @@ export default function GamuraStoreLaunch({
 
                 <button
                   type="submit"
-                  className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 rounded-full bg-[#0b8f5e] hover:bg-[#09774e] text-white text-sm font-semibold transition-colors cursor-pointer"
+                  className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-sm font-semibold transition-colors cursor-pointer"
                 >
                   Add to Gamura Store
                 </button>
@@ -734,7 +819,11 @@ export default function GamuraStoreLaunch({
                       key={app.id}
                       className="flex items-center gap-3.5 py-3"
                     >
-                      <AppTileIcon app={app} sizeClass="w-12 h-12 text-lg" />
+                      <StoreAppGlyph
+                        app={app}
+                        sizeClass="w-12 h-12 text-lg"
+                        iconPx={22}
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-[#1D1D1F] truncate">
                           {app.name}
@@ -762,7 +851,7 @@ export default function GamuraStoreLaunch({
         )}
       </main>
 
-      {/* Bottom Apple Store Navigation */}
+      {/* Bottom Apple Store Dock */}
       <nav
         aria-label="Gamura Store Navigation"
         className="fixed bottom-3.5 left-1/2 -translate-x-1/2 z-30 w-auto max-w-[calc(100vw-20px)] pb-[env(safe-area-inset-bottom)]"
@@ -787,7 +876,7 @@ export default function GamuraStoreLaunch({
                 }}
                 className={`min-h-[46px] min-w-[68px] sm:min-w-[84px] px-3 py-1.5 rounded-[22px] flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer whitespace-nowrap ${
                   active
-                    ? "bg-[#0b8f5e]/12 text-[#0b8f5e] font-semibold"
+                    ? "bg-[#E2F5ED] text-[#059669] font-semibold"
                     : "text-[#6E6E73] hover:text-[#1D1D1F] font-medium"
                 }`}
               >
@@ -801,7 +890,7 @@ export default function GamuraStoreLaunch({
         </div>
       </nav>
 
-      {/* App Detail Modal Sheet */}
+      {/* Apple App Store Style App Detail Sheet (Exact Uploaded Screenshot Design) */}
       {selectedApp && (
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -811,108 +900,167 @@ export default function GamuraStoreLaunch({
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-2xl max-h-[92vh] bg-white rounded-t-[28px] sm:rounded-[28px] overflow-y-auto shadow-2xl border border-zinc-200/80 pb-8"
           >
-            <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-xl px-5 py-3.5 flex items-center justify-between border-b border-zinc-100">
+            {/* Top Sheet Header */}
+            <div className="sticky top-0 z-10 bg-white/92 backdrop-blur-xl px-5 py-3 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#6E6E73]">
+                Discover
+              </span>
               <button
                 type="button"
                 onClick={() => setSelectedApp(null)}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#1D1D1F] cursor-pointer"
+                aria-label="Close app details"
+                className="w-8 h-8 rounded-full bg-zinc-200/80 hover:bg-zinc-300/80 flex items-center justify-center text-[#1D1D1F] transition-colors cursor-pointer"
               >
-                <ArrowLeft size={16} />
-                <span>Back</span>
+                <X size={16} />
               </button>
-              <span className="text-xs font-semibold text-[#6E6E73]">
-                Gamura Store
-              </span>
             </div>
 
-            <div className="p-5 sm:p-7 space-y-6">
-              {/* App Header */}
-              <div className="flex items-center gap-4">
-                <AppTileIcon app={selectedApp} sizeClass="w-20 h-20 text-3xl" />
-                <div className="min-w-0">
-                  <h2 className="text-xl sm:text-2xl font-bold text-[#1D1D1F] tracking-tight">
-                    {selectedApp.name}
-                  </h2>
-                  <div className="text-xs sm:text-sm font-semibold text-[#0b8f5e]">
-                    Gamura Studios
+            <div className="px-5 sm:px-7 pt-1 space-y-6">
+              {/* App Header Lockup matching Screenshot */}
+              <div className="flex items-start gap-4">
+                <StoreAppGlyph
+                  app={selectedApp}
+                  sizeClass="w-24 h-24 sm:w-28 sm:h-28 text-4xl"
+                  iconPx={44}
+                />
+                <div className="flex-1 min-w-0 pt-0.5 space-y-3">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold text-[#1D1D1F] tracking-tight leading-tight">
+                      {selectedApp.name}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-[#6E6E73] mt-0.5">
+                      {selectedApp.tag}
+                    </p>
                   </div>
-                  <div className="text-xs text-[#6E6E73] mt-0.5">
+
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {installingId === selectedApp.id ? (
+                        <span className="px-5 py-1.5 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums">
+                          {installPct}%
+                        </span>
+                      ) : installedIdSet.has(selectedApp.id) ? (
+                        <>
+                          <a
+                            href={selectedApp.url}
+                            target={
+                              selectedApp.url.startsWith("/")
+                                ? "_self"
+                                : "_blank"
+                            }
+                            rel="noopener noreferrer"
+                            className="px-5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide transition-colors inline-flex items-center gap-1"
+                          >
+                            <span>OPEN</span>
+                            <ExternalLink size={12} />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleUninstallAll(selectedApp)}
+                            className="px-3.5 py-1.5 rounded-full bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-xs font-semibold text-[#6E6E73] cursor-pointer transition-colors"
+                          >
+                            Uninstall
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setPromptApp(selectedApp)}
+                          className="px-6 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide cursor-pointer transition-colors"
+                        >
+                          GET
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleShareApp(selectedApp)}
+                      aria-label="Share app"
+                      className="w-9 h-9 rounded-full hover:bg-zinc-100 text-[#059669] flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                    >
+                      <Share size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3-Column Metrics Strip Matching Apple App Store Screenshot */}
+              <div className="grid grid-cols-3 divide-x divide-zinc-200/80 py-3.5 border-y border-zinc-200/70 text-center">
+                <div className="px-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#6E6E73]">
+                    Rating
+                  </div>
+                  <div className="text-xl font-bold text-[#1D1D1F] tabular-nums mt-0.5">
+                    {selectedApp.rating}
+                  </div>
+                  <div className="text-[10px] text-[#6E6E73] tracking-tight">
+                    ★★★★★
+                  </div>
+                </div>
+                <div className="px-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#6E6E73]">
+                    Age
+                  </div>
+                  <div className="text-xl font-bold text-[#1D1D1F] tabular-nums mt-0.5">
+                    {selectedApp.age || "3+"}
+                  </div>
+                  <div className="text-[11px] text-[#6E6E73]">Years Old</div>
+                </div>
+                <div className="px-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#6E6E73]">
+                    Chart
+                  </div>
+                  <div className="text-xl font-bold text-[#1D1D1F] mt-0.5">
+                    {selectedApp.chart || "Top"}
+                  </div>
+                  <div className="text-[11px] text-[#6E6E73] truncate">
                     {selectedApp.cat}
                   </div>
                 </div>
               </div>
 
-              {/* Stats Row */}
-              <div className="grid grid-cols-4 gap-2 py-3 border-y border-zinc-100 text-center">
-                <div>
-                  <div className="text-sm font-bold text-[#1D1D1F] tabular-nums">
-                    {selectedApp.rating} ★
+              {/* Destination Quick Controls */}
+              {installedIdSet.has(selectedApp.id) && (
+                <div className="p-4 rounded-2xl bg-[#F5F5F7] border border-zinc-200/70 space-y-2.5">
+                  <div className="text-xs font-bold text-[#1D1D1F]">
+                    Where this app is installed
                   </div>
-                  <div className="text-[11px] text-[#6E6E73]">Rating</div>
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-[#1D1D1F] tabular-nums">
-                    {selectedApp.dl}
-                  </div>
-                  <div className="text-[11px] text-[#6E6E73]">Downloads</div>
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-[#1D1D1F]">
-                    {selectedApp.size.split(" · ")[1] || "1 MB"}
-                  </div>
-                  <div className="text-[11px] text-[#6E6E73]">Size</div>
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-[#1D1D1F]">3+</div>
-                  <div className="text-[11px] text-[#6E6E73]">Rated for</div>
-                </div>
-              </div>
-
-              {/* Primary Install / Open CTA */}
-              <div className="flex items-center gap-3">
-                {installedIds.includes(selectedApp.id) ? (
-                  <>
-                    <a
-                      href={selectedApp.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 min-h-[46px] rounded-full bg-[#0b8f5e] hover:bg-[#09774e] text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
-                    >
-                      <span>Open</span>
-                      <ExternalLink size={15} />
-                    </a>
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => handleUninstall(selectedApp.id)}
-                      className="min-h-[46px] px-5 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-sm font-semibold text-[#1D1D1F] cursor-pointer"
+                      onClick={() => handleToggleUniverse(selectedApp)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer inline-flex items-center gap-1.5 border transition-colors ${
+                        isInUniverse(selectedApp.id)
+                          ? "bg-[#E2F5ED] border-[#059669]/30 text-[#059669]"
+                          : "bg-white border-zinc-200 text-[#6E6E73]"
+                      }`}
                     >
-                      Uninstall
+                      <Globe size={13} />
+                      <span>
+                        {isInUniverse(selectedApp.id)
+                          ? "Added to Universe Apps ✓"
+                          : "Add to Universe Apps"}
+                      </span>
                     </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={installingId === selectedApp.id}
-                    onClick={() => handleInstall(selectedApp)}
-                    className="relative flex-1 min-h-[46px] rounded-full bg-[#0b8f5e] hover:bg-[#09774e] text-white text-sm font-semibold overflow-hidden cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    {installingId === selectedApp.id && (
-                      <span
-                        style={{ width: `${installPct}%` }}
-                        className="absolute inset-y-0 left-0 bg-white/25 transition-all"
-                      />
-                    )}
-                    <Download size={15} className="relative z-10" />
-                    <span className="relative z-10">
-                      {installingId === selectedApp.id
-                        ? `Installing… ${installPct}%`
-                        : "Install"}
-                    </span>
-                  </button>
-                )}
-              </div>
 
-              {/* Visual Showcase Cards */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileIds(addMobileInstalledId(selectedApp.id));
+                        downloadStandaloneAppPackage(selectedApp);
+                        showToast(`Downloaded ${selectedApp.name} for mobile ✓`);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-white hover:bg-zinc-100 border border-zinc-200 text-xs font-semibold text-[#1D1D1F] cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                      <Smartphone size={13} />
+                      <span>Download Mobile File</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Showcase Cards */}
               <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
                 {["Discover", "Play", "Create"].map((word, idx) => (
                   <div
@@ -920,7 +1068,7 @@ export default function GamuraStoreLaunch({
                     style={{
                       background: `linear-gradient(${150 + idx * 40}deg, ${selectedApp.c1}, ${selectedApp.c2})`,
                     }}
-                    className="w-40 h-60 shrink-0 rounded-2xl p-4 text-white flex flex-col justify-between shadow-xs"
+                    className="w-40 h-56 shrink-0 rounded-2xl p-4 text-white flex flex-col justify-between shadow-xs"
                   >
                     <span className="text-3xl font-black opacity-35">
                       {selectedApp.name.charAt(0)}
@@ -949,7 +1097,7 @@ export default function GamuraStoreLaunch({
               <div className="p-4 rounded-2xl bg-[#F5F5F7] border border-zinc-200/70 flex items-start gap-3">
                 <ShieldCheck
                   size={18}
-                  className="text-[#0b8f5e] shrink-0 mt-0.5"
+                  className="text-[#059669] shrink-0 mt-0.5"
                 />
                 <div className="space-y-0.5">
                   <div className="text-xs font-bold text-[#1D1D1F]">
@@ -963,7 +1111,7 @@ export default function GamuraStoreLaunch({
                 </div>
               </div>
 
-              {/* Ratings Distribution */}
+              {/* Ratings */}
               <div className="space-y-2">
                 <h3 className="text-sm font-bold text-[#1D1D1F]">
                   Ratings &amp; reviews
@@ -973,7 +1121,7 @@ export default function GamuraStoreLaunch({
                     <div className="text-4xl font-light text-[#1D1D1F] tabular-nums">
                       {selectedApp.rating}
                     </div>
-                    <div className="flex items-center justify-center gap-0.5 text-[#0b8f5e] mt-1">
+                    <div className="flex items-center justify-center gap-0.5 text-[#059669] mt-1">
                       {[1, 2, 3, 4, 5].map((n) => (
                         <Star key={n} size={12} fill="currentColor" />
                       ))}
@@ -989,7 +1137,7 @@ export default function GamuraStoreLaunch({
                         <div className="flex-1 h-2 bg-[#F5F5F7] rounded-full overflow-hidden">
                           <div
                             style={{ width: `${pct}%` }}
-                            className="h-full bg-[#0b8f5e] rounded-full"
+                            className="h-full bg-[#059669] rounded-full"
                           />
                         </div>
                       </div>
@@ -997,18 +1145,105 @@ export default function GamuraStoreLaunch({
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-              {/* More from Gamura Studios */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-bold text-[#1D1D1F]">
-                  More from Gamura Studios
-                </h3>
-                <div className="flex gap-3.5 overflow-x-auto no-scrollbar pb-1">
-                  {allApps
-                    .filter((a) => a.id !== selectedApp.id)
-                    .map(renderAppTile)}
+      {/* Ask User Where To Install/Use App Modal */}
+      {promptApp && (
+        <div
+          className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setPromptApp(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-white rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 shadow-2xl border border-zinc-200/80 space-y-5"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <StoreAppGlyph
+                  app={promptApp}
+                  sizeClass="w-12 h-12 text-xl"
+                  iconPx={22}
+                />
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-[#1D1D1F] truncate">
+                    Where do you want to use {promptApp.name}?
+                  </h3>
+                  <p className="text-xs text-[#6E6E73]">
+                    Choose an install location. You can uninstall anytime.
+                  </p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setPromptApp(null)}
+                aria-label="Cancel install"
+                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-[#6E6E73] cursor-pointer shrink-0"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() =>
+                  executeInstallWithDestination(promptApp, "universe")
+                }
+                className="w-full p-4 rounded-2xl bg-[#F5F5F7] hover:bg-[#E2F5ED]/60 border border-zinc-200/80 hover:border-[#059669]/40 text-left transition-all cursor-pointer flex items-center gap-3.5"
+              >
+                <div className="w-10 h-10 rounded-xl bg-[#059669] text-white flex items-center justify-center shrink-0">
+                  <Globe size={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-[#1D1D1F]">
+                    In Universe Page
+                  </div>
+                  <div className="text-xs text-[#6E6E73]">
+                    Add directly inside the Apps section of Gamura Universe.
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  executeInstallWithDestination(promptApp, "mobile")
+                }
+                className="w-full p-4 rounded-2xl bg-[#F5F5F7] hover:bg-blue-50/70 border border-zinc-200/80 hover:border-[#0071E3]/40 text-left transition-all cursor-pointer flex items-center gap-3.5"
+              >
+                <div className="w-10 h-10 rounded-xl bg-[#0071E3] text-white flex items-center justify-center shrink-0">
+                  <Smartphone size={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-[#1D1D1F]">
+                    In Your Mobile App / Device
+                  </div>
+                  <div className="text-xs text-[#6E6E73]">
+                    Download standalone web app launcher &amp; add to My apps.
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => executeInstallWithDestination(promptApp, "both")}
+                className="w-full p-3.5 rounded-2xl bg-white hover:bg-zinc-50 border border-zinc-200 text-left transition-all cursor-pointer flex items-center gap-3.5"
+              >
+                <div className="w-10 h-10 rounded-xl bg-[#1D1D1F] text-white flex items-center justify-center shrink-0">
+                  <Layers size={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-[#1D1D1F]">
+                    Both (Universe Page &amp; Mobile App)
+                  </div>
+                  <div className="text-xs text-[#6E6E73]">
+                    Install in Universe Apps and download for your device.
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
         </div>
