@@ -1,19 +1,108 @@
 import React, { useState, useEffect } from "react";
-import { collection, query, where, getDocs, doc, setDoc, getDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase";
-import { Loader2, Globe, Sparkles, User, Link as LinkIcon, CheckCircle2, XCircle, QrCode, Github, Linkedin, Twitter, Youtube, Trash2, Plus, ExternalLink, Copy } from "lucide-react";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  setDoc,
+  getDoc,
+  serverTimestamp,
+  onSnapshot,
+} from "firebase/firestore";
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "../firebase";
+import {
+  Loader2,
+  Globe,
+  Sparkles,
+  User,
+  Link as LinkIcon,
+  CheckCircle2,
+  XCircle,
+  Github,
+  Linkedin,
+  Twitter,
+  Youtube,
+  Trash2,
+  Plus,
+  ExternalLink,
+  Copy,
+  Check,
+  ArrowUp,
+  ArrowDown,
+  Lock,
+} from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { handleFirestoreError, OperationType } from "../firebaseErrorHandler";
 
 interface ProfileManagerProps {
   user: any;
-  showToast?: (ic: string, title: string, content: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
+  initialHandle?: string;
+  onNavigateLogin?: () => void;
+  showToast?: (
+    ic: string,
+    title: string,
+    content: string,
+    type?: "success" | "error" | "info" | "warning"
+  ) => void;
 }
 
-export default function GamuraUniverseProfileManager({ user, showToast }: ProfileManagerProps) {
+const RESERVED_HANDLES = new Set([
+  "home",
+  "gpg",
+  "universe",
+  "community",
+  "features",
+  "pricing",
+  "about",
+  "contact",
+  "terms",
+  "privacy",
+  "delete-account",
+  "account-deletion",
+  "claim",
+  "docs",
+  "feed",
+  "chat",
+  "direct",
+  "profile",
+  "settings",
+  "developer",
+  "white-page",
+  "showcase",
+  "apps",
+  "u",
+  "go",
+  "api",
+  "skills",
+  "login",
+  "signup",
+  "history",
+  "aura",
+  "gg",
+]);
+
+const APPLE_FONT_STYLE: React.CSSProperties = {
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", system-ui, sans-serif',
+};
+
+export default function GamuraUniverseProfileManager({
+  user,
+  initialHandle = "",
+  onNavigateLogin,
+  showToast,
+}: ProfileManagerProps) {
+  const [authUser, setAuthUser] = useState<any>(() => auth.currentUser);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [username, setUsername] = useState("");
-  const [checkStatus, setCheckStatus] = useState<"none" | "checking" | "available" | "taken">("none");
+  const [username, setUsername] = useState(() =>
+    (initialHandle || "").toLowerCase().replace(/[^a-z0-9_-]/g, "")
+  );
+  const [checkStatus, setCheckStatus] = useState<
+    "none" | "checking" | "available" | "taken" | "reserved" | "invalid"
+  >("none");
   const [bio, setBio] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [website, setWebsite] = useState("");
@@ -21,111 +110,271 @@ export default function GamuraUniverseProfileManager({ user, showToast }: Profil
   const [linkedin, setLinkedin] = useState("");
   const [twitter, setTwitter] = useState("");
   const [youtube, setYoutube] = useState("");
-  const [projects, setProjects] = useState<any[]>([]); // [{ title: "", description: "", url: "", githubUrl: "", image: "" }]
-  const [blocks, setBlocks] = useState<any[]>([]); // [{ id: "", type: "txt" | "img" | "div", tt?: "h1"|"h2"|"p", content?: "", src?: "", alt?: "" }]
+  const [projects, setProjects] = useState<any[]>([]);
+  const [blocks, setBlocks] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const [showPublishSuccess, setShowPublishSuccess] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setAuthUser(u);
+    });
+    return () => unsub();
+  }, []);
+
+  const effectiveUser =
+    authUser ||
+    (user && user.uid && user.uid !== "guest_explorer_uid" ? user : null);
+
+  // Restore local draft for convenience before sign-in
+  useEffect(() => {
+    if (initialHandle) {
+      const sanitized = initialHandle
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, "");
+      if (sanitized) setUsername(sanitized);
+    }
+    try {
+      const savedDraft = localStorage.getItem("gamura_claim_draft");
+      if (savedDraft && !effectiveUser) {
+        const parsed = JSON.parse(savedDraft);
+        if (!initialHandle && parsed.username) setUsername(parsed.username);
+        if (parsed.displayName) setDisplayName(parsed.displayName);
+        if (parsed.bio) setBio(parsed.bio);
+        if (parsed.website) setWebsite(parsed.website);
+        if (parsed.github) setGithub(parsed.github);
+        if (parsed.linkedin) setLinkedin(parsed.linkedin);
+        if (parsed.twitter) setTwitter(parsed.twitter);
+        if (parsed.youtube) setYoutube(parsed.youtube);
+        if (Array.isArray(parsed.projects)) setProjects(parsed.projects);
+        if (Array.isArray(parsed.blocks)) setBlocks(parsed.blocks);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [initialHandle, effectiveUser]);
+
+  // Persist draft locally on change so nothing is lost during sign-in
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "gamura_claim_draft",
+        JSON.stringify({
+          username,
+          displayName,
+          bio,
+          website,
+          github,
+          linkedin,
+          twitter,
+          youtube,
+          projects,
+          blocks,
+        })
+      );
+    } catch {
+      // ignore storage errors
+    }
+  }, [
+    username,
+    displayName,
+    bio,
+    website,
+    github,
+    linkedin,
+    twitter,
+    youtube,
+    projects,
+    blocks,
+  ]);
+
+  // Load existing claimed profile from Firestore when signed in
+  useEffect(() => {
+    if (!effectiveUser?.uid) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
-    
-    // Subscribe to developer profile in real-time
-    const docRef = doc(db, "gamura_developers", user.uid);
-    const unsubDoc = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setProfile(data);
-        setUsername(data.username || "");
-        setBio(data.bio || "");
-        setDisplayName(data.displayName || "");
-        setWebsite(data.website || "");
-        setGithub(data.github || "");
-        setLinkedin(data.linkedin || "");
-        setTwitter(data.twitter || "");
-        setYoutube(data.youtube || "");
-        setProjects(data.projects || []);
-        setBlocks(data.blocks || []);
-        setLoading(false);
-      } else {
-        // If profile doesn't exist under UID yet, fall back to lookup by email
-        if (user.email) {
-          const q = query(collection(db, "gamura_developers"), where("email", "==", user.email));
-          getDocs(q).then((snap) => {
-            if (!snap.empty) {
-              const data = snap.docs[0].data();
-              setProfile(data);
-              setUsername(data.username || snap.docs[0].id || "");
-              setBio(data.bio || "");
-              setDisplayName(data.displayName || "");
-              setWebsite(data.website || "");
-              setGithub(data.github || "");
-              setLinkedin(data.linkedin || "");
-              setTwitter(data.twitter || "");
-              setYoutube(data.youtube || "");
-              setProjects(data.projects || []);
-              setBlocks(data.blocks || []);
-            }
-            setLoading(false);
-          }).catch((err) => {
-            console.error(err);
-            setLoading(false);
-          });
+    const docRef = doc(db, "gamura_developers", effectiveUser.uid);
+    const unsubDoc = onSnapshot(
+      docRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setProfile(data);
+          if (!initialHandle) setUsername(data.username || "");
+          setBio(data.bio || "");
+          setDisplayName(data.displayName || "");
+          setWebsite(data.website || "");
+          setGithub(data.github || "");
+          setLinkedin(data.linkedin || "");
+          setTwitter(data.twitter || "");
+          setYoutube(data.youtube || "");
+          setProjects(data.projects || []);
+          setBlocks(data.blocks || []);
+          setLoading(false);
+        } else if (effectiveUser.email) {
+          const q = query(
+            collection(db, "gamura_developers"),
+            where("email", "==", effectiveUser.email)
+          );
+          getDocs(q)
+            .then((snap) => {
+              if (!snap.empty) {
+                const data = snap.docs[0].data();
+                setProfile(data);
+                if (!initialHandle)
+                  setUsername(data.username || snap.docs[0].id || "");
+                setBio(data.bio || "");
+                setDisplayName(data.displayName || "");
+                setWebsite(data.website || "");
+                setGithub(data.github || "");
+                setLinkedin(data.linkedin || "");
+                setTwitter(data.twitter || "");
+                setYoutube(data.youtube || "");
+                setProjects(data.projects || []);
+                setBlocks(data.blocks || []);
+              }
+              setLoading(false);
+            })
+            .catch(() => setLoading(false));
         } else {
           setLoading(false);
         }
+      },
+      () => {
+        setLoading(false);
       }
-    }, (err) => {
-      console.error("Real-time developer profile subscription failed:", err);
-      setLoading(false);
-    });
+    );
 
-    return () => {
-      unsubDoc();
-    };
-  }, [user]);
+    return () => unsubDoc();
+  }, [effectiveUser?.uid, effectiveUser?.email, initialHandle]);
 
+  // Real-time handle availability check
   useEffect(() => {
-    if (!username.trim() || profile?.username === username) {
+    const clean = username.trim().toLowerCase();
+    if (!clean) {
       setCheckStatus("none");
       return;
     }
+    if (clean.length < 2 || !/^[a-z0-9_-]{2,30}$/.test(clean)) {
+      setCheckStatus("invalid");
+      return;
+    }
+    if (RESERVED_HANDLES.has(clean)) {
+      setCheckStatus("reserved");
+      return;
+    }
+    if (profile?.username?.toLowerCase() === clean) {
+      setCheckStatus("available");
+      return;
+    }
+
     const check = async () => {
       setCheckStatus("checking");
       try {
-        const q = query(collection(db, "gamura_developers"), where("username", "==", username.toLowerCase()));
-        const snap = await getDocs(q);
-        if (snap.empty) {
-          const docRef = await getDoc(doc(db, "gamura_developers", username.toLowerCase()));
-          if (docRef.exists()) {
-            setCheckStatus("taken");
-          } else {
+        const [devDoc, usernameDoc] = await Promise.all([
+          getDoc(doc(db, "gamura_developers", clean)),
+          getDoc(doc(db, "usernames", clean)),
+        ]);
+
+        if (devDoc.exists()) {
+          const ownerUid = devDoc.data()?.uid;
+          if (effectiveUser?.uid && ownerUid === effectiveUser.uid) {
             setCheckStatus("available");
+          } else {
+            setCheckStatus("taken");
           }
-        } else {
-          setCheckStatus("taken");
+          return;
         }
-      } catch (err) {
+
+        if (usernameDoc.exists()) {
+          const ownerUid = usernameDoc.data()?.uid;
+          if (effectiveUser?.uid && ownerUid === effectiveUser.uid) {
+            setCheckStatus("available");
+          } else {
+            setCheckStatus("taken");
+          }
+          return;
+        }
+
+        setCheckStatus("available");
+      } catch {
         setCheckStatus("none");
       }
     };
-    const to = setTimeout(check, 500);
-    return () => clearTimeout(to);
-  }, [username, profile]);
+
+    const timer = setTimeout(check, 350);
+    return () => clearTimeout(timer);
+  }, [username, profile?.username, effectiveUser?.uid]);
+
+  const handleQuickGoogleSignIn = async () => {
+    setSigningIn(true);
+    setSaveError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      if (showToast) {
+        showToast("✅", "Signed In", "Ready to publish your Gamura URL.", "success");
+      }
+    } catch (err: any) {
+      const msg = err?.message || "Google sign-in was cancelled or blocked.";
+      setSaveError(msg);
+      if (showToast) showToast("⚠️", "Sign-In Required", msg, "warning");
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const handleCopy = (key: string, value: string) => {
+    navigator.clipboard.writeText(value);
+    setCopiedKey(key);
+    if (showToast) showToast("✓", "Copied", "Link copied to clipboard.", "success");
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
 
   const handleSave = async () => {
-    if (!username.trim()) {
-      if (showToast) showToast("⚠️", "Username Required", "Please provide a valid username handle.", "warning");
+    setSaveError(null);
+    const cleanUser = username
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "");
+
+    if (!cleanUser || cleanUser.length < 2) {
+      const msg = "Choose a handle with at least 2 characters (letters, numbers, _ or -).";
+      setSaveError(msg);
+      if (showToast) showToast("⚠️", "Valid Handle Required", msg, "warning");
       return;
     }
-    if (checkStatus === "taken" && profile?.username !== username) {
-      if (showToast) showToast("⚠️", "Handle Taken", "This username is already taken. Please pick another.", "warning");
+
+    if (RESERVED_HANDLES.has(cleanUser)) {
+      const msg = `"/${cleanUser}" is a reserved system path. Please pick another URL.`;
+      setSaveError(msg);
+      if (showToast) showToast("⚠️", "Reserved Path", msg, "warning");
+      return;
+    }
+
+    if (checkStatus === "taken" && profile?.username !== cleanUser) {
+      const msg = "This URL handle is already claimed. Please choose another.";
+      setSaveError(msg);
+      if (showToast) showToast("⚠️", "Handle Taken", msg, "warning");
+      return;
+    }
+
+    if (!auth.currentUser) {
+      const msg = "Please sign in with Google or your Gamura account below to permanently lock and publish your live URL.";
+      setSaveError(msg);
+      if (showToast) showToast("🔐", "Sign In to Claim", msg, "info");
       return;
     }
 
     setSaving(true);
     try {
-      const cleanUser = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+      const uid = auth.currentUser.uid;
       const payload: any = {
         username: cleanUser,
         displayName: displayName.trim() || cleanUser,
@@ -138,8 +387,8 @@ export default function GamuraUniverseProfileManager({ user, showToast }: Profil
         projects: projects || [],
         blocks: blocks || [],
         published: true,
-        uid: user?.uid,
-        email: user?.email || `${cleanUser}@gamura.app`,
+        uid,
+        email: auth.currentUser.email || `${cleanUser}@gamura.app`,
         plan: profile?.plan || "Starter",
         clicks: profile?.clicks || 0,
         views: profile?.views || 1,
@@ -148,121 +397,136 @@ export default function GamuraUniverseProfileManager({ user, showToast }: Profil
         updatedAt: serverTimestamp(),
       };
 
-      await setDoc(doc(db, "gamura_developers", cleanUser), payload, { merge: true });
+      const devSlugRef = doc(db, "gamura_developers", cleanUser);
+      await setDoc(devSlugRef, payload, { merge: true }).catch((err) => {
+        handleFirestoreError(err, OperationType.WRITE, `gamura_developers/${cleanUser}`);
+      });
 
-      if (user?.uid) {
-        await setDoc(doc(db, "gamura_developers", user.uid), payload, { merge: true }).catch(() => null);
-        await setDoc(doc(db, "usernames", cleanUser), { uid: user.uid }, { merge: true }).catch(() => null);
+      await setDoc(doc(db, "gamura_developers", uid), payload, { merge: true }).catch(
+        () => null
+      );
+
+      const unameRef = doc(db, "usernames", cleanUser);
+      const unameSnap = await getDoc(unameRef).catch(() => null);
+      if (!unameSnap || !unameSnap.exists()) {
+        await setDoc(unameRef, { uid }).catch(() => null);
       }
 
       setProfile(payload);
       setShowPublishSuccess(true);
       if (showToast) {
-        showToast("🚀", "Profile Published!", "Your Gamura Universe profile is live.", "success");
+        showToast(
+          "🚀",
+          "URL Claimed & Live",
+          `Your public page /@${cleanUser} is now active.`,
+          "success"
+        );
       }
     } catch (err: any) {
       console.error("Save profile error:", err);
-      if (showToast) {
-        showToast("❌", "Save Failed", err.message || "Failed to save profile. Please check your connection.", "error");
-      }
+      const msg = err?.message || "Failed to publish profile. Please try again.";
+      setSaveError(msg);
+      if (showToast) showToast("❌", "Publish Failed", msg, "error");
     } finally {
       setSaving(false);
     }
   };
 
   if (loading) {
-    return <div className="p-12 flex justify-center"><Loader2 className="animate-spin text-cyan-400" /></div>;
+    return (
+      <div
+        style={APPLE_FONT_STYLE}
+        className="p-12 flex flex-col items-center justify-center gap-3 text-[#6E6E73]"
+      >
+        <Loader2 className="animate-spin text-[#0071E3]" size={26} />
+        <span className="text-xs font-medium">Loading URL Claim Studio...</span>
+      </div>
+    );
   }
 
   if (showPublishSuccess) {
     const claimUrlPath = `/@${username}`;
-    const fullClaimUrl = `https://gamura.vercel.app/@${username}`;
-    const customNiceUrl = `https://gamura.vercel.app/${username}`;
-    
+    const fullLocalUrl = `${window.location.origin}/@${username}`;
+    const publicTargetUrl = `https://gamura.vercel.app/@${username}`;
+
     return (
-      <div className="max-w-2xl mx-auto p-4 md:p-6 text-white font-sans space-y-6">
-        <div className="bg-[#050811] border-2 border-emerald-500/35 p-6 md:p-8 rounded-3xl relative overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.15)] text-center space-y-6">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.08)_0%,transparent_70%)] pointer-events-none" />
-          
-          <div className="inline-flex p-4 rounded-full bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 mb-2 animate-pulse">
-            <CheckCircle2 size={36} className="text-emerald-400" />
+      <div style={APPLE_FONT_STYLE} className="max-w-2xl mx-auto py-4 px-2 sm:px-4 text-[#1D1D1F]">
+        <div className="bg-white border border-zinc-200/80 p-6 sm:p-8 rounded-3xl shadow-[0_4px_24px_rgba(0,0,0,0.05)] text-center space-y-6">
+          <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600">
+            <CheckCircle2 size={32} />
           </div>
 
           <div className="space-y-2">
-            <span className="inline-block text-[9px] font-black tracking-widest text-emerald-400 bg-emerald-950/40 px-3 py-1 rounded-full border border-emerald-500/20 uppercase font-mono">
-              🚀 TRANSMISSION SECURED
-            </span>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">URL LINK CLAIMED & PUBLISHED!</h1>
-            <p className="text-zinc-400 text-xs md:text-sm max-w-sm mx-auto leading-relaxed">
-              Your custom project hub is now active on the global Gamura network architecture. Click below to inspect your creation.
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700">
+              Live &amp; Published
+            </p>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1D1D1F]">
+              Your Gamura URL is Claimed
+            </h1>
+            <p className="text-sm text-[#6E6E73] max-w-md mx-auto">
+              Your personal hub at <span className="font-semibold text-[#1D1D1F]">/@{username}</span> is active and ready to share.
             </p>
           </div>
 
-          {/* Links Display Box */}
-          <div className="bg-black/40 border border-white/5 rounded-2xl p-4.5 space-y-3.5 max-w-md mx-auto text-left">
+          <div className="bg-[#F5F5F7] border border-zinc-200/70 rounded-2xl p-4 sm:p-5 space-y-3 max-w-md mx-auto text-left">
             <div className="space-y-1">
-              <span className="text-[7.5px] font-extrabold text-zinc-500 tracking-wider uppercase pl-0.5 block font-mono">Official Vercel Target Link:</span>
-              <div className="flex items-center justify-between bg-zinc-950/80 border border-white/10 rounded-xl px-3 py-2.5 font-mono text-xs">
-                <span className="text-cyan-400 select-all overflow-hidden truncate mr-2">{customNiceUrl}</span>
+              <span className="text-[11px] font-semibold text-[#6E6E73] block">
+                Live Hub Link
+              </span>
+              <div className="flex items-center justify-between bg-white border border-zinc-200/80 rounded-xl px-3.5 py-2.5 text-xs">
+                <a
+                  href={claimUrlPath}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#0066CC] hover:underline font-medium truncate mr-2"
+                >
+                  {fullLocalUrl}
+                </a>
                 <button
                   type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(customNiceUrl);
-                    if (showToast) showToast("📋", "Copied", "Copied Vercel link to clipboard.");
-                  }}
-                  className="flex-shrink-0 text-[10px] text-zinc-400 hover:text-white font-bold uppercase transition-colors"
+                  onClick={() => handleCopy("live", fullLocalUrl)}
+                  className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[#1D1D1F] hover:text-[#0066CC] cursor-pointer"
                 >
-                  Copy
+                  {copiedKey === "live" ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                  <span>{copiedKey === "live" ? "Copied" : "Copy"}</span>
                 </button>
               </div>
             </div>
 
             <div className="space-y-1">
-              <span className="text-[7.5px] font-extrabold text-zinc-500 tracking-wider uppercase pl-0.5 block font-mono">Standard Gamura Alias Hub Link:</span>
-              <div className="flex items-center justify-between bg-zinc-950/80 border border-white/10 rounded-xl px-3 py-2.5 font-mono text-xs">
-                <span className="text-zinc-300 select-all overflow-hidden truncate mr-2">{fullClaimUrl}</span>
+              <span className="text-[11px] font-semibold text-[#6E6E73] block">
+                Official Production URL
+              </span>
+              <div className="flex items-center justify-between bg-white border border-zinc-200/80 rounded-xl px-3.5 py-2.5 text-xs">
+                <span className="text-[#424245] truncate mr-2">{publicTargetUrl}</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(fullClaimUrl);
-                    if (showToast) showToast("📋", "Copied", "Copied alias link to clipboard.");
-                  }}
-                  className="flex-shrink-0 text-[10px] text-zinc-400 hover:text-white font-bold uppercase transition-colors"
+                  onClick={() => handleCopy("prod", publicTargetUrl)}
+                  className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-[#1D1D1F] hover:text-[#0066CC] cursor-pointer"
                 >
-                  Copy
+                  {copiedKey === "prod" ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                  <span>{copiedKey === "prod" ? "Copied" : "Copy"}</span>
                 </button>
               </div>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-[7.5px] font-extrabold text-zinc-500 tracking-wider uppercase pl-0.5 block font-mono">Current Sandbox Local Path (Click to view):</span>
-              <a 
-                href={claimUrlPath}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between bg-emerald-950/30 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl px-3 py-2.5 font-mono text-xs text-emerald-450 hover:text-emerald-300 group transition-all"
-              >
-                <span className="overflow-hidden truncate mr-2">{window.location.host}{claimUrlPath}</span>
-                <ExternalLink size={12} className="group-hover:translate-x-0.5 transition-transform" />
-              </a>
             </div>
           </div>
 
-          <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center max-w-sm mx-auto">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-md mx-auto pt-1">
             <a
               href={claimUrlPath}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-grow py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-extrabold text-xs tracking-widest uppercase transition-all shadow-lg active:scale-95 text-center block"
+              className="flex-1 py-3 px-5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold text-xs tracking-wide transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
             >
-              Open My Page 🌐
+              <span>Open My Page</span>
+              <ExternalLink size={14} />
             </a>
             <button
               type="button"
               onClick={() => setShowPublishSuccess(false)}
-              className="flex-grow py-3.5 px-6 rounded-xl bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300 hover:text-white font-extrabold text-xs tracking-widest uppercase transition-all active:scale-95 cursor-pointer"
+              className="flex-1 py-3 px-5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-[#1D1D1F] font-semibold text-xs transition-colors cursor-pointer whitespace-nowrap"
             >
-              Back to Editor
+              Edit Profile
             </button>
           </div>
         </div>
@@ -271,498 +535,641 @@ export default function GamuraUniverseProfileManager({ user, showToast }: Profil
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-4 md:p-6 text-white font-sans space-y-6">
-      <div className="bg-gradient-to-r from-cyan-950/40 to-emerald-950/40 border border-cyan-500/20 p-6 md:p-8 rounded-3xl relative overflow-hidden">
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-cyan-500/10 blur-[80px] rounded-full pointer-events-none" />
-        <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tight text-white mb-2 flex items-center gap-3">
-          <Globe className="text-cyan-400" /> GAMURA UNIVERSE URL
-        </h2>
-        <p className="text-sm text-zinc-400">Claim your unique URL and customize your decentralized Link Hub & project page.</p>
-        
-        <div className="mt-8 space-y-6 relative z-10">
-          
-          {/* USERNAME CLAIM UPLINK */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-cyan-400 uppercase tracking-widest pl-1">CLAIM SUBDOMAIN PATH</label>
-            <div className="flex items-center bg-black/60 border border-white/10 rounded-xl overflow-hidden focus-within:border-cyan-500/50 transition-colors">
-              <span className="text-xs text-zinc-500 pl-4 py-4 font-mono font-bold">gamura.vercel.app/</span>
-              <input 
-                value={username}
-                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                placeholder="yourname"
-                disabled={saving}
-                className="w-full bg-transparent border-none outline-none text-white text-sm py-4 pr-4 pl-1 font-mono font-bold flex-1"
-              />
-              <div className="pr-4 shrink-0">
-                {checkStatus === "checking" && <Loader2 size={16} className="text-zinc-500 animate-spin" />}
-                {checkStatus === "available" && <CheckCircle2 size={16} className="text-emerald-500" />}
-                {checkStatus === "taken" && <XCircle size={16} className="text-red-500" />}
+    <div style={APPLE_FONT_STYLE} className="max-w-3xl mx-auto py-2 px-1 sm:px-2 text-[#1D1D1F] space-y-5">
+      {/* Main Apple Card */}
+      <div className="bg-white border border-zinc-200/80 p-5 sm:p-7 rounded-3xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-zinc-100">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#0071E3] flex items-center justify-center shrink-0">
+                <Globe size={17} />
               </div>
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1D1D1F]">
+                Gamura Free URL Claim
+              </h2>
             </div>
-            {checkStatus === "available" && <p className="text-xs text-emerald-400 font-bold pl-1 mt-1 font-mono uppercase tracking-wider">🌟 URL AVAILABLE TO CLAIM!</p>}
-            {checkStatus === "taken" && <p className="text-xs text-red-500 font-bold pl-1 mt-1 font-mono uppercase tracking-wider">❌ URL ALREADY TAKEN BY DEVELOPER.</p>}
+            <p className="text-xs sm:text-sm text-[#6E6E73]">
+              Reserve your personal <code className="text-xs bg-zinc-100 px-1.5 py-0.5 rounded text-[#1D1D1F]">/@username</code> page, social hub, and project showcase for free.
+            </p>
           </div>
 
-          {/* BASIC PROFILE DETAILS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest pl-1">Display Name</label>
-              <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-4 focus-within:border-white/30 transition-colors">
-                <User size={16} className="text-zinc-400" />
-                <input 
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="E.g. Selvaranjan G"
-                  className="w-full bg-transparent border-none outline-none text-white text-sm py-4 pl-3"
-                />
+          {profile?.username && (
+            <a
+              href={`/@${profile.username}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 text-xs font-semibold text-[#1D1D1F] transition-colors shrink-0 self-start sm:self-center whitespace-nowrap"
+            >
+              <span>View /@{profile.username}</span>
+              <ExternalLink size={13} />
+            </a>
+          )}
+        </div>
+
+        {/* Auth Status Banner for Unauthenticated Visitors */}
+        {!effectiveUser && (
+          <div className="p-4 rounded-2xl bg-[#F5F5F7] border border-zinc-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-white border border-zinc-200/80 flex items-center justify-center text-[#1D1D1F] shrink-0 mt-0.5">
+                <Lock size={15} />
+              </div>
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold text-[#1D1D1F]">
+                  Sign in to permanently lock your free URL
+                </p>
+                <p className="text-xs text-[#6E6E73]">
+                  Check handle availability and draft your page anytime, then sign in to publish live.
+                </p>
               </div>
             </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest pl-1">Website URL</label>
-              <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-4 focus-within:border-white/30 transition-colors">
-                <LinkIcon size={16} className="text-zinc-400" />
-                <input 
-                  value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
-                  placeholder="https://yourpage.com"
-                  className="w-full bg-transparent border-none outline-none text-white text-sm py-4 pl-3"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest pl-1">Profile Bio / Status description</label>
-            <textarea 
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Full-Stack Developer, Web3 Architect, Designer..."
-              rows={2}
-              className="w-full bg-black/40 border border-white/10 rounded-xl outline-none text-white text-sm px-4 py-3 focus:border-white/30 transition-colors resize-none"
-            />
-          </div>
-
-          {/* SOCIAL LINKS SECTION */}
-          <div className="pt-4 border-t border-white/5 space-y-4">
-            <h3 className="text-xs font-black text-cyan-400 uppercase tracking-widest">Connect Social Networks</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider pl-1 flex items-center gap-1.5">
-                  <Github size={12} className="text-zinc-400" /> GitHub Profile
-                </label>
-                <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-4 focus-within:border-white/30 transition-colors">
-                  <input 
-                    value={github}
-                    onChange={(e) => setGithub(e.target.value)}
-                    placeholder="https://github.com/username"
-                    className="w-full bg-transparent border-none outline-none text-white text-xs py-3.5"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider pl-1 flex items-center gap-1.5">
-                  <Linkedin size={12} className="text-zinc-450" /> LinkedIn Profile
-                </label>
-                <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-4 focus-within:border-white/30 transition-colors">
-                  <input 
-                    value={linkedin}
-                    onChange={(e) => setLinkedin(e.target.value)}
-                    placeholder="https://linkedin.com/in/username"
-                    className="w-full bg-transparent border-none outline-none text-white text-xs py-3.5"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider pl-1 flex items-center gap-1.5">
-                  <Twitter size={12} className="text-zinc-455" /> Twitter / X Profile
-                </label>
-                <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-4 focus-within:border-white/30 transition-colors">
-                  <input 
-                    value={twitter}
-                    onChange={(e) => setTwitter(e.target.value)}
-                    placeholder="https://twitter.com/username"
-                    className="w-full bg-transparent border-none outline-none text-white text-xs py-3.5"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider pl-1 flex items-center gap-1.5">
-                  <Youtube size={12} className="text-zinc-455" /> YouTube Channel
-                </label>
-                <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-4 focus-within:border-white/30 transition-colors">
-                  <input 
-                    value={youtube}
-                    onChange={(e) => setYoutube(e.target.value)}
-                    placeholder="https://youtube.com/@channel"
-                    className="w-full bg-transparent border-none outline-none text-white text-xs py-3.5"
-                  />
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* FEATURED PROJECTS SECTION */}
-          <div className="pt-6 border-t border-white/5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xs font-black text-cyan-400 uppercase tracking-widest flex items-center gap-1">
-                  📁 Featured Projects & Credentials
-                </h3>
-                <p className="text-[10px] text-zinc-500 font-medium">Highlight your primary tech creations, codes, and screenshots.</p>
-              </div>
-              <button 
+            <div className="flex items-center gap-2 shrink-0">
+              <button
                 type="button"
-                onClick={() => {
-                  setProjects([...projects, { title: "", description: "", url: "", githubUrl: "", image: "" }]);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0ea5e9]/10 text-[#0ea5e9] border border-[#0ea5e9]/20 hover:bg-[#0ea5e9]/20 text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                onClick={handleQuickGoogleSignIn}
+                disabled={signingIn}
+                className="px-3.5 py-2 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-semibold transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
               >
-                <Plus size={12} /> Add Project
+                {signingIn ? "Signing in..." : "Sign in with Google"}
               </button>
+              {onNavigateLogin && (
+                <button
+                  type="button"
+                  onClick={onNavigateLogin}
+                  className="px-3 py-2 rounded-xl bg-white hover:bg-zinc-100 border border-zinc-200 text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  Account Login
+                </button>
+              )}
             </div>
+          </div>
+        )}
 
-            {projects.length === 0 ? (
-              <div className="text-center py-6 bg-black/20 border border-dashed border-white/10 rounded-xl text-zinc-500 text-xs">
-                No featured projects highlighted yet. Highlight your creation above!
+        {/* Username Handle Input */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-[#1D1D1F] block">
+            Choose Your Free Handle
+          </label>
+          <div className="flex items-center bg-[#F5F5F7] border border-zinc-200/80 rounded-2xl overflow-hidden focus-within:bg-white focus-within:border-[#0071E3] focus-within:ring-2 focus-within:ring-blue-500/10 transition-all">
+            <span className="text-xs sm:text-sm text-[#6E6E73] pl-4 pr-0.5 py-3.5 font-medium select-none shrink-0">
+              {window.location.host}/@
+            </span>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) =>
+                setUsername(
+                  e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "")
+                )
+              }
+              placeholder="yourname"
+              disabled={saving}
+              className="w-full bg-transparent border-none outline-none text-[#1D1D1F] text-sm py-3.5 pr-3 font-semibold flex-1 min-w-0"
+            />
+            <div className="pr-4 shrink-0 flex items-center">
+              {checkStatus === "checking" && (
+                <Loader2 size={16} className="text-[#6E6E73] animate-spin" />
+              )}
+              {checkStatus === "available" && (
+                <CheckCircle2 size={17} className="text-emerald-600" />
+              )}
+              {(checkStatus === "taken" ||
+                checkStatus === "reserved" ||
+                checkStatus === "invalid") && (
+                <XCircle size={17} className="text-red-500" />
+              )}
+            </div>
+          </div>
+          {checkStatus === "available" && (
+            <p className="text-xs text-emerald-700 font-medium pl-1">
+              /@{username} is available to claim.
+            </p>
+          )}
+          {checkStatus === "taken" && (
+            <p className="text-xs text-red-600 font-medium pl-1">
+              /@{username} is already claimed by another user.
+            </p>
+          )}
+          {checkStatus === "reserved" && (
+            <p className="text-xs text-red-600 font-medium pl-1">
+              /{username} is a reserved route name. Please choose another handle.
+            </p>
+          )}
+          {checkStatus === "invalid" && (
+            <p className="text-xs text-amber-700 font-medium pl-1">
+              Use 2 to 30 characters: lowercase letters, numbers, underscores, or hyphens.
+            </p>
+          )}
+        </div>
+
+        {/* Basic Profile Fields */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-[#1D1D1F] block">
+              Display Name
+            </label>
+            <div className="flex items-center bg-[#F5F5F7] border border-zinc-200/80 rounded-xl px-3.5 focus-within:bg-white focus-within:border-[#0071E3] transition-all">
+              <User size={15} className="text-[#6E6E73] shrink-0" />
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Selvaranjan G"
+                className="w-full bg-transparent border-none outline-none text-[#1D1D1F] text-sm py-2.5 pl-2.5"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-[#1D1D1F] block">
+              Personal Website
+            </label>
+            <div className="flex items-center bg-[#F5F5F7] border border-zinc-200/80 rounded-xl px-3.5 focus-within:bg-white focus-within:border-[#0071E3] transition-all">
+              <LinkIcon size={15} className="text-[#6E6E73] shrink-0" />
+              <input
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                placeholder="https://yoursite.com"
+                className="w-full bg-transparent border-none outline-none text-[#1D1D1F] text-sm py-2.5 pl-2.5"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-[#1D1D1F] block">
+            Bio &amp; Role
+          </label>
+          <textarea
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Developer, Designer, Creator..."
+            rows={2}
+            className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl outline-none text-[#1D1D1F] text-sm px-3.5 py-2.5 focus:bg-white focus:border-[#0071E3] transition-all resize-none"
+          />
+        </div>
+
+        {/* Social Links */}
+        <div className="pt-4 border-t border-zinc-100 space-y-3">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[#6E6E73]">
+            Social Links
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {[
+              {
+                label: "GitHub",
+                icon: <Github size={14} className="text-[#6E6E73]" />,
+                value: github,
+                setter: setGithub,
+                placeholder: "https://github.com/username",
+              },
+              {
+                label: "LinkedIn",
+                icon: <Linkedin size={14} className="text-[#6E6E73]" />,
+                value: linkedin,
+                setter: setLinkedin,
+                placeholder: "https://linkedin.com/in/username",
+              },
+              {
+                label: "Twitter / X",
+                icon: <Twitter size={14} className="text-[#6E6E73]" />,
+                value: twitter,
+                setter: setTwitter,
+                placeholder: "https://x.com/username",
+              },
+              {
+                label: "YouTube",
+                icon: <Youtube size={14} className="text-[#6E6E73]" />,
+                value: youtube,
+                setter: setYoutube,
+                placeholder: "https://youtube.com/@channel",
+              },
+            ].map((soc) => (
+              <div key={soc.label} className="space-y-1">
+                <label className="text-[11px] font-medium text-[#6E6E73] flex items-center gap-1.5">
+                  {soc.icon}
+                  <span>{soc.label}</span>
+                </label>
+                <input
+                  value={soc.value}
+                  onChange={(e) => soc.setter(e.target.value)}
+                  placeholder={soc.placeholder}
+                  className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3.5 py-2.5 outline-none focus:bg-white focus:border-[#0071E3] transition-all"
+                />
               </div>
-            ) : (
-              <div className="space-y-4">
-                {projects.map((proj, idx) => (
-                  <div key={idx} className="bg-[#03060c] border border-white/5 p-4 rounded-xl space-y-3 relative overflow-hidden">
-                    <button 
-                      type="button"
-                      onClick={() => {
-                        const next = [...projects];
-                        next.splice(idx, 1);
-                        setProjects(next);
-                      }}
-                      className="absolute top-4 right-4 p-1.5 rounded-lg bg-red-950/20 text-red-400 border border-red-500/10 hover:bg-red-500/10 transition-all cursor-pointer"
-                      title="Remove Project"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+            ))}
+          </div>
+        </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-10">
-                      <div className="space-y-1">
-                        <label className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Project Title</label>
-                        <input 
-                          value={proj.title || ""}
-                          onChange={(e) => {
-                            const next = [...projects];
-                            next[idx].title = e.target.value;
-                            setProjects(next);
-                          }}
-                          placeholder="E.g. Gamura Sandbox Engine"
-                          className="w-full bg-black/40 border border-white/10 rounded-lg text-white text-xs px-3 py-2 outline-none focus:border-white/20"
-                        />
-                      </div>
+        {/* Featured Projects */}
+        <div className="pt-4 border-t border-zinc-100 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#6E6E73]">
+                Featured Projects
+              </h3>
+              <p className="text-xs text-[#6E6E73]">
+                Showcase links and live demos on your public page.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setProjects([
+                  ...projects,
+                  { title: "", description: "", url: "", githubUrl: "", image: "" },
+                ])
+              }
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-[#1D1D1F] text-xs font-semibold transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+            >
+              <Plus size={14} />
+              <span>Add Project</span>
+            </button>
+          </div>
 
-                      <div className="space-y-1">
-                        <label className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Project Screenshot Image URL</label>
-                        <input 
-                          value={proj.image || ""}
-                          onChange={(e) => {
-                            const next = [...projects];
-                            next[idx].image = e.target.value;
-                            setProjects(next);
-                          }}
-                          placeholder="https://images.unsplash.com/photo-..."
-                          className="w-full bg-black/40 border border-white/10 rounded-lg text-white text-xs px-3 py-2 outline-none focus:border-white/20 font-mono"
-                        />
-                      </div>
-                    </div>
+          {projects.length === 0 ? (
+            <div className="text-center py-5 bg-[#F5F5F7] border border-dashed border-zinc-200 rounded-2xl text-[#6E6E73] text-xs">
+              No projects added yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {projects.map((proj, idx) => (
+                <div
+                  key={idx}
+                  className="bg-[#F5F5F7] border border-zinc-200/80 p-4 rounded-2xl space-y-3 relative"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = [...projects];
+                      next.splice(idx, 1);
+                      setProjects(next);
+                    }}
+                    className="absolute top-3.5 right-3.5 p-1.5 rounded-lg bg-white border border-zinc-200 text-zinc-500 hover:text-red-600 transition-colors cursor-pointer"
+                    title="Remove Project"
+                  >
+                    <Trash2 size={14} />
+                  </button>
 
-                    {proj.image && (
-                      <div className="h-28 rounded-lg overflow-hidden border border-white/5 bg-zinc-950 select-none m-0.5">
-                        <img 
-                          src={proj.image} 
-                          alt="Project Preview" 
-                          className="w-full h-full object-cover" 
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5">
-                      <label className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Project Description</label>
-                      <textarea 
-                        value={proj.description || ""}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-9">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-[#6E6E73]">
+                        Project Title
+                      </label>
+                      <input
+                        value={proj.title || ""}
                         onChange={(e) => {
                           const next = [...projects];
-                          next[idx].description = e.target.value;
+                          next[idx] = { ...next[idx], title: e.target.value };
                           setProjects(next);
                         }}
-                        placeholder="Brief description of what you designed, built, and executed."
-                        rows={2}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg text-white text-xs px-3 py-2 outline-none focus:border-white/20 resize-none"
+                        placeholder="Project Name"
+                        className="w-full bg-white border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3 py-2 outline-none focus:border-[#0071E3]"
                       />
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Deployment Demo Link</label>
-                        <input 
-                          value={proj.url || ""}
-                          onChange={(e) => {
-                            const next = [...projects];
-                            next[idx].url = e.target.value;
-                            setProjects(next);
-                          }}
-                          placeholder="https://..."
-                          className="w-full bg-black/40 border border-white/10 rounded-lg text-white text-xs px-3 py-2 outline-none focus:border-white/20"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">GitHub Repository Link</label>
-                        <input 
-                          value={proj.githubUrl || ""}
-                          onChange={(e) => {
-                            const next = [...projects];
-                            next[idx].githubUrl = e.target.value;
-                            setProjects(next);
-                          }}
-                          placeholder="https://github.com/..."
-                          className="w-full bg-black/40 border border-white/10 rounded-lg text-white text-xs px-3 py-2 outline-none focus:border-white/20"
-                        />
-                      </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-[#6E6E73]">
+                        Cover Image URL (optional)
+                      </label>
+                      <input
+                        value={proj.image || ""}
+                        onChange={(e) => {
+                          const next = [...projects];
+                          next[idx] = { ...next[idx], image: e.target.value };
+                          setProjects(next);
+                        }}
+                        placeholder="https://..."
+                        className="w-full bg-white border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3 py-2 outline-none focus:border-[#0071E3]"
+                      />
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-[#6E6E73]">
+                      Description
+                    </label>
+                    <textarea
+                      value={proj.description || ""}
+                      onChange={(e) => {
+                        const next = [...projects];
+                        next[idx] = { ...next[idx], description: e.target.value };
+                        setProjects(next);
+                      }}
+                      rows={2}
+                      placeholder="Short overview of what you built..."
+                      className="w-full bg-white border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3 py-2 outline-none focus:border-[#0071E3] resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-[#6E6E73]">
+                        Live Demo URL
+                      </label>
+                      <input
+                        value={proj.url || ""}
+                        onChange={(e) => {
+                          const next = [...projects];
+                          next[idx] = { ...next[idx], url: e.target.value };
+                          setProjects(next);
+                        }}
+                        placeholder="https://..."
+                        className="w-full bg-white border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3 py-2 outline-none focus:border-[#0071E3]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-[#6E6E73]">
+                        GitHub Repo URL
+                      </label>
+                      <input
+                        value={proj.githubUrl || ""}
+                        onChange={(e) => {
+                          const next = [...projects];
+                          next[idx] = { ...next[idx], githubUrl: e.target.value };
+                          setProjects(next);
+                        }}
+                        placeholder="https://github.com/..."
+                        className="w-full bg-white border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3 py-2 outline-none focus:border-[#0071E3]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Custom Profile Blocks */}
+        <div className="pt-4 border-t border-zinc-100 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#6E6E73]">
+                Custom Page Blocks
+              </h3>
+              <p className="text-xs text-[#6E6E73]">
+                Add extra links, notes, images, or dividers.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setBlocks([
+                    ...blocks,
+                    { id: `b-${Date.now()}`, type: "lnk", title: "", url: "", icon: "🔗" },
+                  ])
+                }
+                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-[#1D1D1F] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+              >
+                + Link
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setBlocks([
+                    ...blocks,
+                    { id: `b-${Date.now()}`, type: "txt", tt: "p", content: "" },
+                  ])
+                }
+                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-[#1D1D1F] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+              >
+                + Text
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setBlocks([
+                    ...blocks,
+                    { id: `b-${Date.now()}`, type: "img", src: "", alt: "" },
+                  ])
+                }
+                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-[#1D1D1F] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+              >
+                + Image
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setBlocks([...blocks, { id: `b-${Date.now()}`, type: "div" }])
+                }
+                className="px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-[#1D1D1F] text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+              >
+                + Divider
+              </button>
+            </div>
           </div>
 
-          {/* CUSTOM INTERACTIVE CANVAS BLOCKS SECTION */}
-          <div className="pt-6 border-t border-white/5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <Sparkles size={12} className="text-emerald-400" /> Interactive Profile Blocks
-                </h3>
-                <p className="text-[10px] text-zinc-500 font-medium">Add additional headings, texts, media images, and dividers to structure your page layout.</p>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setBlocks([...blocks, { id: `b-${Date.now()}`, type: "txt", tt: "p", content: "" }]);
-                  }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/25 text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
+          {blocks.length > 0 && (
+            <div className="space-y-3">
+              {blocks.map((b, idx) => (
+                <div
+                  key={b.id || idx}
+                  className="bg-[#F5F5F7] border border-zinc-200/80 p-4 rounded-2xl space-y-3"
                 >
-                  <Plus size={10} /> + TEXT
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setBlocks([...blocks, { id: `b-${Date.now()}`, type: "img", src: "", alt: "" }]);
-                  }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/25 text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
-                >
-                  <Plus size={10} /> + IMAGE
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setBlocks([...blocks, { id: `b-${Date.now()}`, type: "div" }]);
-                  }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-zinc-700/20 text-zinc-300 border border-white/10 hover:bg-zinc-700/40 text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
-                >
-                  <Plus size={10} /> + LINE
-                </button>
-              </div>
-            </div>
-
-            {blocks.length === 0 ? (
-              <div className="text-center py-6 bg-black/20 border border-dashed border-white/10 rounded-xl text-zinc-500 text-xs">
-                No custom blocks are added yet. Create headings, upload images, or add stylish dividers above!
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {blocks.map((b, idx) => (
-                  <div key={b.id || idx} className="bg-[#03060c] border border-white/5 p-4 rounded-xl space-y-3 relative">
-                    <div className="flex justify-between items-center pb-2 border-b border-white/[0.04]">
-                      <span className="text-[9px] font-black tracking-widest text-zinc-450 uppercase font-mono">
-                        {b.type === "txt" ? "📝 Text Block" : b.type === "img" ? "🖼️ Image Block" : "━ Divider Line"}
-                      </span>
-                      <div className="flex items-center gap-2.5 pr-2">
-                        {idx > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = [...blocks];
-                              const temp = next[idx];
-                              next[idx] = next[idx - 1];
-                              next[idx - 1] = temp;
-                              setBlocks(next);
-                            }}
-                            className="text-[9px] font-extrabold text-[#0ea5e9] hover:text-sky-300 font-mono"
-                          >
-                            ▲ UP
-                          </button>
-                        )}
-                        {idx < blocks.length - 1 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const next = [...blocks];
-                              const temp = next[idx];
-                              next[idx] = next[idx + 1];
-                              next[idx + 1] = temp;
-                              setBlocks(next);
-                            }}
-                            className="text-[9px] font-extrabold text-[#0ea5e9] hover:text-sky-300 font-mono"
-                          >
-                            ▼ DOWN
-                          </button>
-                        )}
-                        <button 
+                  <div className="flex items-center justify-between border-b border-zinc-200/60 pb-2">
+                    <span className="text-xs font-semibold text-[#1D1D1F]">
+                      {b.type === "lnk"
+                        ? "Link Button"
+                        : b.type === "txt"
+                        ? "Text Block"
+                        : b.type === "img"
+                        ? "Image Block"
+                        : "Divider"}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {idx > 0 && (
+                        <button
                           type="button"
                           onClick={() => {
                             const next = [...blocks];
-                            next.splice(idx, 1);
+                            [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
                             setBlocks(next);
                           }}
-                          className="p-1 px-1.5 rounded bg-red-950/20 text-red-400 border border-red-500/15 hover:bg-red-500/10 cursor-pointer text-[9px] uppercase font-bold"
-                          title="Delete Block"
+                          className="p-1.5 rounded-lg bg-white border border-zinc-200 text-zinc-600 hover:text-zinc-900 cursor-pointer"
+                          title="Move Up"
                         >
-                          Remove
+                          <ArrowUp size={12} />
                         </button>
-                      </div>
+                      )}
+                      {idx < blocks.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = [...blocks];
+                            [next[idx + 1], next[idx]] = [next[idx], next[idx + 1]];
+                            setBlocks(next);
+                          }}
+                          className="p-1.5 rounded-lg bg-white border border-zinc-200 text-zinc-600 hover:text-zinc-900 cursor-pointer"
+                          title="Move Down"
+                        >
+                          <ArrowDown size={12} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = [...blocks];
+                          next.splice(idx, 1);
+                          setBlocks(next);
+                        }}
+                        className="p-1.5 rounded-lg bg-white border border-zinc-200 text-zinc-500 hover:text-red-600 cursor-pointer"
+                        title="Remove Block"
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </div>
+                  </div>
 
-                    {b.type === "txt" && (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-4">
-                          <label className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider font-mono">Text Type:</label>
-                          <div className="flex gap-2">
-                            {[
-                              { label: "Heading 1", value: "h1" },
-                              { label: "Heading 2", value: "h2" },
-                              { label: "Paragraph", value: "p" }
-                            ].map((opt) => (
-                              <button
-                                key={opt.value}
-                                type="button"
-                                onClick={() => {
-                                  const next = [...blocks];
-                                  next[idx].tt = opt.value;
-                                  setBlocks(next);
-                                }}
-                                className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider transition-all ${b.tt === opt.value ? "bg-emerald-500/20 text-emerald-450 border border-emerald-500/30" : "bg-black/30 text-zinc-400 border border-white/5 hover:text-white"}`}
-                              >
-                                {opt.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                  {b.type === "lnk" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input
+                        value={b.title || ""}
+                        onChange={(e) => {
+                          const next = [...blocks];
+                          next[idx] = { ...next[idx], title: e.target.value };
+                          setBlocks(next);
+                        }}
+                        placeholder="Button Label"
+                        className="w-full bg-white border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3 py-2 outline-none focus:border-[#0071E3]"
+                      />
+                      <input
+                        value={b.url || ""}
+                        onChange={(e) => {
+                          const next = [...blocks];
+                          next[idx] = { ...next[idx], url: e.target.value };
+                          setBlocks(next);
+                        }}
+                        placeholder="https://..."
+                        className="w-full bg-white border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3 py-2 outline-none focus:border-[#0071E3]"
+                      />
+                    </div>
+                  )}
 
-                        <div className="space-y-1">
-                          <label className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Content Text</label>
-                          <textarea 
-                            value={b.content || ""}
-                            onChange={(e) => {
+                  {b.type === "txt" && (
+                    <div className="space-y-2">
+                      <div className="flex gap-1.5">
+                        {[
+                          { label: "Heading", value: "h1" },
+                          { label: "Subheading", value: "h2" },
+                          { label: "Paragraph", value: "p" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
                               const next = [...blocks];
-                              next[idx].content = e.target.value;
+                              next[idx] = { ...next[idx], tt: opt.value };
                               setBlocks(next);
                             }}
-                            placeholder={b.tt === "h1" ? "E.g. SYSTEM ARCHITECTURE INTEGRATION" : b.tt === "h2" ? "E.g. Key technologies" : "Write your custom markdown/content paragraph text here..."}
-                            rows={3}
-                            className="w-full bg-black/40 border border-white/10 rounded-lg text-white text-xs px-3 py-2 outline-none focus:border-white/20 resize-none font-sans"
-                          />
-                        </div>
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                              b.tt === opt.value
+                                ? "bg-[#1D1D1F] text-white"
+                                : "bg-white border border-zinc-200 text-[#6E6E73]"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
                       </div>
-                    )}
+                      <textarea
+                        value={b.content || ""}
+                        onChange={(e) => {
+                          const next = [...blocks];
+                          next[idx] = { ...next[idx], content: e.target.value };
+                          setBlocks(next);
+                        }}
+                        rows={2}
+                        placeholder="Write your text here..."
+                        className="w-full bg-white border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3 py-2 outline-none focus:border-[#0071E3] resize-none"
+                      />
+                    </div>
+                  )}
 
-                    {b.type === "img" && (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="space-y-1.5 flex flex-col justify-start">
-                            <label className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Image Resource URL</label>
-                            <input 
-                              type="text"
-                              value={b.src || ""}
-                              onChange={(e) => {
-                                const next = [...blocks];
-                                next[idx].src = e.target.value;
-                                setBlocks(next);
-                              }}
-                              placeholder="https://images.unsplash.com/photo-..."
-                              className="w-full bg-black/40 border border-white/10 rounded-lg text-white text-xs px-3 py-2 outline-none focus:border-white/20 font-mono"
-                            />
-                          </div>
+                  {b.type === "img" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input
+                        value={b.src || ""}
+                        onChange={(e) => {
+                          const next = [...blocks];
+                          next[idx] = { ...next[idx], src: e.target.value };
+                          setBlocks(next);
+                        }}
+                        placeholder="Image URL (https://...)"
+                        className="w-full bg-white border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3 py-2 outline-none focus:border-[#0071E3]"
+                      />
+                      <input
+                        value={b.alt || ""}
+                        onChange={(e) => {
+                          const next = [...blocks];
+                          next[idx] = { ...next[idx], alt: e.target.value };
+                          setBlocks(next);
+                        }}
+                        placeholder="Caption (optional)"
+                        className="w-full bg-white border border-zinc-200/80 rounded-xl text-[#1D1D1F] text-xs px-3 py-2 outline-none focus:border-[#0071E3]"
+                      />
+                    </div>
+                  )}
 
-                          <div className="space-y-1.5 flex flex-col justify-start">
-                            <label className="text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Alternative Text / Caption</label>
-                            <input 
-                              type="text"
-                              value={b.alt || ""}
-                              onChange={(e) => {
-                                const next = [...blocks];
-                                next[idx].alt = e.target.value;
-                                setBlocks(next);
-                              }}
-                              placeholder="E.g. Developer workspace graphics diagram"
-                              className="w-full bg-black/40 border border-white/10 rounded-lg text-white text-xs px-3 py-2 outline-none focus:border-white/20"
-                            />
-                          </div>
-                        </div>
+                  {b.type === "div" && (
+                    <div className="h-px w-full bg-zinc-200 my-1" />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-                        {b.src && (
-                          <div className="w-full max-h-32 rounded-lg overflow-hidden border border-white/5 bg-zinc-950 flex items-center justify-center">
-                            <img 
-                              src={b.src} 
-                              alt={b.alt || "Preview"} 
-                              className="max-h-32 object-contain" 
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )}
+        {saveError && (
+          <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-medium">
+            {saveError}
+          </div>
+        )}
 
-                    {b.type === "div" && (
-                      <div className="py-2 flex flex-col items-center">
-                        <div className="h-px w-full bg-gradient-to-r from-transparent via-white/[0.12] to-transparent my-1.5" />
-                        <span className="text-[7.5px] text-zinc-500 font-mono tracking-widest uppercase">HORIZONTAL DECORATIVE DIVIDER ATTACHMENT</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
+        {/* Footer Publish Bar */}
+        <div className="pt-5 border-t border-zinc-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+          {profile?.username ? (
+            <div className="flex items-center gap-3 bg-[#F5F5F7] border border-zinc-200/80 p-2.5 rounded-2xl w-full sm:w-auto">
+              <div className="bg-white p-1.5 rounded-xl border border-zinc-200/60 shrink-0">
+                <QRCodeSVG
+                  value={`${window.location.origin}/@${profile.username}`}
+                  size={44}
+                  level="H"
+                />
               </div>
-            )}
-          </div>
+              <div className="min-w-0 pr-2">
+                <div className="text-[11px] font-semibold text-[#1D1D1F]">
+                  Active QR Link
+                </div>
+                <div className="text-xs text-[#6E6E73] truncate max-w-[180px]">
+                  {window.location.host}/@{profile.username}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-[#6E6E73]">
+              Instant live URL • Free QR Code included
+            </div>
+          )}
 
-          <div className="pt-6 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
-            {profile && profile.username && (
-               <div className="flex items-center gap-3 bg-black/40 border border-white/10 p-3 rounded-xl w-full md:w-auto">
-                 <div className="bg-white p-1.5 rounded-lg shrink-0">
-                   <QRCodeSVG value={`${window.location.origin}/@${profile.username}`} size={48} level="H" />
-                 </div>
-                 <div className="text-left py-1">
-                   <div className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">PROFILE QR</div>
-                   <div className="text-xs text-zinc-400 font-mono mt-0.5 max-w-[140px] truncate">{`${window.location.host}/@${profile.username}`}</div>
-                 </div>
-               </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={
+              saving ||
+              !username.trim() ||
+              checkStatus === "taken" ||
+              checkStatus === "reserved" ||
+              checkStatus === "invalid"
+            }
+            className="w-full sm:w-auto px-7 py-3 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-50 text-white font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm whitespace-nowrap"
+          >
+            {saving ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Sparkles size={16} />
             )}
-            <button
-              onClick={handleSave}
-              disabled={saving || !username || checkStatus === "taken"}
-              className="w-full md:w-auto bg-cyan-500 hover:bg-cyan-400 text-black font-black uppercase tracking-widest text-xs px-8 py-4 rounded-xl disabled:opacity-50 transition-all flex items-center justify-center gap-2 md:ml-auto cursor-pointer shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/20 active:scale-[0.98]"
-            >
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} 
-              {profile ? "Uplink & Publish Profile 🚀" : "Claim My URL & Publish 🚀"}
-            </button>
-          </div>
+            <span>
+              {profile ? "Save & Publish Updates" : "Claim Free URL & Publish"}
+            </span>
+          </button>
         </div>
       </div>
     </div>

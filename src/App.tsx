@@ -6796,7 +6796,7 @@ const UniverseDashboard = ({
 
   const [isDeploying, setIsDeploying] = useState(false);
   useEffect(() => {
-    if (!user) return;
+    if (!user || !auth.currentUser || user.uid === "guest_explorer_uid") return;
     const unsub = onSnapshot(doc(db, "user_connections", user.uid), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
@@ -7210,11 +7210,20 @@ const UniverseDashboard = ({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 360, damping: 34 }}
-              className="fixed bottom-0 left-0 right-0 z-[500] mx-auto w-full max-w-2xl h-[62vh] min-h-[380px] max-h-[600px] bg-white/95 backdrop-blur-2xl rounded-t-[2.25rem] border-t border-x border-zinc-200/80 shadow-[0_-24px_60px_rgba(0,0,0,0.14)] flex flex-col overflow-hidden text-zinc-900"
+              drag="y"
+              dragConstraints={{ top: 0 }}
+              dragElastic={{ top: 0.03, bottom: 0.65 }}
+              dragMomentum={false}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 80 || info.velocity.y > 320) {
+                  setMobileOpen(false);
+                }
+              }}
+              className="fixed bottom-0 left-0 right-0 z-[500] mx-auto w-full max-w-2xl h-[62vh] min-h-[380px] max-h-[600px] bg-white/95 backdrop-blur-2xl rounded-t-[2.25rem] border-t border-x border-zinc-200/80 shadow-[0_-24px_60px_rgba(0,0,0,0.14)] flex flex-col overflow-hidden text-zinc-900 select-none"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Drag Handle & Compact Header */}
-              <div className="pt-2.5 pb-2 px-5 flex flex-col items-center border-b border-zinc-100 shrink-0 bg-white/80">
+              <div className="pt-2.5 pb-2 px-5 flex flex-col items-center border-b border-zinc-100 shrink-0 bg-white/80 cursor-grab active:cursor-grabbing">
                 <div className="w-10 h-1 rounded-full bg-zinc-300 mb-2.5" />
                 <div className="w-full flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -7241,7 +7250,14 @@ const UniverseDashboard = ({
               </div>
 
               {/* Scrollable Grouped Apple White Cards */}
-              <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-3.5 space-y-4 bg-[#f5f5f7]">
+              <div
+                onPointerDown={(e) => {
+                  if (e.currentTarget.scrollTop > 2) {
+                    e.stopPropagation();
+                  }
+                }}
+                className="flex-1 overflow-y-auto touch-pan-y px-4 sm:px-5 py-3.5 space-y-4 bg-[#f5f5f7]"
+              >
                 {navGroups.map((group, gIdx) => (
                   <div key={gIdx} className="space-y-1.5">
                     {group.label && (
@@ -7420,7 +7436,17 @@ const UniverseDashboard = ({
           </div>
         </header>
 
-        <div className="ud-content">
+        <div
+          className="ud-content"
+          style={{
+            maxWidth:
+              activeTab === "Portfolio Builder"
+                ? "1360px"
+                : activeTab === "Gamura Universe"
+                  ? "1040px"
+                  : "960px",
+          }}
+        >
           {activeTab === "Network Graph" ? (
             <NetworkGraphView
               currentUser={user}
@@ -7486,7 +7512,11 @@ const UniverseDashboard = ({
             />
           ) : activeTab === "Gamura Universe" ? (
             <div className="p-2 md:p-4 pb-16">
-              <GamuraUniverseProfileManager user={user} showToast={showToast} />
+              <GamuraUniverseProfileManager
+                user={user}
+                onNavigateLogin={onConnect}
+                showToast={showToast}
+              />
             </div>
           ) : activeTab === "Gamura Link" ? (
             <div className="p-2 md:p-4 pb-16">
@@ -8342,8 +8372,7 @@ const UniverseDashboard = ({
 };
 
 export default function App() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState<
+  type PageType =
     | "home"
     | "gpg"
     | "login"
@@ -8356,14 +8385,131 @@ export default function App() {
     | "aura"
     | "universe-active"
     | "white-page"
+    | "claim"
     | "privacy"
     | "terms"
-    | "delete-account"
-  >("home");
+    | "delete-account";
+
+  const reservedRouteSet = new Set([
+    "",
+    "home",
+    "gpg",
+    "claim",
+    "universe",
+    "universe-active",
+    "community",
+    "features",
+    "pricing",
+    "about",
+    "contact",
+    "terms",
+    "privacy",
+    "delete-account",
+    "account-deletion",
+    "docs",
+    "feed",
+    "chat",
+    "direct",
+    "profile",
+    "settings",
+    "developer",
+    "white-page",
+    "showcase",
+    "apps",
+    "u",
+    "api",
+    "skills",
+    "login",
+    "signup",
+    "history",
+    "aura",
+    "gg",
+    "index.html",
+    "selvaranjan_gamura.html",
+  ]);
+
+  const resolveRouteFromLocation = (): {
+    page: PageType;
+    claimed: string | null;
+    shortSlug: string | null;
+    prefillHandle: string;
+  } => {
+    if (typeof window === "undefined") {
+      return { page: "home", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    const params = new URLSearchParams(window.location.search);
+    const u =
+      params.get("u") ||
+      params.get("username") ||
+      params.get("gamura_hub") ||
+      params.get("ref");
+    const handleParam = params.get("handle") || params.get("u") || "";
+
+    const cleanedPath = window.location.pathname.replace(/^\/+|\/+$/g, "").trim();
+    const lower = cleanedPath.toLowerCase();
+
+    if (lower === "gpg") return { page: "gpg", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
+    if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "terms") return { page: "terms", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "delete-account" || lower === "account-deletion") {
+      return { page: "delete-account", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (lower === "aura") return { page: "aura", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "universe" || lower === "universe-active") {
+      return { page: "universe-active", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (lower === "login") return { page: "login", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "history") return { page: "history", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "about") return { page: "about", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "gg") return { page: "gg", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "white-page") return { page: "white-page", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (u && (lower === "" || lower === "home")) {
+      return { page: "white-page", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (lower.startsWith("@")) {
+      const slug = cleanedPath.substring(1).trim();
+      if (slug && !slug.includes("/")) {
+        return { page: "home", claimed: slug, shortSlug: null, prefillHandle: "" };
+      }
+    }
+    if (lower.startsWith("u/")) {
+      const slug = cleanedPath.substring(2).trim();
+      if (slug && !slug.includes("/")) {
+        return { page: "home", claimed: slug, shortSlug: null, prefillHandle: "" };
+      }
+    }
+    if (lower.startsWith("go/")) {
+      const slug = cleanedPath.substring(3).trim();
+      if (slug) {
+        return { page: "home", claimed: null, shortSlug: slug, prefillHandle: "" };
+      }
+    }
+    if (
+      cleanedPath &&
+      !cleanedPath.includes("/") &&
+      /^[a-zA-Z0-9_-]{2,30}$/.test(cleanedPath) &&
+      !reservedRouteSet.has(lower)
+    ) {
+      return { page: "home", claimed: cleanedPath, shortSlug: null, prefillHandle: "" };
+    }
+
+    return { page: "home", claimed: null, shortSlug: null, prefillHandle: "" };
+  };
+
+  const initialRoute = useMemo(() => resolveRouteFromLocation(), []);
+
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState<PageType>(initialRoute.page);
   const [claimedProfileUser, setClaimedProfileUser] = useState<string | null>(
-    null,
+    initialRoute.claimed,
   );
-  const [shortLinkTarget, setShortLinkTarget] = useState<string | null>(null);
+  const [shortLinkTarget, setShortLinkTarget] = useState<string | null>(
+    initialRoute.shortSlug,
+  );
+  const [claimPrefillHandle, setClaimPrefillHandle] = useState<string>(
+    initialRoute.prefillHandle,
+  );
   const [isDark, setIsDark] = useState(false);
   const [isAuthInitializing, setIsAuthInitializing] = useState(false);
   const [showUniverseLoader, setShowUniverseLoader] = useState(false);
@@ -8524,7 +8670,7 @@ export default function App() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
 
   const addActivity = async (title: string, ic: string = "⚡") => {
-    if (!currentUser) return; // Guard against unauthenticated writes
+    if (!currentUser || !auth.currentUser || currentUser.uid === "guest_explorer_uid") return; // Guard against unauthenticated writes
     const path = "activities";
     try {
       await setDoc(doc(collection(db, path)), {
@@ -8683,115 +8829,12 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const u =
-        params.get("u") ||
-        params.get("username") ||
-        params.get("gamura_hub") ||
-        params.get("ref");
-
-      const pathname = window.location.pathname;
-      const cleanedPath = pathname.replace(/^\/+|\/+$/g, "").trim();
-      const lowerPath = cleanedPath.toLowerCase();
-
-      const reservedRoutes = new Set([
-        "",
-        "home",
-        "gpg",
-        "universe",
-        "community",
-        "features",
-        "pricing",
-        "about",
-        "contact",
-        "terms",
-        "privacy",
-        "delete-account",
-        "account-deletion",
-        "docs",
-        "feed",
-        "chat",
-        "direct",
-        "profile",
-        "settings",
-        "developer",
-        "white-page",
-        "showcase",
-        "apps",
-        "u",
-        "api",
-        "skills",
-        "index.html",
-        "selvaranjan_gamura.html",
-      ]);
-
-      const handleRoute = (pathStr: string) => {
-        const cleaned = pathStr.replace(/^\/+|\/+$/g, "").trim();
-        const lower = cleaned.toLowerCase();
-        if (lower === "gpg") {
-          setCurrentPage("gpg");
-          return true;
-        } else if (lower === "privacy") {
-          setCurrentPage("privacy");
-          return true;
-        } else if (lower === "terms") {
-          setCurrentPage("terms");
-          return true;
-        } else if (lower === "delete-account" || lower === "account-deletion") {
-          setCurrentPage("delete-account");
-          return true;
-        } else if (lower === "aura") {
-          setCurrentPage("aura");
-          return true;
-        } else if (lower === "universe" || lower === "universe-active") {
-          setCurrentPage("universe-active");
-          return true;
-        } else if (lower === "login") {
-          setCurrentPage("login");
-          return true;
-        } else if (lower === "history") {
-          setCurrentPage("history");
-          return true;
-        } else if (lower === "about") {
-          setCurrentPage("about");
-          return true;
-        } else if (lower === "gg") {
-          setCurrentPage("gg");
-          return true;
-        } else if (lower === "" || lower === "home") {
-          setCurrentPage("home");
-          return true;
-        }
-        return false;
-      };
-
-      if (u) {
-        setCurrentPage("white-page");
-      } else if (cleanedPath) {
-        const isKnown = handleRoute(cleanedPath);
-        if (!isKnown) {
-          if (lowerPath.startsWith("@")) {
-            const profileSlug = cleanedPath.substring(1).trim();
-            if (profileSlug && !profileSlug.includes("/")) {
-              setClaimedProfileUser(profileSlug);
-            }
-          } else if (lowerPath.startsWith("go/")) {
-            const shortLinkSlug = cleanedPath.substring(3).trim();
-            if (shortLinkSlug) {
-              setShortLinkTarget(shortLinkSlug);
-            }
-          } else if (
-            !cleanedPath.includes("/") &&
-            /^[a-zA-Z0-9_-]{2,30}$/.test(cleanedPath) &&
-            !reservedRoutes.has(lowerPath)
-          ) {
-            setClaimedProfileUser(cleanedPath);
-          }
-        }
-      }
-
       const onPopState = () => {
-        handleRoute(window.location.pathname);
+        const resolved = resolveRouteFromLocation();
+        setClaimedProfileUser(resolved.claimed);
+        setShortLinkTarget(resolved.shortSlug);
+        setClaimPrefillHandle(resolved.prefillHandle);
+        setCurrentPage(resolved.page);
       };
       window.addEventListener("popstate", onPopState);
       return () => {
@@ -9132,13 +9175,9 @@ export default function App() {
         setPassword("");
         setNickname("");
         setAuthError(null);
-        // Only redirect to home if they are on a protected page
+        // Only redirect to home if they are on an auth-required page
         setCurrentPage((prev) => {
-          if (
-            ["blank", "universe-active", "aura", "gpg", "history"].includes(
-              prev,
-            )
-          ) {
+          if (["blank", "history"].includes(prev)) {
             return "home";
           }
           return prev;
@@ -9158,7 +9197,7 @@ export default function App() {
 
   // Real-time Neural Link Notification System
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !auth.currentUser || currentUser.uid === "guest_explorer_uid") return;
 
     const bootTime = Date.now();
     const notifiedRequestIds = new Set<string>();
@@ -9342,7 +9381,7 @@ export default function App() {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !auth.currentUser || currentUser.uid === "guest_explorer_uid") return;
     const q = query(
       collection(db, `users/${currentUser.uid}/chats`),
       limit(50),
@@ -9423,12 +9462,13 @@ export default function App() {
 
   const deleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!currentUser) return;
+    setChats((prev) => prev.filter((c) => c.id !== chatId));
+    if (currentChatId === chatId) setCurrentChatId(null);
+    if (!currentUser || !auth.currentUser || currentUser.uid === "guest_explorer_uid") return;
 
     setIsDeletingChat(chatId);
     try {
       await deleteDoc(doc(db, `users/${currentUser.uid}/chats`, chatId));
-      if (currentChatId === chatId) setCurrentChatId(null);
     } catch (e) {
       handleFirestoreError(
         e,
@@ -9456,7 +9496,7 @@ export default function App() {
     setCurrentPage("gpg");
     setIsMenuOpen(false);
 
-    if (currentUser) {
+    if (currentUser && auth.currentUser && currentUser.uid !== "guest_explorer_uid") {
       try {
         await setDoc(doc(db, `users/${currentUser.uid}/chats`, newId), newChat);
       } catch (e) {
@@ -9475,16 +9515,60 @@ export default function App() {
     }
   }, [gpgMessages]);
 
+  const getRecentGpgTimestamps = useCallback(() => {
+    const now = Date.now();
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    let localTs: number[] = [];
+    try {
+      const raw = localStorage.getItem("gamura_gpg_timestamps");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          localTs = parsed.filter((t) => typeof t === "number" && now - t < twentyFourHours);
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    const userTs = (currentUserInfo?.gpgTimestamps || []).filter(
+      (t: number) => typeof t === "number" && now - t < twentyFourHours,
+    );
+    return Array.from(new Set([...localTs, ...userTs])).sort((a, b) => a - b);
+  }, [currentUserInfo?.gpgTimestamps]);
+
+  const extractPuterText = (resp: any): string => {
+    if (!resp) return "";
+    if (typeof resp === "string") return resp.trim();
+    const content =
+      resp?.message?.content ??
+      resp?.choices?.[0]?.message?.content ??
+      resp?.text;
+    if (typeof content === "string") return content.trim();
+    if (Array.isArray(content)) {
+      return content
+        .map((part: any) => (typeof part === "string" ? part : part?.text || ""))
+        .join("")
+        .trim();
+    }
+    return "";
+  };
+
   const handleGpgSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!gpgInput.trim() || isGpgLoading) return;
+
+    const recentTimestamps = getRecentGpgTimestamps();
+    if (recentTimestamps.length >= 3) {
+      setLimitError("Daily 3-chat limit reached (3/3 used). Please try again in 24 hours.");
+      setTimeout(() => setLimitError(null), 4500);
+      return;
+    }
 
     let activeChatId = currentChatId;
     let oldChatMessages: Message[] = [];
     let chatTitle = gpgInput.slice(0, 30) + (gpgInput.length > 30 ? "..." : "");
     let baseTimestamp = Date.now();
 
-    // If no active chat, create one
     if (!activeChatId) {
       activeChatId = Date.now().toString();
       setCurrentChatId(activeChatId);
@@ -9519,7 +9603,7 @@ export default function App() {
       return [newChatSession, ...prev];
     });
 
-    if (currentUser) {
+    if (currentUser && auth.currentUser && currentUser.uid !== "guest_explorer_uid") {
       setDoc(
         doc(db, `users/${currentUser.uid}/chats`, activeChatId),
         newChatSession,
@@ -9536,35 +9620,52 @@ export default function App() {
     setIsGpgLoading(true);
 
     try {
-      const toolContext = selectedTool
-        ? `[TOOL: ${selectedTool.toUpperCase()}] `
-        : "";
-
       let generatedPromptText = "";
 
-      // 1. Realtime 100% Free Puter.js AI Integration
+      // 1. Puter.js Best ChatGPT-Class Model Cascade
       if (typeof window !== "undefined" && (window as any).puter?.ai?.chat) {
-        try {
-          const userPrompt = userMessage.content.trim();
-          const targetContext = selectedTool
-            ? `Focus specifically for target tool: ${selectedTool.toUpperCase()}.`
-            : "Create a ready-to-use, high-precision prompt.";
-          const systemMsg = `You are GPG (Gamura Prompt Generator). Your ONLY purpose is to write a clean, ready-to-use prompt tailored directly to what the user needs.
-Output ONLY the generated prompt text itself — no greetings, no commentary, no explanations, no refusals.
-${targetContext}
+        const targetContext = selectedTool
+          ? `Focus specifically for target tool: ${selectedTool.toUpperCase()}.`
+          : "Create a ready-to-use, high-precision prompt.";
+        const systemInstruction = `You are GPG (Gamura Prompt Generator). Your ONLY purpose is to craft a clean, copy-ready, high-precision prompt tailored directly to what the user needs.
+Output ONLY the generated prompt text itself — no greetings, no commentary, no explanations, no refusals, and no markdown code fences.
+${targetContext}`;
 
-User Need: "${userPrompt}"`;
+        const puterMessages = [
+          { role: "system", content: systemInstruction },
+          ...newMessages.map((m) => ({
+            role: m.role === "model" ? "assistant" : "user",
+            content: m.content,
+          })),
+        ];
 
-          const puterResp = await (window as any).puter.ai.chat(systemMsg);
-          if (typeof puterResp === "string" && puterResp.trim()) {
-            generatedPromptText = puterResp.trim();
-          } else if (puterResp?.message?.content) {
-            generatedPromptText = puterResp.message.content.trim();
-          } else if (puterResp?.text) {
-            generatedPromptText = puterResp.text.trim();
+        const preferredModels = ["gpt-4o", "gpt-4.1", "o3-mini"];
+        for (const modelName of preferredModels) {
+          try {
+            const resp = await (window as any).puter.ai.chat(puterMessages, {
+              model: modelName,
+            });
+            const extracted = extractPuterText(resp);
+            if (extracted) {
+              generatedPromptText = extracted;
+              break;
+            }
+          } catch (modelErr) {
+            console.warn(`Puter model ${modelName} unavailable, trying next:`, modelErr);
           }
-        } catch (puterErr) {
-          console.warn("Puter AI realtime generation fell back to server:", puterErr);
+        }
+
+        if (!generatedPromptText) {
+          try {
+            const singlePrompt = `${systemInstruction}\n\nUser Need: "${userMessage.content.trim()}"`;
+            const resp = await (window as any).puter.ai.chat(singlePrompt);
+            const extracted = extractPuterText(resp);
+            if (extracted) {
+              generatedPromptText = extracted;
+            }
+          } catch (fallbackErr) {
+            console.warn("Puter default fallback failed, using /api/gpg:", fallbackErr);
+          }
         }
       }
 
@@ -9623,37 +9724,41 @@ User Need: "${userPrompt}"`;
         return [aiChatSession, ...prev];
       });
 
-      if (
-        currentUser &&
-        currentUserInfo &&
-        modelMessage.content !== "I'm a GPG" &&
-        !modelMessage.content.startsWith("Error:")
-      ) {
+      if (!modelMessage.content.startsWith("Error:")) {
         const now = Date.now();
-        const twentyFourHours = 24 * 60 * 60 * 1000;
-        const updatedTimestamps = [
-          ...(currentUserInfo.gpgTimestamps || []).filter(
-            (t: number) => now - t < twentyFourHours,
-          ),
-          now,
-        ];
-        setCurrentUserInfo({
-          ...currentUserInfo,
-          gpgTimestamps: updatedTimestamps,
-        });
-
-        updateDoc(doc(db, "users", currentUser.uid), {
-          gpgTimestamps: updatedTimestamps,
-        }).catch((e) => {
-          handleFirestoreError(
-            e,
-            OperationType.UPDATE,
-            `users/${currentUser.uid}`,
+        const updatedTimestamps = [...recentTimestamps, now];
+        try {
+          localStorage.setItem(
+            "gamura_gpg_timestamps",
+            JSON.stringify(updatedTimestamps),
           );
-        });
+        } catch {
+          // ignore storage write failures
+        }
+        if (currentUserInfo) {
+          setCurrentUserInfo({
+            ...currentUserInfo,
+            gpgTimestamps: updatedTimestamps,
+          });
+        }
+        if (
+          currentUser &&
+          auth.currentUser &&
+          currentUser.uid !== "guest_explorer_uid"
+        ) {
+          updateDoc(doc(db, "users", currentUser.uid), {
+            gpgTimestamps: updatedTimestamps,
+          }).catch((e) => {
+            handleFirestoreError(
+              e,
+              OperationType.UPDATE,
+              `users/${currentUser.uid}`,
+            );
+          });
+        }
       }
 
-      if (currentUser) {
+      if (currentUser && auth.currentUser && currentUser.uid !== "guest_explorer_uid") {
         setDoc(
           doc(db, `users/${currentUser.uid}/chats`, activeChatId),
           aiChatSession,
@@ -9714,7 +9819,7 @@ User Need: "${userPrompt}"`;
         return [errorChatSession, ...prev];
       });
 
-      if (currentUser && activeChatId) {
+      if (currentUser && auth.currentUser && currentUser.uid !== "guest_explorer_uid" && activeChatId) {
         setDoc(
           doc(db, `users/${currentUser.uid}/chats`, activeChatId),
           errorChatSession,
@@ -11164,7 +11269,10 @@ User Need: "${userPrompt}"`;
                   <div className="space-y-2 pt-2 text-left">
                     <button
                       type="button"
-                      onClick={() => setCurrentPage("white-page")}
+                      onClick={() => {
+                        window.history.pushState({}, "", "/claim");
+                        setCurrentPage("claim");
+                      }}
                       className="w-full flex items-center justify-between gap-3 bg-[#0EA5E9] hover:bg-[#0284c7] text-white rounded-xl py-3 px-4.5 font-bold text-[10px] uppercase tracking-widest hover:shadow-lg transition-all active:scale-[0.98] group cursor-pointer"
                     >
                       <span className="flex items-center gap-2">
@@ -12768,23 +12876,8 @@ User Need: "${userPrompt}"`;
   }
 
   if (currentPage === "gpg") {
-    // Ensure guest session so prompt generation and local state work immediately and freely
-    if (!currentUser && !currentUserInfo) {
-      setCurrentUserInfo({
-        username: "Explorer",
-        nickname: "Guest Explorer",
-        gpgTimestamps: [],
-        avatarUrl: "",
-        bio: "Guest Explorer Session",
-        email: "explorer@gamura.app",
-        themeColor: "",
-      });
-      setCurrentUser({
-        uid: "guest_explorer_uid",
-        displayName: "Guest Explorer",
-        email: "explorer@gamura.app",
-      });
-    }
+    const recentGpgCount = getRecentGpgTimestamps().length;
+    const remainingGpgCount = Math.max(0, 3 - recentGpgCount);
 
     return (
       <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col h-screen overflow-hidden">
@@ -12796,7 +12889,7 @@ User Need: "${userPrompt}"`;
                 window.history.pushState({}, "", "/");
                 setCurrentPage("home");
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200 text-xs font-semibold transition-all cursor-pointer border border-zinc-200 dark:border-white/10"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-800 dark:text-zinc-200 text-xs font-semibold transition-all cursor-pointer border border-zinc-200 dark:border-white/10 whitespace-nowrap"
             >
               <ArrowLeft size={14} />
               <span>Back</span>
@@ -12806,7 +12899,7 @@ User Need: "${userPrompt}"`;
               target="_blank"
               rel="noreferrer"
               title="Open GPG in dedicated window"
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-300 text-xs transition-all border border-zinc-200 dark:border-white/10"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-white/5 dark:hover:bg-white/10 text-zinc-600 dark:text-zinc-300 text-xs transition-all border border-zinc-200 dark:border-white/10 whitespace-nowrap"
             >
               <ExternalLink size={12} />
               <span className="text-[10px] font-mono">Dedicated Page</span>
@@ -12824,16 +12917,12 @@ User Need: "${userPrompt}"`;
                 PROMPT GENERATOR
               </span>
             </div>
-            <div className="flex items-center gap-1 text-[9px] font-mono text-emerald-500 dark:text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Puter Realtime AI • 100% Free</span>
-            </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               onClick={startNewChat}
-              className="text-[10px] md:text-xs font-bold text-zinc-900 dark:text-white border border-zinc-300 dark:border-white/20 px-3 py-1.5 rounded-xl hover:bg-zinc-900 hover:text-white dark:hover:bg-white dark:hover:text-black transition-all uppercase tracking-wider cursor-pointer"
+              className="text-[10px] md:text-xs font-bold text-zinc-900 dark:text-white border border-zinc-300 dark:border-white/20 px-3 py-1.5 rounded-xl hover:bg-zinc-900 hover:text-white dark:hover:bg-white dark:hover:text-black transition-all uppercase tracking-wider cursor-pointer whitespace-nowrap"
             >
               New Chat
             </button>
@@ -13038,11 +13127,61 @@ User Need: "${userPrompt}"`;
                 )}
               </button>
             </div>
-            <div className="text-[10px] text-center text-zinc-400 dark:text-zinc-500 mt-3 tracking-widest uppercase font-medium flex items-center justify-center gap-2">
+            <div className="text-[11px] text-center text-zinc-500 dark:text-zinc-400 mt-3 tracking-wide font-medium flex items-center justify-center gap-2">
               <span className="font-semibold">Prompt Generator Only</span>
+              <span aria-hidden="true">·</span>
+              <span className={remainingGpgCount === 0 ? "text-red-500 font-semibold" : "text-zinc-600 dark:text-zinc-300"}>
+                {remainingGpgCount}/3 prompts remaining today
+              </span>
             </div>
           </form>
         </div>
+      </div>
+    );
+  }
+
+  if (currentPage === "claim") {
+    return (
+      <div
+        className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] flex flex-col"
+        style={{
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif',
+        }}
+      >
+        <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-2xl border-b border-black/[0.06]">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+            <button
+              onClick={() => {
+                window.history.pushState({}, "", "/");
+                setCurrentPage("home");
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/[0.05] hover:bg-black/[0.09] text-sm font-medium text-[#1D1D1F] transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <ArrowLeft size={15} />
+              <span>Home</span>
+            </button>
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#1D1D1F] tracking-tight">
+              <Globe size={16} className="text-[#0071E3]" />
+              <span>Gamura Free URL</span>
+            </div>
+            <button
+              onClick={() => setCurrentPage("login")}
+              className="px-3.5 py-1.5 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+            >
+              {isLoggedIn ? "Account" : "Sign In"}
+            </button>
+          </div>
+        </header>
+
+        <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+          <GamuraUniverseProfileManager
+            user={currentUser}
+            initialHandle={claimPrefillHandle}
+            onNavigateLogin={() => setCurrentPage("login")}
+            showToast={showToast}
+          />
+        </main>
       </div>
     );
   }
@@ -13069,10 +13208,15 @@ User Need: "${userPrompt}"`;
           window.history.pushState({}, "", "/");
           setCurrentPage("home");
         }}
-        onClaimRoute={() => {
+        onClaimRoute={(prefill) => {
+          const targetHandle = prefill || claimedProfileUser || "";
+          setClaimPrefillHandle(targetHandle);
           setClaimedProfileUser(null);
-          window.history.pushState({}, "", "/");
-          setCurrentPage("white-page");
+          const nextUrl = targetHandle
+            ? `/claim?handle=${encodeURIComponent(targetHandle)}`
+            : "/claim";
+          window.history.pushState({}, "", nextUrl);
+          setCurrentPage("claim");
         }}
       />
     );
@@ -13171,19 +13315,28 @@ User Need: "${userPrompt}"`;
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={{ type: "spring", damping: 32, stiffness: 320, mass: 0.85 }}
+                drag="y"
+                dragConstraints={{ top: 0 }}
+                dragElastic={{ top: 0.03, bottom: 0.65 }}
+                dragMomentum={false}
+                onDragEnd={(_, info) => {
+                  if (info.offset.y > 80 || info.velocity.y > 320) {
+                    setIsMenuOpen(false);
+                  }
+                }}
                 className="fixed bottom-0 left-0 right-0 mx-auto w-full max-w-2xl h-[54vh] min-h-[380px] max-h-[620px] bg-white/95 backdrop-blur-2xl z-50 rounded-t-[2.25rem] shadow-[0_-24px_60px_rgba(0,0,0,0.16)] border-t border-x border-zinc-200/80 flex flex-col select-none text-zinc-900 overflow-hidden"
               >
                 {/* Grabber Handle */}
                 <div
                   onClick={() => setIsMenuOpen(false)}
-                  className="w-full pt-3 pb-1 flex justify-center cursor-pointer shrink-0"
-                  title="Close menu"
+                  className="w-full pt-3 pb-1 flex justify-center cursor-grab active:cursor-grabbing shrink-0"
+                  title="Swipe down or tap to close"
                 >
                   <div className="w-11 h-1.5 rounded-full bg-zinc-300/90 hover:bg-zinc-400 transition-colors" />
                 </div>
 
                 {/* Sheet Top Bar */}
-                <div className="px-6 py-3 flex items-center justify-between border-b border-zinc-100 shrink-0">
+                <div className="px-6 py-3 flex items-center justify-between border-b border-zinc-100 shrink-0 cursor-grab active:cursor-grabbing">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-2xl bg-zinc-50 border border-zinc-200/80 flex items-center justify-center p-1.5 shrink-0">
                       <SafeImage
@@ -13212,7 +13365,14 @@ User Need: "${userPrompt}"`;
                 </div>
 
                 {/* Apple Grouped Scrollable Body */}
-                <div className="flex-1 px-5 py-4 overflow-y-auto bg-[#F5F5F7]/70 space-y-4">
+                <div
+                  onPointerDown={(e) => {
+                    if (e.currentTarget.scrollTop > 2) {
+                      e.stopPropagation();
+                    }
+                  }}
+                  className="flex-1 px-5 py-4 overflow-y-auto touch-pan-y bg-[#F5F5F7]/70 space-y-4"
+                >
                   {/* Group 1: Core Platforms */}
                   <div className="bg-white rounded-2xl border border-zinc-200/70 divide-y divide-zinc-100 overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
                     {/* GPG */}
@@ -13309,6 +13469,31 @@ User Need: "${userPrompt}"`;
                       <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-700 group-hover:translate-x-0.5 transition-all shrink-0" />
                     </button>
 
+                    {/* Free URL Claim */}
+                    <button
+                      onClick={() => {
+                        window.history.pushState({}, "", "/claim");
+                        setCurrentPage("claim");
+                        setIsMenuOpen(false);
+                      }}
+                      className="group w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-zinc-900 flex items-center justify-center text-white shrink-0 shadow-xs">
+                          <Link size={17} />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-semibold text-zinc-900 truncate">
+                            Free URL Claim
+                          </span>
+                          <span className="text-xs text-zinc-500 truncate">
+                            Claim your public @username page
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
+
                     {/* Join Galaxy */}
                     <button
                       onClick={() => {
@@ -13397,50 +13582,47 @@ User Need: "${userPrompt}"`;
                     </button>
                   </div>
 
-                  {/* Group 3: Legal & Account Management */}
+                  {/* Group 3: Legal & Account Management (Opens on dedicated URL page) */}
                   <div className="bg-white rounded-2xl border border-zinc-200/70 divide-y divide-zinc-100 overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-                    <button
-                      onClick={() => {
-                        window.history.pushState({}, "", "/privacy");
-                        setCurrentPage("privacy");
-                        setIsMenuOpen(false);
-                      }}
-                      className="group w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-50 transition-colors text-left cursor-pointer"
+                    <a
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="group w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-50 transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
                         <Shield size={15} className="text-emerald-600" />
                         <span className="text-xs font-medium text-zinc-700">Privacy Policy</span>
                       </div>
-                      <ChevronRight size={14} className="text-zinc-400" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        window.history.pushState({}, "", "/terms");
-                        setCurrentPage("terms");
-                        setIsMenuOpen(false);
-                      }}
-                      className="group w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-50 transition-colors text-left cursor-pointer"
+                      <ExternalLink size={13} className="text-zinc-400" />
+                    </a>
+                    <a
+                      href="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="group w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-50 transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
                         <FileText size={15} className="text-sky-600" />
-                        <span className="text-xs font-medium text-zinc-700">Terms of Service</span>
+                        <span className="text-xs font-medium text-zinc-700">Terms &amp; Conditions</span>
                       </div>
-                      <ChevronRight size={14} className="text-zinc-400" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        window.history.pushState({}, "", "/delete-account");
-                        setCurrentPage("delete-account");
-                        setIsMenuOpen(false);
-                      }}
-                      className="group w-full flex items-center justify-between px-4 py-2.5 hover:bg-red-50/70 transition-colors text-left cursor-pointer"
+                      <ExternalLink size={13} className="text-zinc-400" />
+                    </a>
+                    <a
+                      href="/delete-account"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="group w-full flex items-center justify-between px-4 py-2.5 hover:bg-red-50/70 transition-colors text-left"
                     >
                       <div className="flex items-center gap-3">
                         <Trash2 size={15} className="text-red-500" />
-                        <span className="text-xs font-medium text-red-600">Delete Account</span>
+                        <span className="text-xs font-medium text-red-600">Account Deletion</span>
                       </div>
-                      <ChevronRight size={14} className="text-zinc-400" />
-                    </button>
+                      <ExternalLink size={13} className="text-zinc-400" />
+                    </a>
                   </div>
                 </div>
               </motion.div>

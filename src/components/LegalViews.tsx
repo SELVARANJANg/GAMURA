@@ -1,5 +1,16 @@
 import React, { useState } from "react";
-import { ArrowLeft, Shield, ShieldCheck, Trash2, CheckCircle2, AlertTriangle, FileText, ExternalLink, Mail, UserCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  ShieldCheck,
+  Trash2,
+  CheckCircle2,
+  FileText,
+  ExternalLink,
+  Mail,
+  UserCheck,
+} from "lucide-react";
+import { deleteDoc, doc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 
 interface LegalViewProps {
   onBack: () => void;
@@ -7,342 +18,434 @@ interface LegalViewProps {
   onDeleteAccount?: () => Promise<void>;
 }
 
+const APPLE_FONT_STYLE: React.CSSProperties = {
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", system-ui, sans-serif',
+};
+
 export function PrivacyPolicyView({ onBack }: { onBack: () => void }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center px-4 py-8 sm:py-12 selection:bg-emerald-500/30">
-      <div className="w-full max-w-3xl space-y-8">
-        {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+    <div
+      style={APPLE_FONT_STYLE}
+      className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] flex flex-col selection:bg-blue-100 selection:text-blue-900"
+    >
+      {/* Top Apple Frosted Navigation Bar */}
+      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-zinc-200/80">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <button
+            type="button"
             onClick={onBack}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition-all border border-white/10 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200/80 text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer whitespace-nowrap shrink-0"
           >
             <ArrowLeft size={14} />
-            <span>Return to Gamura</span>
+            <span>Back to Gamura</span>
           </button>
-          <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
-            <ShieldCheck size={14} />
-            <span>Google Play Policy Compliant</span>
+          <div className="flex items-center gap-1.5 text-xs font-medium text-[#6E6E73] whitespace-nowrap">
+            <ShieldCheck size={15} className="text-emerald-600" />
+            <span>Privacy Policy</span>
           </div>
         </div>
+      </header>
 
-        {/* Title */}
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-semibold uppercase tracking-wider">
-            <Shield size={12} />
-            Gamura Legal Transparency
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white font-sans">
+      <main className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-6">
+        <div className="space-y-2 px-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6E6E73]">
+            Gamura Legal &amp; Privacy
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#1D1D1F]">
             Privacy Policy
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-400">
-            Last Updated: November 2026 • Official Privacy Notice for GAMURA (Gamura World) & Android Application
+          <p className="text-sm text-[#6E6E73]">
+            Last updated November 2026 • GAMURA (Gamura World) Web &amp; Android Application
           </p>
         </div>
 
-        {/* Content Cards */}
-        <div className="space-y-6 text-sm text-zinc-300 leading-relaxed font-sans">
-          <section className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl space-y-3">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              1. Introduction & Developer Identity
+        <div className="space-y-4 text-sm text-[#424245] leading-relaxed">
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              1. Introduction &amp; Developer Identity
             </h2>
             <p>
-              Gamura ("we", "our", or "us"), founded and engineered by Selvaranjan G, operates the Gamura intelligence, workspace, prompt generation (GPG), and gaming platform across web (<a href="https://gamura.vercel.app" target="_blank" rel="noreferrer" className="text-cyan-400 underline">gamura.vercel.app</a>) and the Android Google Play Store application (<code className="text-emerald-400 text-xs bg-black/40 px-1.5 py-0.5 rounded">com.gamura.app</code>).
+              Gamura (&ldquo;we&rdquo;, &ldquo;our&rdquo;, or &ldquo;us&rdquo;), founded and engineered by Selvaranjan G, operates the Gamura workspace, GPG Prompt Generator, Developer Portfolio Builder, and Universe URL Hub across web (
+              <a
+                href="https://gamura.vercel.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0066CC] hover:underline font-medium"
+              >
+                gamura.vercel.app
+              </a>
+              ) and our Android application (<code className="text-xs bg-zinc-100 px-1.5 py-0.5 rounded text-[#1D1D1F]">com.gamura.app</code>).
             </p>
             <p>
-              We respect your privacy and are committed to protecting your personal data in accordance with Google Play Developer Policies and global data protection standards.
+              We respect your privacy and handle your personal data responsibly in accordance with Google Play Developer Policies and applicable data protection standards.
             </p>
           </section>
 
-          <section className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl space-y-3">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
               2. Information We Collect
             </h2>
-            <p>Gamura is built to minimize data collection:</p>
-            <ul className="list-disc list-inside space-y-1.5 pl-2 text-zinc-300">
-              <li><strong className="text-white">Account Information:</strong> When signing in with Google or Email, we store your Firebase User ID, email, display name, and avatar URL.</li>
-              <li><strong className="text-white">User-Generated Content:</strong> Custom workspace messages, streak check-ins, and GPG prompt history created within your private user space.</li>
-              <li><strong className="text-white">Anonymous Usage:</strong> Local storage flags for theme preference (light/dark mode) and offline cached assets.</li>
+            <p>Gamura is designed to collect only what is necessary to provide your workspace features:</p>
+            <ul className="list-disc list-inside space-y-2 pl-1 text-[#424245]">
+              <li>
+                <strong className="font-semibold text-[#1D1D1F]">Account Information:</strong> When you sign in with Google or email, we store your Firebase User ID, email address, display name, username handle, and optional avatar URL.
+              </li>
+              <li>
+                <strong className="font-semibold text-[#1D1D1F]">Workspace &amp; Public Profile Content:</strong> Prompts you create in GPG, claimed Gamura Universe URL profiles, short links, and portfolio drafts.
+              </li>
+              <li>
+                <strong className="font-semibold text-[#1D1D1F]">Local Browser Preferences:</strong> Theme choices, saved drafts, and daily GPG prompt usage timestamps stored locally on your device.
+              </li>
             </ul>
-            <p className="text-xs text-zinc-400 mt-2">
-              We do NOT sell, lease, or monetize your personal data.
+            <p className="text-xs text-[#6E6E73] pt-1">
+              We do not sell, rent, or trade your personal information to third parties.
             </p>
           </section>
 
-          <section className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl space-y-3">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              3. AI & Third-Party Service Providers
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              3. Infrastructure &amp; AI Processing
             </h2>
-            <p>
-              Gamura utilizes industry-standard cloud infrastructure:
-            </p>
-            <ul className="list-disc list-inside space-y-1.5 pl-2 text-zinc-300">
-              <li><strong className="text-white">Google Cloud & Firebase:</strong> Authentication and Firestore database management with strict security rules.</li>
-              <li><strong className="text-white">Puter.js & AI Endpoints:</strong> Realtime, zero-credential prompt generation for GPG. Prompt inputs are transmitted solely to compute responses.</li>
+            <ul className="list-disc list-inside space-y-2 pl-1 text-[#424245]">
+              <li>
+                <strong className="font-semibold text-[#1D1D1F]">Google Cloud &amp; Firebase:</strong> Authentication, Firestore database storage, and Realtime Database presence secured with strict access rules.
+              </li>
+              <li>
+                <strong className="font-semibold text-[#1D1D1F]">Puter AI &amp; Prompt Generation Endpoints:</strong> Inputs submitted in GPG are processed solely to generate tailored prompts for your immediate use.
+              </li>
             </ul>
           </section>
 
-          <section className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl space-y-3">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              4. Data Retention & Account Deletion
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              4. Data Retention &amp; Account Deletion
             </h2>
             <p>
-              You maintain full ownership of your data. You may request immediate deletion of your account and all associated Firestore records at any time using our dedicated deletion gateway at:
+              You retain full control over your account and data. You can permanently delete your account and associated records at any time through our dedicated deletion page:
             </p>
-            <div className="pt-2">
+            <div className="pt-1">
               <a
                 href="/delete-account"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 text-xs font-semibold transition-all"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100/80 border border-red-200 text-red-700 text-xs font-semibold transition-colors"
               >
                 <Trash2 size={14} />
-                <span>Open Account Deletion Portal (/delete-account)</span>
+                <span>Open Account Deletion Page</span>
+                <ExternalLink size={12} />
               </a>
             </div>
           </section>
 
-          <section className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl space-y-3">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              5. Contact Us
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              5. Contact
             </h2>
             <p>
-              For privacy inquiries, rights enforcement, or legal requests, contact Developer Selvaranjan G:
+              For privacy questions or data requests, please reach out to Developer Selvaranjan G:
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 pt-1">
-              <div className="flex items-center gap-2 text-xs text-zinc-300">
-                <Mail size={14} className="text-emerald-400" />
+            <div className="flex flex-col sm:flex-row gap-4 pt-1 text-xs font-medium text-[#1D1D1F]">
+              <a
+                href="mailto:support@gamura.app"
+                className="inline-flex items-center gap-2 hover:text-[#0066CC] transition-colors"
+              >
+                <Mail size={14} className="text-[#6E6E73]" />
                 <span>support@gamura.app</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-zinc-300">
-                <ExternalLink size={14} className="text-cyan-400" />
+              </a>
+              <a
+                href="https://gamura.vercel.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 hover:text-[#0066CC] transition-colors"
+              >
+                <ExternalLink size={14} className="text-[#6E6E73]" />
                 <span>https://gamura.vercel.app</span>
-              </div>
+              </a>
             </div>
           </section>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
 export function TermsOfServiceView({ onBack }: { onBack: () => void }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center px-4 py-8 sm:py-12 selection:bg-emerald-500/30">
-      <div className="w-full max-w-3xl space-y-8">
-        {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+    <div
+      style={APPLE_FONT_STYLE}
+      className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] flex flex-col selection:bg-blue-100 selection:text-blue-900"
+    >
+      {/* Top Apple Frosted Navigation Bar */}
+      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-zinc-200/80">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <button
+            type="button"
             onClick={onBack}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition-all border border-white/10 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200/80 text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer whitespace-nowrap shrink-0"
           >
             <ArrowLeft size={14} />
-            <span>Return to Gamura</span>
+            <span>Back to Gamura</span>
           </button>
-          <div className="flex items-center gap-2 text-xs text-cyan-400 font-mono">
-            <FileText size={14} />
-            <span>Platform Agreement</span>
+          <div className="flex items-center gap-1.5 text-xs font-medium text-[#6E6E73] whitespace-nowrap">
+            <FileText size={15} className="text-[#0066CC]" />
+            <span>Terms &amp; Conditions</span>
           </div>
         </div>
+      </header>
 
-        {/* Title */}
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[11px] font-semibold uppercase tracking-wider">
-            <FileText size={12} />
-            Gamura Platform Terms
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white font-sans">
-            Terms of Service
+      <main className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-6">
+        <div className="space-y-2 px-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6E6E73]">
+            Platform Agreement
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#1D1D1F]">
+            Terms &amp; Conditions
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-400">
-            Last Updated: November 2026 • Official Platform Terms for GAMURA (Gamura World)
+          <p className="text-sm text-[#6E6E73]">
+            Last updated November 2026 • Official Terms of Service for GAMURA (Gamura World)
           </p>
         </div>
 
-        {/* Content Cards */}
-        <div className="space-y-6 text-sm text-zinc-300 leading-relaxed font-sans">
-          <section className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl space-y-3">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
+        <div className="space-y-4 text-sm text-[#424245] leading-relaxed">
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
               1. Acceptance of Terms
             </h2>
             <p>
-              By accessing or using the Gamura platform, applications, and services (including GPG Gamura Prompt Generator and Neural Link workspaces), you agree to be bound by these Terms of Service.
+              By accessing or using Gamura, including GPG (Gamura Prompt Generator), Gamura Universe URL Claim, Portfolio Builder, and related web or Android applications, you agree to comply with these Terms &amp; Conditions.
             </p>
           </section>
 
-          <section className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl space-y-3">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
-              2. Acceptable Use
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              2. Acceptable Use &amp; Fair Limits
             </h2>
             <p>
-              You agree to use Gamura responsibly. You may not utilize our platform or prompt generation systems to generate illegal, infringing, or abusive material, reverse engineer core systems, or disrupt normal operations.
+              You agree to use Gamura responsibly and lawfully. You must not misuse prompt generation endpoints, impersonate other creators when claiming Gamura Universe handles, distribute malicious links, or attempt to disrupt service availability. Daily usage limits (such as the 3-prompt daily allowance in GPG) help keep free access reliable for all users.
             </p>
           </section>
 
-          <section className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl space-y-3">
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
-              3. Intellectual Property
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              3. Ownership &amp; Intellectual Property
             </h2>
             <p>
-              The Gamura branding, interface layouts, and proprietary code are the intellectual property of Selvaranjan G. Prompts and creative texts generated by you using GPG belong to you.
+              Gamura branding, visual design, and core software architecture remain the intellectual property of Selvaranjan G. Prompts generated by you in GPG and personal portfolio content you author belong to you.
+            </p>
+          </section>
+
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              4. Account Termination &amp; Deletion
+            </h2>
+            <p>
+              You may discontinue use and permanently delete your account data at any time via{" "}
+              <a
+                href="/delete-account"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#0066CC] hover:underline font-medium"
+              >
+                gamura.vercel.app/delete-account
+              </a>
+              .
             </p>
           </section>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
-export function AccountDeletionView({ onBack, currentUser, onDeleteAccount }: LegalViewProps) {
+export function AccountDeletionView({
+  onBack,
+  currentUser,
+  onDeleteAccount,
+}: LegalViewProps) {
   const [confirmStep, setConfirmStep] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletedSuccess, setDeletedSuccess] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [manualEmail, setManualEmail] = useState("");
   const [manualRequested, setManualRequested] = useState(false);
 
+  const isRealAuthenticatedUser = Boolean(
+    currentUser &&
+      currentUser.uid &&
+      currentUser.uid !== "guest_explorer_uid" &&
+      auth.currentUser
+  );
+
   const handleExecuteDelete = async () => {
     setIsDeleting(true);
+    setDeleteError(null);
     try {
+      if (auth.currentUser) {
+        const uid = auth.currentUser.uid;
+        await deleteDoc(doc(db, "users", uid)).catch(() => null);
+        await deleteDoc(doc(db, "gamura_developers", uid)).catch(() => null);
+      }
       if (onDeleteAccount) {
         await onDeleteAccount();
       }
       setDeletedSuccess(true);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Account deletion error:", e);
+      setDeleteError(
+        e?.message ||
+          "Please re-authenticate or submit a deletion request by email below."
+      );
     } finally {
       setIsDeleting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center px-4 py-8 sm:py-12 selection:bg-red-500/30">
-      <div className="w-full max-w-2xl space-y-8">
-        {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+    <div
+      style={APPLE_FONT_STYLE}
+      className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] flex flex-col selection:bg-red-100 selection:text-red-900"
+    >
+      {/* Top Apple Frosted Navigation Bar */}
+      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-zinc-200/80">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <button
+            type="button"
             onClick={onBack}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition-all border border-white/10 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200/80 text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer whitespace-nowrap shrink-0"
           >
             <ArrowLeft size={14} />
-            <span>Return to Gamura</span>
+            <span>Back to Gamura</span>
           </button>
-          <div className="flex items-center gap-2 text-xs text-red-400 font-mono">
-            <AlertTriangle size={14} />
-            <span>Google Play Policy Requirement</span>
+          <div className="flex items-center gap-1.5 text-xs font-medium text-red-600 whitespace-nowrap">
+            <Trash2 size={14} />
+            <span>Account Deletion</span>
           </div>
         </div>
+      </header>
 
-        {/* Title */}
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[11px] font-semibold uppercase tracking-wider">
-            <Trash2 size={12} />
-            User Data & Account Management
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white font-sans">
+      <main className="w-full max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-6">
+        <div className="space-y-2 px-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6E6E73]">
+            User Data &amp; Account Management
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#1D1D1F]">
             Delete Gamura Account
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-400">
-            Google Play Account Deletion Portal for Gamura (<code className="text-white text-xs">com.gamura.app</code>)
+          <p className="text-sm text-[#6E6E73]">
+            Official account &amp; data deletion portal for Gamura (<code className="text-xs bg-zinc-200/70 px-1.5 py-0.5 rounded text-[#1D1D1F]">com.gamura.app</code>)
           </p>
         </div>
 
         {deletedSuccess ? (
-          <div className="p-8 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto text-emerald-400">
-              <CheckCircle2 size={32} />
+          <div className="p-8 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600">
+              <CheckCircle2 size={28} />
             </div>
-            <h3 className="text-xl font-bold text-white">Account Deletion Complete</h3>
-            <p className="text-xs sm:text-sm text-zinc-300 max-w-md mx-auto">
-              Your Gamura account credentials, stored workspace data, and Firestore entries have been permanently removed.
+            <h2 className="text-xl font-semibold text-[#1D1D1F]">
+              Account Deletion Complete
+            </h2>
+            <p className="text-sm text-[#6E6E73] max-w-md mx-auto">
+              Your Gamura account credentials and associated workspace records have been permanently removed.
             </p>
             <button
+              type="button"
               onClick={onBack}
-              className="mt-4 px-6 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+              className="mt-2 px-6 py-2.5 rounded-xl bg-[#1D1D1F] hover:bg-black text-white text-xs font-semibold transition-colors cursor-pointer"
             >
-              Back to Home
+              Return to Home
             </button>
           </div>
-        ) : currentUser ? (
-          <div className="p-6 sm:p-8 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl space-y-6">
-            <div className="flex items-center gap-3 pb-4 border-b border-white/10">
-              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white">
+        ) : isRealAuthenticatedUser ? (
+          <div className="p-6 sm:p-8 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-6">
+            <div className="flex items-center gap-3.5 pb-5 border-b border-zinc-100">
+              <div className="w-11 h-11 rounded-full bg-zinc-100 border border-zinc-200 flex items-center justify-center text-[#1D1D1F] shrink-0">
                 <UserCheck size={20} />
               </div>
-              <div>
-                <p className="text-xs text-zinc-400">Active Account</p>
-                <p className="text-sm font-bold text-white">{currentUser.email || currentUser.displayName || currentUser.uid}</p>
+              <div className="min-w-0">
+                <p className="text-xs text-[#6E6E73] font-medium">Signed-in Account</p>
+                <p className="text-sm font-semibold text-[#1D1D1F] truncate">
+                  {currentUser.email || currentUser.displayName || currentUser.uid}
+                </p>
               </div>
             </div>
 
-            <div className="space-y-3 text-xs sm:text-sm text-zinc-300">
-              <p className="font-semibold text-white">What happens when you delete your account:</p>
-              <ul className="list-disc list-inside space-y-1.5 pl-2 text-zinc-400">
-                <li>Your profile and login credentials will be permanently erased.</li>
-                <li>Your chat history, saved prompts, and streak data will be purged.</li>
-                <li>This action is immediate and cannot be undone.</li>
+            <div className="space-y-2.5 text-sm text-[#424245]">
+              <p className="font-semibold text-[#1D1D1F]">
+                Deleting your account permanently removes:
+              </p>
+              <ul className="list-disc list-inside space-y-1.5 pl-1 text-[#6E6E73]">
+                <li>Your Gamura login credentials and profile details.</li>
+                <li>Saved GPG prompt history, preferences, and streak logs.</li>
+                <li>Associated developer hub entries linked to your user ID.</li>
               </ul>
             </div>
 
+            {deleteError && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700">
+                {deleteError}
+              </div>
+            )}
+
             {!confirmStep ? (
               <button
+                type="button"
                 onClick={() => setConfirmStep(true)}
-                className="w-full py-3 rounded-xl bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 text-xs font-bold tracking-widest uppercase transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
-                <Trash2 size={15} />
-                <span>Proceed to Delete Account</span>
+                <Trash2 size={16} />
+                <span>Delete My Account</span>
               </button>
             ) : (
-              <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 space-y-3">
-                <p className="text-xs text-red-300 font-semibold text-center">
-                  Are you absolutely certain? This cannot be reversed.
+              <div className="p-4 rounded-xl bg-red-50 border border-red-200 space-y-3">
+                <p className="text-xs text-red-800 font-semibold text-center">
+                  Are you sure you want to permanently delete this account? This cannot be undone.
                 </p>
                 <div className="flex gap-3">
                   <button
+                    type="button"
                     onClick={() => setConfirmStep(false)}
-                    className="flex-1 py-2.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-all cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl bg-white hover:bg-zinc-100 border border-zinc-200 text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
+                    type="button"
                     onClick={handleExecuteDelete}
                     disabled={isDeleting}
-                    className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-xs font-bold text-white transition-all cursor-pointer flex items-center justify-center gap-2"
+                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-xs font-semibold text-white transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {isDeleting ? "Deleting..." : "Yes, Delete Permanently"}
+                    {isDeleting ? "Deleting..." : "Confirm Deletion"}
                   </button>
                 </div>
               </div>
             )}
           </div>
         ) : (
-          <div className="p-6 sm:p-8 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl space-y-6">
-            <p className="text-xs sm:text-sm text-zinc-300">
-              Not currently logged in. If you have an existing Gamura account and wish to submit a data deletion request under Google Play policies, please enter your registered email below:
+          <div className="p-6 sm:p-8 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-5">
+            <p className="text-sm text-[#424245] leading-relaxed">
+              You are not currently signed in. Enter the email address registered with your Gamura account to request complete account and data deletion:
             </p>
             {manualRequested ? (
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center space-y-2">
-                <CheckCircle2 size={24} className="text-emerald-400 mx-auto" />
-                <p className="text-xs font-semibold text-white">Deletion Request Submitted</p>
-                <p className="text-[11px] text-zinc-400">
-                  We have queued your account deletion. Associated records for {manualEmail} will be purged within 48 hours.
+              <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
+                <CheckCircle2 size={24} className="text-emerald-600 mx-auto" />
+                <p className="text-sm font-semibold text-[#1D1D1F]">
+                  Deletion Request Received
+                </p>
+                <p className="text-xs text-[#6E6E73]">
+                  Your request for <span className="font-medium text-[#1D1D1F]">{manualEmail}</span> has been queued. Associated records will be permanently purged within 48 hours.
                 </p>
               </div>
             ) : (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (manualEmail) setManualRequested(true);
+                  if (manualEmail.trim()) setManualRequested(true);
                 }}
                 className="space-y-4"
               >
                 <div>
-                  <label className="block text-[11px] text-zinc-400 uppercase tracking-wider mb-1.5 font-mono">
+                  <label className="block text-xs font-semibold text-[#1D1D1F] mb-1.5">
                     Registered Account Email
                   </label>
                   <input
@@ -350,21 +453,21 @@ export function AccountDeletionView({ onBack, currentUser, onDeleteAccount }: Le
                     required
                     value={manualEmail}
                     onChange={(e) => setManualEmail(e.target.value)}
-                    placeholder="explorer@example.com"
-                    className="w-full px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs outline-none focus:border-red-500/50"
+                    placeholder="name@example.com"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200 text-[#1D1D1F] text-sm outline-none focus:bg-white focus:border-[#0066CC] transition-all"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl bg-red-600/80 hover:bg-red-600 text-white text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+                  className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors cursor-pointer"
                 >
-                  Submit Account Deletion Request
+                  Submit Deletion Request
                 </button>
               </form>
             )}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
