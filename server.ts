@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 
 dotenv.config();
 
@@ -120,9 +120,10 @@ Instructions:
 
       const response: any = await Promise.race([
         ai.models.generateContent({
-          model: "gemini-3.8-flash",
+          model: "gemini-4-hydrogen",
           contents: prompt,
           config: {
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
             responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
@@ -229,7 +230,7 @@ TOOL-SPECIFIC OPTIMIZATION:
 - CHART / GRAPH: Focus on schema, axes, topology, and visual clarity.`;
 
       let response: any;
-      const modelsToTry = ["gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+      const modelsToTry = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
       let lastError: any = null;
 
       for (const model of modelsToTry) {
@@ -239,6 +240,9 @@ TOOL-SPECIFIC OPTIMIZATION:
             contents,
             config: {
               systemInstruction,
+              ...(model === "gemini-4-hydrogen"
+                ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+                : {}),
             },
           });
           if (response && (response.text || response.text === "")) {
@@ -296,9 +300,10 @@ TOOL-SPECIFIC OPTIMIZATION:
       }));
 
       const stream = await ai.models.generateContentStream({
-        model: "gemini-3.8-flash",
+        model: "gemini-4-hydrogen",
         contents,
         config: {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           systemInstruction: `You are the Gamura Prompt Generator (GPG). Transform whatever the user asks for into a ready-to-use, high-precision prompt for their exact need. Output ONLY the raw prompt text. No preambles, no markdown fences, no conversational filler.`,
         },
       });

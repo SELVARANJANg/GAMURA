@@ -2476,105 +2476,172 @@ const NeuralLinkView = ({
 };
 
 const GalaxyCoreView = () => {
-  const [stats, setStats] = useState({
-    cpu: 42,
-    mem: 2.1,
-    network: 85,
-    latency: 12,
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [serverStatus, setServerStatus] = useState<"checking" | "online" | "offline">("checking");
+  const [rtdbOnline, setRtdbOnline] = useState(false);
+  const [nodeStats, setNodeStats] = useState({
+    developers: 0,
+    neuralProfiles: 0,
+    shortLinks: 0,
+    totalUsers: 0,
   });
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setStats({
-        cpu: 35 + Math.floor(Math.random() * 25),
-        mem: 2.0 + Math.random() * 0.4,
-        network: 80 + Math.floor(Math.random() * 15),
-        latency: 8 + Math.floor(Math.random() * 8),
-      });
-    }, 3000);
-    return () => clearInterval(interval);
+    const measureLatency = async () => {
+      const start = performance.now();
+      try {
+        const res = await fetch("/api/health", { cache: "no-store" });
+        const elapsed = Math.max(1, Math.round(performance.now() - start));
+        setLatencyMs(elapsed);
+        setServerStatus(res.ok ? "online" : "offline");
+      } catch {
+        setServerStatus("offline");
+        setLatencyMs(null);
+      }
+    };
+
+    measureLatency();
+    const timer = setInterval(measureLatency, 8000);
+
+    const connRef = ref(rtdb, ".info/connected");
+    const unsubConn = onValue(connRef, (snap) => {
+      setRtdbOnline(snap.val() === true);
+    });
+
+    const unsubStats = onSnapshot(
+      doc(db, "system", "stats"),
+      (snap) => {
+        if (snap.exists()) {
+          setNodeStats((prev) => ({
+            ...prev,
+            totalUsers: snap.data()?.totalUsers || prev.totalUsers,
+          }));
+        }
+      },
+      () => {},
+    );
+
+    const unsubDevs = onSnapshot(
+      query(collection(db, "gamura_developers"), limit(100)),
+      (snap) => {
+        setNodeStats((prev) => ({ ...prev, developers: snap.size }));
+      },
+      () => {},
+    );
+
+    const unsubProfiles = onSnapshot(
+      query(collection(db, "neural_profiles"), limit(100)),
+      (snap) => {
+        setNodeStats((prev) => ({ ...prev, neuralProfiles: snap.size }));
+      },
+      () => {},
+    );
+
+    const unsubLinks = onSnapshot(
+      query(collection(db, "gamura_shortlinks"), limit(100)),
+      (snap) => {
+        setNodeStats((prev) => ({ ...prev, shortLinks: snap.size }));
+      },
+      () => {},
+    );
+
+    return () => {
+      clearInterval(timer);
+      unsubConn();
+      unsubStats();
+      unsubDevs();
+      unsubProfiles();
+      unsubLinks();
+    };
   }, []);
 
-  return (
-    <div className="w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-black/40 border border-white/5 rounded-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-700 relative overflow-hidden p-8 shadow-2xl">
-      <div className="ud-welcome-bg" />
-      <div className="ud-welcome-grid absolute inset-0 opacity-10" />
+  const totalLiveNodes = Math.max(
+    nodeStats.totalUsers,
+    nodeStats.developers + nodeStats.neuralProfiles,
+  );
 
-      <div className="relative z-10 flex flex-col items-center">
-        <div className="relative mb-10 group">
-          <div className="absolute inset-0 bg-cyan-500/20 blur-[100px] rounded-full group-hover:bg-cyan-500/30 transition-all duration-700" />
-          <div className="w-32 h-32 rounded-3xl bg-zinc-900 border border-white/10 flex items-center justify-center relative z-10 shadow-2xl group-hover:scale-105 transition-transform duration-700">
-            <Cpu
-              size={64}
-              className="text-cyan-400 animate-[pulse_4s_infinite]"
+  return (
+    <div className="w-full bg-white border border-zinc-200/80 rounded-3xl p-6 sm:p-10 shadow-xs font-sans text-[#1D1D1F] space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col items-center text-center space-y-4">
+        <div className="w-20 h-20 rounded-3xl bg-[#F5F5F7] border border-zinc-200/80 flex items-center justify-center shadow-xs">
+          <Cpu size={36} className="text-[#0071E3]" />
+        </div>
+
+        <div className="space-y-2">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1D1D1F]">
+            Galaxy Core
+          </h2>
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                serverStatus === "offline"
+                  ? "bg-amber-500"
+                  : "bg-emerald-500 animate-pulse"
+              }`}
             />
-            <div className="absolute inset-0 border-2 border-dashed border-cyan-500/20 rounded-3xl animate-[spin_15s_linear_infinite]" />
+            <span className="text-xs font-semibold text-emerald-700">
+              {serverStatus === "online"
+                ? "All Systems Operational"
+                : serverStatus === "checking"
+                  ? "Checking Real-Time Nodes..."
+                  : "Local Mesh Mode Active"}
+            </span>
           </div>
         </div>
+      </div>
 
-        <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-[0.3em] mb-4">
-          Galaxy Core
-        </h2>
-
-        <div className="flex items-center gap-2 px-6 py-2 bg-emerald-500/5 border border-emerald-500/20 rounded-full mb-12">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]" />
-          <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em]">
-            Quantum Supremacy Stable
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 w-full max-w-4xl">
-          {[
-            {
-              label: "Neural CPU",
-              val: `${stats.cpu}%`,
-              sub: "ACTIVE",
-              icon: <Cpu size={14} />,
-            },
-            {
-              label: "Sync Memory",
-              val: `${stats.mem.toFixed(1)} GB`,
-              sub: "VIRTUALIZED",
-              icon: <Database size={14} />,
-            },
-            {
-              label: "Mesh Bandwidth",
-              val: `${stats.network} TB/s`,
-              sub: "UPLINK",
-              icon: <Globe size={14} />,
-            },
-            {
-              label: "Core Latency",
-              val: `${stats.latency} MS`,
-              sub: "REAL-TIME",
-              icon: <Activity size={14} />,
-            },
-          ].map((s, i) => (
-            <div
-              key={i}
-              className="p-6 rounded-2xl bg-zinc-900/60 border border-white/5 flex flex-col items-center text-center group hover:bg-white/[0.04] hover:border-cyan-500/30 transition-all"
-            >
-              <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-600 mb-4 group-hover:text-cyan-400 transition-colors">
-                {s.icon}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto">
+        {[
+          {
+            label: "API Latency",
+            val: latencyMs !== null ? `${latencyMs} ms` : "Checking",
+            sub: "Real-Time Health Probe",
+            icon: <Activity size={16} className="text-[#0071E3]" />,
+          },
+          {
+            label: "Published URLs",
+            val: `${nodeStats.developers}`,
+            sub: "Active Free /@ Pages",
+            icon: <Globe size={16} className="text-emerald-600" />,
+          },
+          {
+            label: "Neutral Link Profiles",
+            val: `${nodeStats.neuralProfiles}`,
+            sub: `${totalLiveNodes} Total Ecosystem Nodes`,
+            icon: <Users size={16} className="text-indigo-600" />,
+          },
+          {
+            label: "Realtime Presence",
+            val: rtdbOnline ? "Connected" : "Syncing",
+            sub: `${nodeStats.shortLinks} Short Links Tracked`,
+            icon: <Database size={16} className="text-amber-600" />,
+          },
+        ].map((metric, i) => (
+          <div
+            key={i}
+            className="p-5 rounded-2xl bg-[#F5F5F7] border border-zinc-200/60 flex flex-col justify-between space-y-3"
+          >
+            <div className="w-9 h-9 rounded-xl bg-white border border-zinc-200/80 flex items-center justify-center shadow-xs">
+              {metric.icon}
+            </div>
+            <div>
+              <div className="text-xl font-bold text-[#1D1D1F] tracking-tight">
+                {metric.val}
               </div>
-              <div className="text-2xl font-black text-white mb-1 tracking-tight">
-                {s.val}
+              <div className="text-xs font-semibold text-[#1D1D1F] mt-0.5">
+                {metric.label}
               </div>
-              <div className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">
-                {s.label}
-              </div>
-              <div className="text-[7px] font-black text-cyan-500/60 uppercase tracking-widest mt-2">
-                {s.sub}
+              <div className="text-[11px] text-[#6E6E73] mt-0.5">
+                {metric.sub}
               </div>
             </div>
-          ))}
-        </div>
-
-        <p className="mt-12 text-[10px] text-zinc-600 font-bold uppercase tracking-[0.2em] max-w-sm text-center leading-relaxed">
-          Gamura Universe centralized node management. All neural frequencies
-          are synchronized across the distributed mesh.
-        </p>
+          </div>
+        ))}
       </div>
+
+      <p className="text-xs text-[#6E6E73] max-w-md mx-auto text-center leading-relaxed">
+        Live system telemetry synced directly from Gamura cloud APIs, Realtime Database presence, and Firestore directories.
+      </p>
     </div>
   );
 };
@@ -2604,36 +2671,47 @@ const AuraSettingsView = ({
   userInfo: any;
   setCurrentUserInfo: any;
 }) => {
-  const [accent, setAccent] = useState(userInfo?.themeColor || "#0ea5e9"); // default sky-500
+  const [accent, setAccent] = useState(
+    userInfo?.themeColor || localStorage.getItem("gamura_aura_accent") || "#0071E3",
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   const colors = [
-    { name: "Sky", hex: "#0ea5e9" },
-    { name: "Cyan", hex: "#06b6d4" },
-    { name: "Emerald", hex: "#10b981" },
-    { name: "Violet", hex: "#8b5cf6" },
-    { name: "Fuchsia", hex: "#d946ef" },
-    { name: "Rose", hex: "#f43f5e" },
-    { name: "Amber", hex: "#f59e0b" },
+    { name: "Apple Blue", hex: "#0071E3" },
+    { name: "Sky", hex: "#0EA5E9" },
+    { name: "Emerald", hex: "#10B981" },
+    { name: "Indigo", hex: "#6366F1" },
+    { name: "Violet", hex: "#8B5CF6" },
+    { name: "Rose", hex: "#F43F5E" },
+    { name: "Amber", hex: "#F59E0B" },
   ];
 
   const handleSave = async () => {
-    if (!user) return;
     setIsSaving(true);
     try {
-      await updateDoc(doc(db, "users", user.uid), { themeColor: accent });
-      const updatedUserInfo = { ...userInfo, themeColor: accent };
-      setCurrentUserInfo(updatedUserInfo);
-      try {
-        localStorage.setItem(
-          `gamura_user_info_${user.uid}`,
-          JSON.stringify(updatedUserInfo),
+      localStorage.setItem("gamura_aura_accent", accent);
+      const isAuthUser = Boolean(
+        user && auth.currentUser && user.uid !== "guest_explorer_uid",
+      );
+      if (isAuthUser) {
+        await setDoc(
+          doc(db, "users", user.uid),
+          { themeColor: accent },
+          { merge: true },
         );
-      } catch (e) {}
+        const updatedUserInfo = { ...(userInfo || {}), themeColor: accent };
+        setCurrentUserInfo(updatedUserInfo);
+        try {
+          localStorage.setItem(
+            `gamura_user_info_${user.uid}`,
+            JSON.stringify(updatedUserInfo),
+          );
+        } catch (e) {}
+      }
       showToast(
         "🎨",
-        "Theme Updated",
-        "UI Accent Color applied across your interface.",
+        "Aura Theme Saved",
+        "Accent color updated across your Universe workspace.",
         "success",
       );
     } catch (e: any) {
@@ -2644,29 +2722,26 @@ const AuraSettingsView = ({
   };
 
   return (
-    <div className="h-full min-h-[500px] bg-[#050810] flex flex-col items-center justify-center relative font-sans overflow-hidden animate-in fade-in duration-700 p-8">
-      <div
-        className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-sky-950/20 opacity-90 z-0"
-        style={{ "--tw-gradient-to": `${accent}33` } as React.CSSProperties}
-      />
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-30 z-0 animate-pulse" />
-
-      <div className="relative z-10 w-full max-w-md text-center space-y-6">
-        <div className="inline-flex p-3 bg-white/5 border border-white/10 rounded-2xl">
-          <Settings className="w-8 h-8" style={{ color: accent }} />
+    <div className="w-full bg-white border border-zinc-200/80 rounded-3xl p-6 sm:p-10 shadow-xs font-sans text-[#1D1D1F] flex flex-col items-center justify-center animate-in fade-in duration-500">
+      <div className="w-full max-w-md text-center space-y-6">
+        <div
+          className="inline-flex p-3.5 rounded-2xl bg-[#F5F5F7] border border-zinc-200/80"
+          style={{ color: accent }}
+        >
+          <Settings className="w-7 h-7" />
         </div>
 
-        <div className="space-y-2">
-          <h2 className="text-2xl font-black text-white tracking-[0.25em] uppercase font-sans">
-            Aura <span style={{ color: accent }}>Theme</span>
+        <div className="space-y-1.5">
+          <h2 className="text-2xl font-bold text-[#1D1D1F] tracking-tight">
+            Aura Appearance
           </h2>
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-            UI Color Customizer
+          <p className="text-xs text-[#6E6E73]">
+            Customize your primary accent color across Gamura Universe
           </p>
         </div>
 
-        <div className="py-8 border-y border-white/10 relative overflow-hidden group space-y-4">
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+        <div className="py-6 px-4 bg-[#F5F5F7] border border-zinc-200/70 rounded-2xl space-y-4">
+          <p className="text-xs font-semibold text-[#6E6E73]">
             Select Primary Accent
           </p>
           <div className="flex flex-wrap justify-center gap-3">
@@ -2674,35 +2749,34 @@ const AuraSettingsView = ({
               <button
                 key={c.hex}
                 onClick={() => setAccent(c.hex)}
-                className={`w-10 h-10 rounded-xl transition-all cursor-pointer shadow-lg ${accent === c.hex ? "scale-110 border-2 border-white ring-4 ring-white/20" : "border border-transparent hover:scale-105 opacity-80 hover:opacity-100"}`}
+                className={`w-10 h-10 rounded-full transition-all cursor-pointer shadow-xs ${
+                  accent === c.hex
+                    ? "scale-110 ring-2 ring-offset-2 ring-[#1D1D1F]"
+                    : "hover:scale-105 opacity-85 hover:opacity-100"
+                }`}
                 style={{ backgroundColor: c.hex }}
                 title={c.name}
               />
             ))}
           </div>
-          <div className="pt-4">
+          <div className="pt-2">
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="w-full py-3 rounded-xl text-black text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-[0.98] cursor-pointer"
-              style={{ backgroundColor: accent, opacity: isSaving ? 0.7 : 1 }}
+              className="w-full py-3 rounded-xl text-white text-xs font-semibold shadow-xs transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60"
+              style={{ backgroundColor: accent }}
             >
-              {isSaving ? "Syncing..." : "Apply Identity Theme"}
+              {isSaving ? "Saving..." : "Apply Aura Theme"}
             </button>
           </div>
         </div>
 
-        <p className="text-slate-400 text-xs font-medium leading-relaxed max-w-sm mx-auto">
-          Your selected frequency controls the interactive elements, glows, and
-          core UI accents across your Gamura Universe dashboard.
-        </p>
-
         <button
           onClick={onBack}
-          className="mx-auto flex items-center justify-center gap-2 text-white bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-xl px-5 py-3 text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95 cursor-pointer font-sans"
+          className="mx-auto inline-flex items-center justify-center gap-2 text-[#1D1D1F] bg-[#F5F5F7] hover:bg-zinc-200/80 border border-zinc-200/80 rounded-xl px-5 py-2.5 text-xs font-semibold transition-all cursor-pointer"
         >
-          <ArrowLeft size={14} className="stroke-[2.5]" />
-          Return to Console
+          <ArrowLeft size={14} />
+          Back to Overview
         </button>
       </div>
     </div>
@@ -4527,7 +4601,6 @@ const FeaturePipelineView = ({
 
 const FeaturesView = ({
   onBack,
-  loaderImgSources,
   showToast,
 }: {
   onBack: () => void;
@@ -4537,103 +4610,208 @@ const FeaturesView = ({
   const [showProposeModal, setShowProposeModal] = useState(false);
   const [proposalTitle, setProposalTitle] = useState("");
   const [proposalDesc, setProposalDesc] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [liveProposals, setLiveProposals] = useState<any[]>([]);
 
-  const handlePropose = (e: React.FormEvent) => {
-    e.preventDefault();
-    showToast(
-      "🚀",
-      "Proposal Received",
-      "User innovation data has been synced to the neural network for review.",
+  useEffect(() => {
+    const q = query(collection(db, "features"), limit(30));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const items = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((item: any) => item.proposedBy || item.description);
+        setLiveProposals(items);
+      },
+      () => {},
     );
-    setShowProposeModal(false);
-    setProposalTitle("");
-    setProposalDesc("");
+    return () => unsub();
+  }, []);
+
+  const handlePropose = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = proposalTitle.trim();
+    const desc = proposalDesc.trim();
+    if (!title || !desc) return;
+    setSubmitting(true);
+    try {
+      const currentAuthUser = auth.currentUser;
+      const newDoc = {
+        name: title,
+        description: desc,
+        status: "Proposed",
+        progress: 15,
+        color: "sky",
+        order: Date.now(),
+        proposedBy: currentAuthUser?.displayName || currentAuthUser?.email || "Community Member",
+      };
+
+      if (currentAuthUser) {
+        const refDoc = doc(collection(db, "features"));
+        await setDoc(refDoc, newDoc);
+        showToast(
+          "🚀",
+          "Proposal Published",
+          `"${title}" is now saved in the Gamura roadmap.`,
+        );
+      } else {
+        setLiveProposals((prev) => [{ id: `local_${Date.now()}`, ...newDoc }, ...prev]);
+        showToast(
+          "✨",
+          "Proposal Added",
+          "Added to your session preview. Sign in to publish globally.",
+        );
+      }
+
+      setShowProposeModal(false);
+      setProposalTitle("");
+      setProposalDesc("");
+    } catch (err: any) {
+      showToast("❌", "Submission Failed", err?.message || "Could not save proposal.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  const coreCapabilities = [
+    {
+      title: "Gamura Prompt Generator (GPG)",
+      subtitle: "Real-Time Prompt Engine",
+      icon: Sparkles,
+      status: "Live",
+      text: "Transforms any goal, topic, or task into crisp, production-ready prompts for code, design, video, and research.",
+    },
+    {
+      title: "Free URL Identity (/@username)",
+      subtitle: "Instant Public Hub",
+      icon: Globe,
+      status: "Live",
+      text: "Claim a personalized Gamura URL, custom profile blocks, social links, and QR code sharing in seconds.",
+    },
+    {
+      title: "Neutral Link Chat & Groups",
+      subtitle: "Ephemeral 24h Channels",
+      icon: MessageSquare,
+      status: "Live",
+      text: "Connect directly with teammates using unique handles with auto-expiring 24-hour rooms and live presence.",
+    },
+    {
+      title: "AI Semantic Chat Search",
+      subtitle: "Meaning-Based Retrieval",
+      icon: Search,
+      status: "Live",
+      text: "Search across message history by meaning, context, and intent rather than exact keyword spelling.",
+    },
+    {
+      title: "Portfolio Builder",
+      subtitle: "One-Click Publishing",
+      icon: Briefcase,
+      status: "Live",
+      text: "Build clean Apple-inspired personal websites and export HTML or deploy straight to GitHub Pages.",
+    },
+    {
+      title: "Live Universe Analytics",
+      subtitle: "Real-Time Firestore Sync",
+      icon: Activity,
+      status: "Live",
+      text: "Monitor user nodes, short-link clicks, system latency, and shared community projects without mock data.",
+    },
+  ];
+
   return (
-    <div className="w-full h-full min-h-[600px] bg-black/40 border border-white/5 flex flex-col p-8 backdrop-blur-2xl relative overflow-hidden animate-in fade-in zoom-in duration-700 shadow-2xl">
-      <div className="flex items-center justify-between mb-12">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 text-white font-black text-[9px] uppercase tracking-widest hover:bg-white/10 transition-all"
-        >
-          <ArrowLeft size={12} /> Return
-        </button>
-        <div className="flex items-center gap-4">
+    <div className="w-full space-y-6 font-sans text-[#1D1D1F] animate-in fade-in duration-500 pb-10">
+      <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
           <button
-            onClick={() => setShowProposeModal(true)}
-            className="flex items-center gap-2 px-4 py-1.5 bg-cyan-500 text-black font-black text-[9px] uppercase tracking-widest hover:scale-105 transition-all shadow-[0_0_15px_rgba(34,211,238,0.4)]"
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-xs font-medium text-[#6E6E73] hover:text-[#1D1D1F] transition-colors cursor-pointer mb-1.5"
           >
-            <Plus size={12} /> Propose Feature
+            <ArrowLeft size={14} /> Back to Overview
           </button>
-          <h2 className="text-xl font-black text-white uppercase tracking-tighter">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1D1D1F]">
             System Features
           </h2>
+          <p className="text-xs text-[#6E6E73] mt-0.5">
+            Active capabilities powering Gamura Intelligence and Gamura Universe.
+          </p>
         </div>
+
+        <button
+          onClick={() => setShowProposeModal(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold text-xs rounded-xl transition-all cursor-pointer shadow-xs shrink-0"
+        >
+          <Plus size={14} /> Propose Feature
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
-        {[
-          {
-            title: "Aerospace Grid Systems",
-            subtitle: "Orbitron & Rajdhani Alignment",
-            icon: Sun,
-            text: "Aesthetics powered by premium futuristic type pairings. Sharp lines, elegant borders, glowing modules, and high contrast cyber interfaces.",
-          },
-          {
-            title: "Interactive Particle field",
-            subtitle: "Warp Starfields Canvas",
-            icon: Star,
-            text: "Runs responsive custom renders calculated using high frequency state update arrays to adapt perfectly to window resize margins.",
-          },
-          {
-            title: "Quantum Telemetry API",
-            subtitle: "BuBuBai Multi-Engine Integrations",
-            icon: Terminal,
-            text: "Access high-performance neural modules capable of parsing inputs, formulating code, and keeping logs secure via advanced FireStore patterns.",
-          },
-          {
-            title: "Galaxy Connectivity",
-            subtitle: "Mesh Resource Allocation",
-            icon: Network,
-            text: "Distributed client-side rendering engine bringing ultra-responsive interfaces to any portal with sub-millisecond response.",
-          },
-          {
-            title: "Direct Neural Link",
-            subtitle: "Encrypted Nickname Uplink",
-            icon: Cpu,
-            text: "Connect with others using unique nicknames. Shared channels and temporary hubs allow for frictionless cosmic collaboration.",
-          },
-          {
-            title: "Aura Modulation",
-            subtitle: "Global Real-time Controls",
-            icon: Zap,
-            text: "Fine-tune the universe speed, density and visual themes instantly through the Aura Settings interface.",
-          },
-        ].map((feat, i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {coreCapabilities.map((feat, i) => (
           <div
             key={i}
-            className="bg-white/5 border border-white/5 p-6 hover:border-cyan-500/20 transition-all duration-300 backdrop-blur-md space-y-3"
+            className="bg-white border border-zinc-200/80 rounded-2xl p-5 hover:border-zinc-300 transition-all shadow-xs space-y-3 flex flex-col justify-between"
           >
-            <div className="w-10 h-10 border border-cyan-500/20 bg-cyan-500/5 flex items-center justify-center text-cyan-400">
-              <feat.icon className="w-5 h-5" />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0071E3] flex items-center justify-center">
+                  <feat.icon className="w-5 h-5" />
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/70 text-[10px] font-semibold">
+                  {feat.status}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] font-medium text-[#0071E3]">
+                  {feat.subtitle}
+                </span>
+                <h3 className="font-bold text-sm text-[#1D1D1F] mt-0.5">
+                  {feat.title}
+                </h3>
+              </div>
+              <p className="text-xs text-[#6E6E73] leading-relaxed">
+                {feat.text}
+              </p>
             </div>
-            <div>
-              <span className="text-[8px] font-black text-cyan-500/60 uppercase tracking-[0.2em]">
-                {feat.subtitle}
-              </span>
-              <h3 className="font-black text-sm text-white uppercase mt-1">
-                {feat.title}
-              </h3>
-            </div>
-            <p className="text-[10px] text-zinc-400 leading-relaxed font-medium">
-              {feat.text}
-            </p>
           </div>
         ))}
       </div>
 
-      {/* Removed Visual Assets & Signals as requested */}
+      {liveProposals.length > 0 && (
+        <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-[#1D1D1F]">
+                Community Feature Proposals
+              </h3>
+              <p className="text-xs text-[#6E6E73]">
+                Live submissions stored in Firestore
+              </p>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-[#F5F5F7] text-xs font-semibold text-[#1D1D1F]">
+              {liveProposals.length}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {liveProposals.map((item) => (
+              <div
+                key={item.id}
+                className="p-4 rounded-2xl bg-[#F5F5F7] border border-zinc-200/60 space-y-1.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-[#1D1D1F] truncate">
+                    {item.name}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-white border border-zinc-200 text-[10px] font-semibold text-[#0071E3] shrink-0">
+                    {item.status || "Proposed"}
+                  </span>
+                </div>
+                <p className="text-xs text-[#6E6E73] leading-relaxed">
+                  {item.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* PROPOSE MODAL */}
       <AnimatePresence>
@@ -4642,27 +4820,29 @@ const FeaturesView = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[1000] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[1000] flex items-center justify-center p-4"
+            onClick={() => setShowProposeModal(false)}
           >
             <motion.div
-              initial={{ scale: 0.9, y: 20 }}
+              initial={{ scale: 0.95, y: 12 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden"
+              exit={{ scale: 0.95, y: 12 }}
+              className="w-full max-w-md bg-white border border-zinc-200 rounded-3xl shadow-2xl overflow-hidden text-[#1D1D1F]"
+              onClick={(e) => e.stopPropagation()}
             >
-              <form onSubmit={handlePropose} className="p-8 space-y-6">
+              <form onSubmit={handlePropose} className="p-6 sm:p-7 space-y-5">
                 <div>
-                  <h2 className="text-lg font-black text-white uppercase tracking-widest leading-none mb-2">
-                    Propose Innovation
+                  <h2 className="text-lg font-bold text-[#1D1D1F] tracking-tight">
+                    Propose a Feature
                   </h2>
-                  <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">
-                    Share your vision for the Gamura Universe
+                  <p className="text-xs text-[#6E6E73] mt-0.5">
+                    Share an idea for Gamura Universe.
                   </p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                    <label className="text-xs font-semibold text-[#1D1D1F] block">
                       Feature Name
                     </label>
                     <input
@@ -4670,38 +4850,39 @@ const FeaturesView = ({
                       required
                       value={proposalTitle}
                       onChange={(e) => setProposalTitle(e.target.value)}
-                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-[10px] font-bold text-white focus:outline-none focus:border-cyan-500/50 transition-all"
-                      placeholder="e.g. Neural Visualization Hub"
+                      className="w-full bg-[#F5F5F7] border border-zinc-200 rounded-xl px-3.5 py-2.5 text-sm text-[#1D1D1F] focus:outline-none focus:bg-white focus:border-[#0071E3] transition-all"
+                      placeholder="e.g. Custom Portfolio Themes"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">
-                      System Description
+                    <label className="text-xs font-semibold text-[#1D1D1F] block">
+                      Description
                     </label>
                     <textarea
                       required
                       value={proposalDesc}
                       onChange={(e) => setProposalDesc(e.target.value)}
                       rows={3}
-                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-[10px] font-bold text-white focus:outline-none focus:border-cyan-500/50 transition-all resize-none"
-                      placeholder="Explain the functional benefits..."
+                      className="w-full bg-[#F5F5F7] border border-zinc-200 rounded-xl px-3.5 py-2.5 text-sm text-[#1D1D1F] focus:outline-none focus:bg-white focus:border-[#0071E3] transition-all resize-none"
+                      placeholder="Describe how it helps users..."
                     />
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 pt-1">
                   <button
                     type="button"
                     onClick={() => setShowProposeModal(false)}
-                    className="flex-1 py-3 bg-white/5 border border-white/10 text-white font-black text-[9px] rounded-xl uppercase tracking-widest hover:bg-white/10 transition-all"
+                    className="flex-1 py-2.5 bg-[#F5F5F7] hover:bg-zinc-200 text-[#1D1D1F] font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-3 bg-cyan-500 text-black font-black text-[9px] rounded-xl uppercase tracking-widest hover:scale-[1.02] shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all"
+                    disabled={submitting}
+                    className="flex-1 py-2.5 bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-60"
                   >
-                    Send Protocol
+                    {submitting ? "Submitting..." : "Submit Proposal"}
                   </button>
                 </div>
               </form>
@@ -4743,106 +4924,215 @@ const UsersView = ({
     initialFilter,
   );
   const [search, setSearch] = useState("");
-  const [usersList, setUsersList] = useState<any[]>([]);
+  const [authUsers, setAuthUsers] = useState<any[]>([]);
+  const [publicProfiles, setPublicProfiles] = useState<any[]>([]);
+  const [publicDevs, setPublicDevs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [pingingId, setPingingId] = useState<string | null>(null);
   const [userToDelete, setUserToDelete] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  const isAuth = Boolean(
+    currentUser && auth.currentUser && currentUser.uid !== "guest_explorer_uid",
+  );
 
   useEffect(() => {
-    if (!currentUser) return;
-    const q = query(
-      collection(db, "users"),
-      orderBy("lastLogin", "desc"),
-      limit(100),
-    );
-    const unsub = onSnapshot(
-      q,
+    setLoading(true);
+    let settledCount = 0;
+    const markReady = () => {
+      settledCount += 1;
+      if (settledCount >= 1) setLoading(false);
+    };
+
+    // Public Neutral Link profiles (always readable)
+    const unsubProfiles = onSnapshot(
+      query(collection(db, "neural_profiles"), limit(100)),
       (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        // Client-side sort by lastLogin to avoid index requirement
-        list.sort((a: any, b: any) => {
-          const getT = (val: any) => {
-            if (!val) return 0;
-            if (val.toMillis) return val.toMillis();
-            if (val instanceof Date) return val.getTime();
-            if (val.toDate) return val.toDate().getTime();
-            return Number(val) || 0;
-          };
-          return getT(b.lastLogin) - getT(a.lastLogin);
-        });
-        setUsersList(list);
-        setLoading(false);
+        setPublicProfiles(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        markReady();
       },
-      (err) => {
-        console.error("Users list query err:", err);
-        setLoading(false);
-      },
+      () => markReady(),
     );
-    return unsub;
-  }, [currentUser, db]);
+
+    // Public Developer URLs (always readable)
+    const unsubDevs = onSnapshot(
+      query(collection(db, "gamura_developers"), limit(100)),
+      (snap) => {
+        setPublicDevs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        markReady();
+      },
+      () => markReady(),
+    );
+
+    // Authenticated /users directory (when signed in)
+    let unsubUsers = () => {};
+    if (isAuth) {
+      const q = query(
+        collection(db, "users"),
+        orderBy("lastLogin", "desc"),
+        limit(100),
+      );
+      unsubUsers = onSnapshot(
+        q,
+        (snap) => {
+          setAuthUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+          markReady();
+        },
+        () => markReady(),
+      );
+    } else {
+      setAuthUsers([]);
+    }
+
+    const fallbackTimer = setTimeout(() => setLoading(false), 1500);
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      unsubProfiles();
+      unsubDevs();
+      unsubUsers();
+    };
+  }, [isAuth, db]);
+
+  // Merge authenticated users + public profiles + public developers into one live list
+  const usersList = useMemo(() => {
+    const map = new Map<string, any>();
+
+    authUsers.forEach((u) => {
+      const key = u.uid || u.id;
+      map.set(key, {
+        ...u,
+        id: u.id || key,
+        uid: u.uid || key,
+        source: "account",
+      });
+    });
+
+    publicProfiles.forEach((p) => {
+      const key = p.uid || `np_${p.nickname || p.id}`;
+      const existing = map.get(key);
+      if (existing) {
+        map.set(key, {
+          ...existing,
+          neuralNickname: p.nickname,
+          lastPulse: p.lastPulse || existing.lastPulse,
+          avatarUrl: existing.avatarUrl || p.avatarUrl,
+        });
+      } else {
+        map.set(key, {
+          id: p.uid || p.id,
+          uid: p.uid || p.id,
+          nickname: p.nickname || p.id,
+          username: p.nickname || p.id,
+          avatarUrl: p.avatarUrl || "",
+          lastPulse: p.lastPulse || null,
+          source: "neural_profile",
+        });
+      }
+    });
+
+    publicDevs.forEach((dev) => {
+      const key = dev.uid || `dev_${dev.username || dev.id}`;
+      const existing = map.get(key);
+      if (existing) {
+        map.set(key, {
+          ...existing,
+          username: existing.username || dev.username || dev.id,
+          displayName: existing.nickname || dev.displayName,
+          published: dev.published,
+        });
+      } else {
+        map.set(key, {
+          id: dev.uid || dev.id,
+          uid: dev.uid || dev.id,
+          nickname: dev.displayName || dev.username || dev.id,
+          username: dev.username || dev.id,
+          photoURL: dev.avatar || "",
+          createdAt: dev.updatedAt || null,
+          published: dev.published,
+          source: "developer_url",
+        });
+      }
+    });
+
+    const list = Array.from(map.values());
+    list.sort((a: any, b: any) => {
+      const aOnline = presenceData?.[a.uid]?.online ? 1 : 0;
+      const bOnline = presenceData?.[b.uid]?.online ? 1 : 0;
+      if (aOnline !== bOnline) return bOnline - aOnline;
+
+      const getT = (val: any) => {
+        if (!val) return 0;
+        if (val.toMillis) return val.toMillis();
+        if (val.seconds) return val.seconds * 1000;
+        if (val instanceof Date) return val.getTime();
+        if (val.toDate) return val.toDate().getTime();
+        return Number(val) || 0;
+      };
+      return Math.max(getT(b.lastLogin), getT(b.lastPulse)) - Math.max(getT(a.lastLogin), getT(a.lastPulse));
+    });
+    return list;
+  }, [authUsers, publicProfiles, publicDevs, presenceData]);
 
   useEffect(() => {
     setFilterMode(initialFilter);
   }, [initialFilter]);
 
-  const [currentTime, setCurrentTime] = useState(Date.now());
-
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    const timer = setInterval(() => setCurrentTime(Date.now()), 5000);
     return () => clearInterval(timer);
   }, []);
 
   const activeThreshold = 5 * 60 * 1000;
 
   const getUserStatus = (u: any) => {
-    const isOnline = presenceData?.[u.id]?.online;
+    const isOnline = presenceData?.[u.uid]?.online || presenceData?.[u.id]?.online;
     if (isOnline) {
       return {
-        label: "ACTIVE",
+        label: "Active",
         active: true,
-        color:
-          "text-emerald-400 border-emerald-500/20 bg-emerald-500/5 shadow-[0_0_8px_rgba(16,185,129,0.1)] animate-pulse",
+        badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+        dotClass: "bg-emerald-500 animate-pulse",
       };
     }
 
-    if (!u.lastLogin)
-      return {
-        label: "OFFLINE",
-        active: false,
-        color: "text-zinc-550 border-white/5 bg-black/20",
-      };
-    
-    let t = 0;
-    if (u.lastLogin.toDate) t = u.lastLogin.toDate().getTime();
-    else if (u.lastLogin instanceof Date) t = u.lastLogin.getTime();
-    else t = new Date(u.lastLogin).getTime();
+    const pulseSource = u.lastPulse || u.lastLogin;
+    if (pulseSource) {
+      let t = 0;
+      if (pulseSource.toDate) t = pulseSource.toDate().getTime();
+      else if (pulseSource.seconds) t = pulseSource.seconds * 1000;
+      else if (pulseSource instanceof Date) t = pulseSource.getTime();
+      else t = new Date(pulseSource).getTime();
 
-    const isActive = currentTime - t < activeThreshold;
-    if (isActive) {
-      return {
-        label: "STANDBY",
-        active: false,
-        color: "text-amber-500 border-amber-500/20 bg-amber-500/5",
-      };
+      if (t > 0 && currentTime - t < activeThreshold) {
+        return {
+          label: "Recent",
+          active: true,
+          badgeClass: "bg-blue-50 text-[#0071E3] border-blue-200",
+          dotClass: "bg-[#0071E3]",
+        };
+      }
     }
+
     return {
-      label: "OFFLINE",
+      label: u.published ? "Public URL" : "Synced",
       active: false,
-      color: "text-zinc-550 border-white/5 bg-black/20",
+      badgeClass: "bg-zinc-100 text-[#6E6E73] border-zinc-200",
+      dotClass: "bg-zinc-400",
     };
   };
 
   const getFilteredUsers = () => {
+    const q = search.toLowerCase().trim();
     return usersList.filter((u) => {
       const matchesSearch =
-        (u.uid && u.uid.toLowerCase().includes(search.toLowerCase())) ||
-        (u.username &&
-          u.username.toLowerCase().includes(search.toLowerCase())) ||
-        (u.nickname &&
-          u.nickname.toLowerCase().includes(search.toLowerCase())) ||
-        (u.email && u.email.toLowerCase().includes(search.toLowerCase()));
+        !q ||
+        (u.uid && String(u.uid).toLowerCase().includes(q)) ||
+        (u.username && String(u.username).toLowerCase().includes(q)) ||
+        (u.nickname && String(u.nickname).toLowerCase().includes(q)) ||
+        (u.email && String(u.email).toLowerCase().includes(q));
 
       if (!matchesSearch) return false;
 
@@ -4868,129 +5158,130 @@ const UsersView = ({
     setCopiedId(id);
     showToast(
       "📋",
-      "ID Copied",
-      `Copied user identifier to clipboard.`,
+      "Copied",
+      "User identifier copied to clipboard.",
       "success",
     );
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handlePing = (targetUser: any) => {
+  const handlePing = async (targetUser: any) => {
     setPingingId(targetUser.uid);
-    showToast(
-      "📡",
-      "Pinging Node",
-      `Broadcasting sync signal to node G-ID:${targetUser.uid.substring(0, 6).toUpperCase()}...`,
-    );
-    setTimeout(async () => {
-      setPingingId(null);
-      const latency = Math.floor(Math.random() * 60) + 12;
-      showToast(
-        "⚡",
-        "Signal Sync Successful",
-        `Node responded in ${latency}ms. Connection strength 100%.`,
-        "success",
-      );
-      addActivity(
-        `Pinged user node ${targetUser.nickname || targetUser.username} (${targetUser.uid.substring(0, 6)})`,
-        "📡",
-      );
+    const start = performance.now();
+    try {
+      await fetch("/api/health", { cache: "no-store" });
+      const latency = Math.max(1, Math.round(performance.now() - start));
 
-      // Add real-time notification to the target user
-      if (currentUser && targetUser.uid !== currentUser.uid) {
+      if (isAuth && targetUser.uid && targetUser.uid !== currentUser?.uid) {
         try {
           const senderName =
-            currentUser.nickname || currentUser.username || "A user";
+            currentUser.nickname || currentUser.username || currentUser.displayName || "A member";
           await setDoc(
             doc(collection(db, `users/${targetUser.uid}/notifications`)),
             {
-              msg: `📡 ${senderName} pinged your node. Latency: ${latency}ms`,
+              msg: `📡 ${senderName} pinged you (${latency}ms)`,
               ic: "📡",
               timestamp: serverTimestamp(),
-              read: false,
+              unread: true,
             },
           );
-        } catch (e) {
-          // ignore error if they don't have permissions
+        } catch {
+          // Ignore if target isn't a full user doc
         }
       }
-    }, 1200);
+
+      showToast(
+        "⚡",
+        "Signal Verified",
+        `Responded in ${latency}ms.`,
+        "success",
+      );
+      if (isAuth) {
+        addActivity(
+          `Pinged ${targetUser.nickname || targetUser.username} (${latency}ms)`,
+          "📡",
+        );
+      }
+    } catch {
+      showToast("⚠️", "Ping Unavailable", "Check network connection.", "warning");
+    } finally {
+      setPingingId(null);
+    }
   };
 
   const filtered = getFilteredUsers();
   const currentLoggedInUserDoc = usersList.find(
-    (u) => u.uid === currentUser?.uid,
+    (u) => isAuth && u.uid === currentUser?.uid,
   );
   const isAdmin =
-    currentUser &&
+    isAuth &&
     ((currentLoggedInUserDoc && currentLoggedInUserDoc.role === "admin") ||
       currentUser.email === "gamuragalaxy@gmail.com" ||
       currentUser.email === "selvaranjancg@gmail.com");
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 font-sans pb-16">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
+    <div className="space-y-5 animate-in fade-in duration-500 font-sans pb-16 text-[#1D1D1F]">
+      {/* Header Card */}
+      <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div
+          <button
             onClick={onBack}
-            className="flex items-center gap-1.5 text-zinc-500 hover:text-cyan-400 font-sharetech text-[10px] tracking-[0.2em] uppercase cursor-pointer select-none transition-colors"
+            className="flex items-center gap-1.5 text-xs font-medium text-[#6E6E73] hover:text-[#1D1D1F] cursor-pointer transition-colors mb-1.5"
           >
-            <ArrowLeft size={12} /> BACK TO ANALYTICS
-          </div>
-          <h2 className="font-orbitron text-xl font-black text-white tracking-[0.15em] uppercase mt-1">
-            NEURAL{" "}
-            <span className="text-cyan-400 font-bold">USERS DIRECTORY</span>
+            <ArrowLeft size={14} /> Back to Overview
+          </button>
+          <h2 className="text-xl sm:text-2xl font-bold text-[#1D1D1F] tracking-tight">
+            Users Directory
           </h2>
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">
-            Real-time synchronization matrix monitoring active core node
-            connections.
+          <p className="text-xs text-[#6E6E73] mt-0.5">
+            Live members, Neutral Link handles, and claimed Gamura URL profiles.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="bg-black/30 border border-white/5 rounded-xl px-4 py-2.5 flex flex-col items-center min-w-[100px]">
-            <span className="text-[8px] text-zinc-500 uppercase tracking-widest font-sharetech">
-              REGISTRATION CORES
+          <div className="bg-[#F5F5F7] border border-zinc-200/70 rounded-2xl px-4 py-2.5 flex flex-col items-center min-w-[96px]">
+            <span className="text-[11px] font-medium text-[#6E6E73]">
+              Total Nodes
             </span>
-            <span className="text-sm font-black text-white font-mono mt-0.5">
+            <span className="text-base font-bold text-[#1D1D1F] mt-0.5">
               {currentCount}
             </span>
           </div>
-          <div className="bg-black/30 border border-white/5 rounded-xl px-4 py-2.5 flex flex-col items-center min-w-[100px] relative overflow-hidden group">
-            <div className="absolute top-0 inset-x-0 h-[1.5px] bg-emerald-500/50" />
-            <span className="text-[8px] text-emerald-500 uppercase tracking-widest font-sharetech flex items-center gap-1">
-              <span className="w-1 h-1 bg-emerald-400 rounded-full animate-pulse" />{" "}
-              ACTIVE NODES
+          <div className="bg-emerald-50/70 border border-emerald-200/70 rounded-2xl px-4 py-2.5 flex flex-col items-center min-w-[96px]">
+            <span className="text-[11px] font-medium text-emerald-700 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+              Active Now
             </span>
-            <span className="text-sm font-black text-emerald-400 font-mono mt-0.5">
+            <span className="text-base font-bold text-emerald-700 mt-0.5">
               {activeCount}
             </span>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row items-center gap-4">
-        <div className="relative flex-1 w-full">
+      {/* Search & Filter Row */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+        <div className="relative flex-1">
           <Search
-            size={14}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500"
+            size={15}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6E6E73]"
           />
           <input
             type="text"
-            placeholder="FILTER BY USER ID, NICKNAME, EMAIL OR HANDLE..."
+            placeholder="Search by name, @handle, email, or UID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-black/30 border border-white/5 rounded-xl pl-10 pr-4 py-3 text-xs font-bold text-white placeholder:text-zinc-600 tracking-wider focus:outline-none focus:border-cyan-500/30 uppercase"
+            className="w-full bg-white border border-zinc-200/80 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-[#1D1D1F] placeholder:text-[#6E6E73] focus:outline-none focus:border-[#0071E3] shadow-xs"
           />
         </div>
 
-        <div className="flex bg-black/30 border border-white/5 p-1 rounded-xl w-full md:w-auto">
+        <div className="flex bg-white border border-zinc-200/80 p-1 rounded-2xl shadow-xs">
           {[
-            { id: "all", label: "ALL USERS", count: currentCount },
-            { id: "active", label: "LIVE NODES", count: activeCount },
+            { id: "all", label: "All", count: currentCount },
+            { id: "active", label: "Active", count: activeCount },
             {
               id: "admins",
-              label: "OPERATORS",
+              label: "Admins",
               count: usersList.filter(
                 (u) =>
                   u.role === "admin" ||
@@ -5004,18 +5295,18 @@ const UsersView = ({
               <button
                 key={tab.id}
                 onClick={() => setFilterMode(tab.id as any)}
-                className={`flex-1 md:flex-initial px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`flex-1 md:flex-initial px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                   isActive
-                    ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/20"
-                    : "text-zinc-500 border border-transparent hover:text-zinc-300"
+                    ? "bg-[#1D1D1F] text-white"
+                    : "text-[#6E6E73] hover:text-[#1D1D1F]"
                 }`}
               >
                 {tab.label}
                 <span
-                  className={`px-1.5 py-0.5 rounded-full text-[8px] font-mono leading-none ${
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] leading-none ${
                     isActive
-                      ? "bg-cyan-500/20 text-cyan-400"
-                      : "bg-white/5 text-zinc-650"
+                      ? "bg-white/20 text-white"
+                      : "bg-zinc-100 text-[#6E6E73]"
                   }`}
                 >
                   {tab.count}
@@ -5026,190 +5317,147 @@ const UsersView = ({
         </div>
       </div>
 
+      {/* Directory Grid */}
       {loading ? (
-        <div className="py-20 flex flex-col items-center justify-center gap-3">
-          <RefreshCw className="w-8 h-8 text-cyan-500 animate-spin" />
-          <span className="text-[10px] text-zinc-500 font-sharetech uppercase tracking-[0.3em] animate-pulse">
-            Accessing centralized user schemas...
+        <div className="py-16 bg-white border border-zinc-200/80 rounded-3xl flex flex-col items-center justify-center gap-3 shadow-xs">
+          <RefreshCw className="w-6 h-6 text-[#0071E3] animate-spin" />
+          <span className="text-xs text-[#6E6E73] font-medium">
+            Loading live directory...
           </span>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="py-20 text-center border border-dashed border-white/10 rounded-2xl bg-black/10">
-          <div className="text-zinc-500 text-3xl mb-2">🛸</div>
-          <h3 className="font-orbitron text-xs font-black text-white tracking-widest uppercase mb-1">
-            No Sync Logs Found
+        <div className="py-16 text-center border border-dashed border-zinc-300 rounded-3xl bg-white">
+          <Users size={28} className="mx-auto text-zinc-400 mb-2" />
+          <h3 className="text-sm font-bold text-[#1D1D1F] mb-1">
+            No matching users found
           </h3>
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wider leading-relaxed">
-            Try expanding search query parameters or modifying selection
-            filters.
+          <p className="text-xs text-[#6E6E73]">
+            Try clearing your search filter or switching tabs.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((u, index) => {
+          {filtered.map((u) => {
             const status = getUserStatus(u);
-            const isCurrentUser = currentUser && currentUser.uid === u.uid;
+            const isCurrentUser = isAuth && currentUser?.uid === u.uid;
             return (
               <div
-                key={u.id}
-                className={`p-4 rounded-xl flex flex-col justify-between border hover:border-cyan-500/20 transition-all duration-300 relative overflow-hidden group ${
+                key={u.uid || u.id}
+                className={`p-5 rounded-3xl bg-white border flex flex-col justify-between transition-all shadow-xs ${
                   isCurrentUser
-                    ? "bg-cyan-500/[0.02] border-cyan-500/20"
-                    : "bg-[#0a0f1d]/40 border-white/5"
+                    ? "border-[#0071E3]/40 ring-1 ring-[#0071E3]/10"
+                    : "border-zinc-200/80 hover:border-zinc-300"
                 }`}
               >
-                {isCurrentUser && (
-                  <div className="absolute top-0 inset-x-0 h-[1.5px] bg-gradient-to-r from-cyan-500 via-blue-500 to-transparent" />
-                )}
-
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
-                      <span className="text-[8px] font-mono text-zinc-500 uppercase">
-                        G-NODE:0X{u.uid?.substring(0, 6).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-mono text-[#6E6E73] truncate">
+                      ID: {String(u.uid || u.id).slice(0, 10)}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {isCurrentUser && (
-                        <span className="text-[8px] font-black border border-cyan-500/20 text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">
-                          YOU
+                        <span className="text-[10px] font-semibold bg-blue-50 text-[#0071E3] border border-blue-200 px-2 py-0.5 rounded-full">
+                          You
                         </span>
                       )}
                       <span
-                        className={`text-[8px] font-mono uppercase border px-1.5 py-0.5 rounded font-black tracking-widest ${status.color}`}
+                        className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full inline-flex items-center gap-1.5 ${status.badgeClass}`}
                       >
+                        <span className={`w-1.5 h-1.5 rounded-full ${status.dotClass}`} />
                         {status.label}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <div
-                        className={`w-11 h-11 rounded-xl overflow-hidden border bg-zinc-900 ${
-                          status.active
-                            ? "border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                            : "border-white/10"
-                        }`}
-                      >
-                        {u.photoURL || u.avatarUrl ? (
-                          <img
-                            src={u.photoURL || u.avatarUrl}
-                            className="w-full h-full object-cover"
-                            alt="User Avatar"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-zinc-900 flex items-center justify-center text-zinc-500 text-xs font-black uppercase font-orbitron">
-                            {(u.nickname || u.username || "A").charAt(0)}
-                          </div>
-                        )}
-                      </div>
-                      {status.active && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#050810] animate-ping" />
+                    <div className="w-11 h-11 rounded-2xl overflow-hidden border border-zinc-200 bg-[#F5F5F7] flex items-center justify-center shrink-0">
+                      {u.photoURL || u.avatarUrl ? (
+                        <img
+                          src={u.photoURL || u.avatarUrl}
+                          className="w-full h-full object-cover"
+                          alt={u.nickname || "User"}
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span className="text-sm font-bold text-[#1D1D1F] uppercase">
+                          {(u.nickname || u.username || "G").charAt(0)}
+                        </span>
                       )}
                     </div>
-
                     <div className="min-w-0">
-                      <div className="font-orbitron text-[11px] font-black text-white uppercase tracking-wider truncate leading-tight">
-                        {u.nickname || "Anonymous Explorer"}
+                      <div className="text-sm font-bold text-[#1D1D1F] truncate">
+                        {u.nickname || u.username || "Gamura Member"}
                       </div>
-                      <div className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest mt-0.5 truncate">
-                        @{u.username || "explorer"}
+                      <div className="text-xs text-[#6E6E73] truncate">
+                        @{u.username || u.neuralNickname || "member"}
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-2.5 bg-black/40 border border-white/5 rounded-lg space-y-1.5 font-mono text-[9px]">
+                  <div className="p-3 bg-[#F5F5F7] rounded-2xl space-y-1.5 text-[11px]">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-zinc-500 uppercase shrink-0">
-                        USER ID (UID)
+                      <span className="text-[#6E6E73] shrink-0">Identifier</span>
+                      <span className="font-mono text-[#1D1D1F] truncate font-medium">
+                        {u.uid}
                       </span>
-                      <div className="flex items-center gap-1 min-w-0">
-                        <span className="text-zinc-300 select-text cursor-text truncate font-semibold">
-                          {u.uid}
+                    </div>
+                    {u.email && isAuth && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[#6E6E73] shrink-0">Email</span>
+                        <span className="text-[#1D1D1F] truncate font-medium">
+                          {u.email}
                         </span>
-                        <button
-                          onClick={() => handleCopy(u.uid)}
-                          className="text-zinc-500 hover:text-cyan-400 p-0.5 rounded cursor-pointer shrink-0 transition-colors"
-                        >
-                          {copiedId === u.uid ? (
-                            <Check size={10} className="text-emerald-500" />
-                          ) : (
-                            <Copy size={10} />
-                          )}
-                        </button>
                       </div>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-zinc-500 uppercase shrink-0">
-                        NET EMAIL
-                      </span>
-                      <span className="text-zinc-300 select-text cursor-text truncate font-semibold">
-                        {u.email || "NO_EMAIL"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1 font-sans">
-                    <div className="flex justify-between items-center text-[8px] uppercase tracking-wider">
-                      <span className="text-zinc-500">CONNECTION PULSE</span>
-                      <span className="text-zinc-400 font-mono">
-                        {u.lastLogin
-                          ? u.lastLogin.toDate
-                            ? u.lastLogin.toDate().toLocaleString()
-                            : new Date(u.lastLogin).toLocaleString()
-                          : "NEVER"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-[8px] uppercase tracking-wider">
-                      <span className="text-zinc-500">NODE DISCOVERY</span>
-                      <span className="text-zinc-400 font-mono">
-                        {u.createdAt
-                          ? u.createdAt.toDate
-                            ? u.createdAt.toDate().toLocaleDateString()
-                            : new Date(u.createdAt).toLocaleDateString()
-                          : "UNKNOWN"}
-                      </span>
-                    </div>
+                    )}
+                    {u.published && u.username && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[#6E6E73] shrink-0">Public URL</span>
+                        <a
+                          href={`/@${u.username}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[#0071E3] hover:underline font-semibold truncate"
+                        >
+                          /@{u.username}
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between gap-2">
+                <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between gap-2">
                   <button
                     onClick={() => handlePing(u)}
                     disabled={pingingId === u.uid}
-                    className="flex-1 py-1.5 bg-white/5 hover:bg-cyan-500/10 border border-white/5 hover:border-cyan-500/20 rounded-md text-[8px] font-black text-zinc-400 hover:text-cyan-400 uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
+                    className="flex-1 py-2 bg-[#F5F5F7] hover:bg-zinc-200/80 rounded-xl text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
                   >
                     {pingingId === u.uid ? (
                       <>
-                        <RefreshCw size={9} className="animate-spin" />{" "}
-                        PINGING...
+                        <RefreshCw size={12} className="animate-spin" /> Pinging...
                       </>
                     ) : (
                       <>
-                        <Zap size={9} /> PING NODE
+                        <Zap size={12} className="text-[#0071E3]" /> Ping
                       </>
                     )}
                   </button>
 
-                  {isAdmin && u.uid !== currentUser?.uid && (
+                  {isAdmin && u.uid !== currentUser?.uid && u.source === "account" && (
                     <button
                       onClick={() => setUserToDelete(u)}
-                      className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-500/40 text-red-400 rounded-md text-[8px] font-black uppercase tracking-widest transition-all cursor-pointer flex items-center gap-1 shrink-0"
-                      title="Purge User Node"
+                      className="p-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl transition-colors cursor-pointer"
+                      title="Delete User Record"
                     >
-                      <Trash2 size={9} />
+                      <Trash2 size={13} />
                     </button>
                   )}
 
                   <button
                     onClick={() => handleCopy(u.uid)}
-                    className="px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/15 rounded-md text-[8px] font-black text-cyan-400 uppercase tracking-widest transition-all cursor-pointer"
+                    className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 rounded-xl text-xs font-semibold text-[#0071E3] transition-colors cursor-pointer flex items-center gap-1"
                   >
-                    COPY ID
+                    {copiedId === u.uid ? <Check size={12} /> : <Copy size={12} />}
+                    {copiedId === u.uid ? "Copied" : "Copy"}
                   </button>
                 </div>
               </div>
@@ -5224,104 +5472,75 @@ const UsersView = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/85 backdrop-blur-md z-[500] flex items-center justify-center p-4 font-sans"
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[500] flex items-center justify-center p-4 font-sans"
             onClick={() => setUserToDelete(null)}
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 15 }}
-              className="w-full max-w-md bg-[#0a0f1d] border border-red-500/25 rounded-2xl p-6 shadow-[0_0_50px_rgba(239,68,68,0.15)] relative overflow-hidden"
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="w-full max-w-md bg-white border border-zinc-200 rounded-3xl p-6 shadow-2xl space-y-5 text-[#1D1D1F]"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* High Contrast Red Laser Accent */}
-              <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-red-500/20 via-red-500 to-red-500/20" />
-
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 shrink-0">
-                  <Trash2 size={20} />
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center text-red-600 shrink-0">
+                  <Trash2 size={18} />
                 </div>
-                <div className="flex-1 space-y-1">
-                  <h3 className="font-orbitron text-xs font-black text-white tracking-[0.15em] uppercase">
-                    PURGE USER NODE?
+                <div>
+                  <h3 className="text-base font-bold text-[#1D1D1F]">
+                    Delete User Record?
                   </h3>
-                  <p className="text-[10px] text-zinc-400 uppercase tracking-widest leading-relaxed">
-                    You are initiating system purging protocol for node
-                    alignment. This operation cannot be undone.
+                  <p className="text-xs text-[#6E6E73] mt-0.5">
+                    This permanently removes @{userToDelete.username || "member"} from the directory.
                   </p>
                 </div>
               </div>
 
-              {/* Target Details Panel */}
-              <div className="mt-6 p-4 bg-black/45 border border-white/5 rounded-xl space-y-3 font-mono text-[10px]">
-                <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                  <span className="text-zinc-500 uppercase tracking-wider">
-                    Target Identifier
-                  </span>
-                  <span className="text-red-400 font-bold">
-                    @{userToDelete.username || "explorer"}
+              <div className="p-4 bg-[#F5F5F7] rounded-2xl space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-[#6E6E73]">Handle</span>
+                  <span className="font-semibold text-[#1D1D1F]">
+                    @{userToDelete.username || "member"}
                   </span>
                 </div>
-                <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                  <span className="text-zinc-500 uppercase tracking-wider">
-                    Nickname
-                  </span>
-                  <span className="text-zinc-200 font-bold">
-                    {userToDelete.nickname || "Anonymous"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center pb-2 border-b border-white/5">
-                  <span className="text-zinc-500 uppercase tracking-wider">
-                    Registered Email
-                  </span>
-                  <span className="text-zinc-200 truncate max-w-[200px] font-bold">
-                    {userToDelete.email || "NO_EMAIL"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-500 uppercase tracking-wider">
-                    User ID (UID)
-                  </span>
-                  <span className="text-zinc-450 tracking-wider text-[9px] font-bold select-all">
-                    {userToDelete.uid}
+                <div className="flex justify-between">
+                  <span className="text-[#6E6E73]">Email</span>
+                  <span className="font-semibold text-[#1D1D1F] truncate max-w-[200px]">
+                    {userToDelete.email || "Not set"}
                   </span>
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="mt-6 flex gap-3 justify-end">
+              <div className="flex gap-3 justify-end">
                 <button
                   type="button"
                   onClick={() => setUserToDelete(null)}
                   disabled={isDeleting}
-                  className="px-4 py-2 hover:bg-white/5 border border-white/5 rounded-xl text-[9px] font-black text-zinc-400 hover:text-zinc-200 uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 bg-[#F5F5F7] hover:bg-zinc-200 rounded-xl text-xs font-semibold text-[#1D1D1F] cursor-pointer"
                 >
-                  ABORT SEQUENCE
+                  Cancel
                 </button>
                 <button
                   type="button"
                   onClick={async () => {
                     setIsDeleting(true);
                     try {
-                      // Delete user document from Firestore users collection
                       await deleteDoc(doc(db, "users", userToDelete.id));
                       addActivity(
-                        `Purged user node ${userToDelete.nickname || userToDelete.username} (${userToDelete.uid?.substring(0, 6)})`,
+                        `Removed user ${userToDelete.nickname || userToDelete.username}`,
                         "🗑️",
                       );
                       showToast(
                         "🗑️",
-                        "Node Purged",
-                        `User @${userToDelete.username || "explorer"} has been completely deleted.`,
+                        "User Removed",
+                        `@${userToDelete.username || "member"} was deleted.`,
                         "success",
                       );
                     } catch (err: any) {
-                      console.error("Purging failed", err);
                       showToast(
                         "❌",
-                        "Purge Failed",
-                        err.message ||
-                          "An error occurred during database purging.",
+                        "Delete Failed",
+                        err.message || "Could not delete user record.",
                         "error",
                       );
                     } finally {
@@ -5330,14 +5549,14 @@ const UsersView = ({
                     }
                   }}
                   disabled={isDeleting}
-                  className="px-5 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-black font-black font-orbitron text-[9px] tracking-widest rounded-xl hover:scale-[1.02] active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-xl cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {isDeleting ? (
                     <>
-                      <Loader2 size={10} className="animate-spin" /> PURGING...
+                      <Loader2 size={12} className="animate-spin" /> Deleting...
                     </>
                   ) : (
-                    <>CONFIRM PURGE</>
+                    <span>Confirm Delete</span>
                   )}
                 </button>
               </div>
@@ -5658,6 +5877,9 @@ const UniverseDashboard = ({
   const [isConnected, setIsConnected] = useState(false);
   const [totalTelemetry, setTotalTelemetry] = useState<number | null>(null);
   const [avgLoadTime, setAvgLoadTime] = useState("1.2s");
+  const isAuthUser = Boolean(
+    user && auth.currentUser && user.uid !== "guest_explorer_uid",
+  );
 
   useEffect(() => {
     // calculate load time once on mount
@@ -5674,7 +5896,7 @@ const UniverseDashboard = ({
     }
     
     let unsub = () => {};
-    if (user && activityFilter === "mine") {
+    if (isAuthUser && activityFilter === "mine") {
       unsub = onSnapshot(doc(db, "activityLogs", user.uid), (docS) => {
         if (docS.exists()) setTotalTelemetry(docS.data().totalActions || 0);
         else setTotalTelemetry(0);
@@ -5683,7 +5905,7 @@ const UniverseDashboard = ({
       setTotalTelemetry(null); // Fallback to length or other metric for global
     }
     return () => unsub();
-  }, [user, activityFilter, db]);
+  }, [user, isAuthUser, activityFilter, db]);
 
   useEffect(() => {
     // Manage Connection Status
@@ -6143,7 +6365,7 @@ const UniverseDashboard = ({
     priority: string = "Medium",
     dueDate: string = "",
   ) => {
-    if (!user) return; // Guard against unauthenticated writes
+    if (!isAuthUser) return; // Guard against unauthenticated writes
     try {
       await setDoc(doc(collection(db, "activities")), {
         title,
@@ -6161,13 +6383,17 @@ const UniverseDashboard = ({
 
   const handleQuickAdd = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!quickAddText.trim() || !user) return;
+    if (!quickAddText.trim()) return;
+    if (!isAuthUser) {
+      showToast("🔒", "Sign In Required", "Sign in to broadcast live signals to members.");
+      return;
+    }
 
     try {
       await setDoc(doc(collection(db, "broadcasts")), {
         message: quickAddText.trim(),
         senderUid: user.uid,
-        username: userInfo?.username || "Anonymous",
+        username: userInfo?.username || "Member",
         priority: quickPriority,
         timestamp: serverTimestamp(),
       });
@@ -6184,7 +6410,7 @@ const UniverseDashboard = ({
   };
 
   const addNotification = async (msg: string, ic: string = "⚡") => {
-    if (!user) return;
+    if (!isAuthUser) return;
     try {
       await setDoc(doc(collection(db, `users/${user.uid}/notifications`)), {
         msg,
@@ -6225,9 +6451,10 @@ const UniverseDashboard = ({
       (error) => handleFirestoreError(error, OperationType.GET, "system/stats"),
     );
 
-    // Users listener (Loads all registered users)
+    // Users listener (Loads authenticated users, plus public developers fallback for guests)
     let unsubUsers = () => {};
-    if (user) {
+    let unsubPublicDevs = () => {};
+    if (isAuthUser) {
       const usersQuery = query(
         collection(db, "users"),
         orderBy("lastLogin", "desc"),
@@ -6254,7 +6481,17 @@ const UniverseDashboard = ({
             setTotalUsersCount(usersList.length);
           }
         },
-        (error) => handleFirestoreError(error, OperationType.LIST, "users"),
+        (error) => console.warn("Users query err:", error),
+      );
+    } else {
+      unsubPublicDevs = onSnapshot(
+        query(collection(db, "gamura_developers"), limit(50)),
+        (snap) => {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setAllUsers(list);
+          setRecentUsers(list.slice(0, 5));
+        },
+        () => {},
       );
     }
 
@@ -6266,20 +6503,20 @@ const UniverseDashboard = ({
     const unsubFeat = onSnapshot(
       featQuery,
       (snap) => {
-        if (snap.empty && user) {
+        if (snap.empty && isAuthUser) {
           // Seed initial features if empty (Requires auth to write)
           const initialFeatures = [
             {
-              name: "BuBuBai",
-              status: "Dev",
-              progress: 55,
-              color: "violet",
+              name: "GPG Engine",
+              status: "Live",
+              progress: 100,
+              color: "sky",
               order: 1,
             },
             {
-              name: "Galaxy Core v2",
-              status: "Testing",
-              progress: 80,
+              name: "Galaxy Core",
+              status: "Live",
+              progress: 100,
               color: "cyan",
               order: 2,
             },
@@ -6292,15 +6529,15 @@ const UniverseDashboard = ({
             },
             {
               name: "Notifications",
-              status: "Review",
-              progress: 65,
+              status: "Live",
+              progress: 100,
               color: "yellow",
               order: 4,
             },
             {
-              name: "API v3",
-              status: "Dev",
-              progress: 40,
+              name: "Free URL Claim",
+              status: "Live",
+              progress: 100,
               color: "cyan",
               order: 5,
             },
@@ -6313,12 +6550,12 @@ const UniverseDashboard = ({
           setFeatures(featList);
         }
       },
-      (error) => handleFirestoreError(error, OperationType.LIST, "features"),
+      (error) => console.warn("Features list skipped:", error),
     );
 
-    // Activities listener (Requires auth - can switch between current user's and global activities)
+    // Activities listener (Requires auth)
     let unsubAct = () => {};
-    if (user) {
+    if (isAuthUser) {
       const actQuery =
         activityFilter === "mine"
           ? query(collection(db, "activityLogs", user.uid, "logs"), orderBy("timestamp", "desc"), limit(200))
@@ -6329,33 +6566,29 @@ const UniverseDashboard = ({
           const actList = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           setActivities(actList);
         },
-        (error) =>
-          handleFirestoreError(error, OperationType.LIST, "activities"),
+        (error) => console.warn("Activities query skipped:", error),
       );
     }
 
-    // Neural Profiles listener
-    let unsubNeural = () => {};
-    if (user) {
-      unsubNeural = onSnapshot(
-        query(collection(db, "neural_profiles")),
-        (snap) => {
-          const profiles: Record<string, string> = {};
-          snap.docs.forEach((d) => {
-             const data = d.data();
-             if (data.uid && data.nickname) {
-               profiles[data.uid] = data.nickname;
-             }
-          });
-          setNeuralProfiles(profiles);
-        },
-        (error) => console.error("Neural profiles fetch failed", error)
-      );
-    }
+    // Neural Profiles listener (Public read)
+    const unsubNeural = onSnapshot(
+      query(collection(db, "neural_profiles"), limit(100)),
+      (snap) => {
+        const profiles: Record<string, string> = {};
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          if (data.uid && data.nickname) {
+            profiles[data.uid] = data.nickname;
+          }
+        });
+        setNeuralProfiles(profiles);
+      },
+      (error) => console.error("Neural profiles fetch failed", error),
+    );
 
-    // Global Connections listener (for connection pulse visualizer)
+    // Global Connections listener (Requires auth)
     let unsubGlobalConn = () => {};
-    if (user) {
+    if (isAuthUser) {
       const globalConnQuery = query(collection(db, "neural_connections"));
       unsubGlobalConn = onSnapshot(
         globalConnQuery,
@@ -6363,14 +6596,13 @@ const UniverseDashboard = ({
           const connList = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
           setGlobalConnections(connList);
         },
-        (error) =>
-          handleFirestoreError(error, OperationType.LIST, "neural_connections"),
+        (error) => console.warn("Neural connections skipped:", error),
       );
     }
 
-    // Notifications listener
+    // Notifications listener (Requires auth)
     let unsubNotif = () => {};
-    if (user) {
+    if (isAuthUser) {
       const notifQuery = query(
         collection(db, `users/${user.uid}/notifications`),
         orderBy("timestamp", "desc"),
@@ -6393,12 +6625,7 @@ const UniverseDashboard = ({
           });
           setNotifications(notifList);
         },
-        (error) =>
-          handleFirestoreError(
-            error,
-            OperationType.LIST,
-            `users/${user.uid}/notifications`,
-          ),
+        (error) => console.warn("Notifications skipped:", error),
       );
     }
 
@@ -6413,8 +6640,7 @@ const UniverseDashboard = ({
         const pList = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         setSharedProjects(pList);
       },
-      (error) =>
-        handleFirestoreError(error, OperationType.LIST, "shared_projects"),
+      (error) => console.warn("Shared projects skipped:", error),
     );
 
     // Theme listener
@@ -6431,17 +6657,13 @@ const UniverseDashboard = ({
           });
         }
       },
-      (error) =>
-        handleFirestoreError(
-          error,
-          OperationType.GET,
-          "system_configs/aura_global",
-        ),
+      (error) => console.warn("Theme config skipped:", error),
     );
 
     return () => {
       unsubStats();
       unsubUsers();
+      unsubPublicDevs();
       unsubFeat();
       unsubAct();
       unsubNeural();
@@ -6450,24 +6672,26 @@ const UniverseDashboard = ({
       unsubProjects();
       unsubTheme();
     };
-  }, [user, activityFilter]);
+  }, [user, isAuthUser, activityFilter]);
 
   useEffect(() => {
-    if (user && db) {
+    if (isAuthUser && db) {
       const updatePulse = async () => {
         try {
-          await updateDoc(doc(db, "users", user.uid), {
-            lastLogin: serverTimestamp(),
-          });
+          await setDoc(
+            doc(db, "users", user.uid),
+            { lastLogin: serverTimestamp() },
+            { merge: true },
+          );
         } catch (e) {
-          console.error("Pulse update failed", e);
+          console.warn("Pulse update skipped", e);
         }
       };
       updatePulse();
       const interval = setInterval(updatePulse, 45000);
       return () => clearInterval(interval);
     }
-  }, [user, db]);
+  }, [user, isAuthUser, db]);
 
   useEffect(() => {
     if (editProfileOpen && userInfo) {
@@ -6612,15 +6836,21 @@ const UniverseDashboard = ({
     });
   };
 
+  const [commentProjectId, setCommentProjectId] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
+
   const handleAddProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!isAuthUser) {
+      showToast("🔒", "Sign In Required", "Sign in to share projects in the Universe.");
+      return;
+    }
     try {
       const newRef = doc(collection(db, "shared_projects"));
       await setDoc(newRef, {
         id: newRef.id,
         userId: user.uid,
-        userName: displayName || userInfo?.nickname || user.email?.split("@")[0] || "Anonymous",
+        userName: displayName || userInfo?.nickname || user.email?.split("@")[0] || "Member",
         title: projectTitle,
         link: projectLink,
         image: projectImage,
@@ -6644,8 +6874,8 @@ const UniverseDashboard = ({
   };
 
   const handleLikeProject = async (project: any) => {
-    if (!user) {
-      showToast("🔒", "Access Denied", "Connect your account to like projects.");
+    if (!isAuthUser) {
+      showToast("🔒", "Sign In Required", "Sign in to like shared projects.");
       return;
     }
     const isLiked = project.likes?.includes(user.uid);
@@ -6664,23 +6894,31 @@ const UniverseDashboard = ({
     }
   };
 
-  const handleCommentProject = async (project: any) => {
-    if (!user) {
-      showToast("🔒", "Access Denied", "Connect your account to comment.");
+  const handleCommentProject = (project: any) => {
+    if (!isAuthUser) {
+      showToast("🔒", "Sign In Required", "Sign in to comment on projects.");
       return;
     }
-    const text = prompt("Enter your comment:");
-    if (!text || !text.trim()) return;
+    setCommentDraft("");
+    setCommentProjectId((prev) => (prev === project.id ? null : project.id));
+  };
+
+  const submitProjectComment = async (project: any) => {
+    if (!isAuthUser || !commentDraft.trim()) return;
+    const text = commentDraft.trim();
+    setCommentDraft("");
+    setCommentProjectId(null);
     try {
       await updateDoc(doc(db, "shared_projects", project.id), {
         comments: arrayUnion({
           userId: user.uid,
-          userName: userInfo?.nickname || user.email?.split("@")[0] || "Anonymous",
-          text: text.trim(),
+          userName: userInfo?.nickname || user.email?.split("@")[0] || "Member",
+          text,
           timestamp: new Date().toISOString(),
           id: Math.random().toString(36).substring(7)
         })
       });
+      showToast("💬", "Comment Added", "Your feedback is now live.");
     } catch(err) {
       console.error(err);
     }
@@ -6946,40 +7184,115 @@ const UniverseDashboard = ({
     },
   ];
 
-  const [connectedApps, setConnectedApps] = useState<any[]>([]);
+  const [connectedApps, setConnectedApps] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("gamura_connected_integrations");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [configuringApp, setConfiguringApp] = useState<string | null>(null);
+  const [integrationEndpoint, setIntegrationEndpoint] = useState("");
+  const [integrationEndpoints, setIntegrationEndpoints] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem("gamura_integration_endpoints");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
   const handleConnectApp = async (app: string) => {
-    if (!user) {
-      showToast("⚠️", "Authentication Required", "Please sign in to connect integrations.");
-      return;
-    }
+    const currentConns = connectedApps.includes(app)
+      ? connectedApps
+      : [...connectedApps, app];
+
+    setConnectedApps(currentConns);
     try {
-      const token = `gm_tok_${Math.random().toString(36).substring(2, 12)}`;
-      const connRef = doc(db, "user_connections", user.uid);
-      const currentConns = [...connectedApps];
-      if (!currentConns.includes(app)) currentConns.push(app);
+      localStorage.setItem("gamura_connected_integrations", JSON.stringify(currentConns));
+    } catch {}
 
-      await setDoc(
-        connRef,
-        {
-          connections: currentConns,
-          [`${app.toLowerCase()}_token`]: token,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      setConnectedApps(currentConns);
-      addActivity(`Authorized ${app} integration`, "🔗");
-      showToast(
-        "✅",
-        `${app} Connected`,
-        `Successfully linked ${app} securely via token.`,
-      );
-    } catch (err: any) {
-      console.error("Failed to connect app", err);
-      showToast("❌", "Connection Error", `Could not connect ${app}.`);
+    if (isAuthUser) {
+      try {
+        const token = `gm_tok_${Math.random().toString(36).substring(2, 12)}`;
+        const connRef = doc(db, "user_connections", user.uid);
+        await setDoc(
+          connRef,
+          {
+            connections: currentConns,
+            [`${app.toLowerCase()}_token`]: token,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        addActivity(`Connected ${app} integration`, "🔗");
+      } catch (err) {
+        console.warn("Firestore integration sync failed:", err);
+      }
     }
+
+    setConfiguringApp(app);
+    setIntegrationEndpoint(integrationEndpoints[app] || "");
+    showToast(
+      "✅",
+      `${app} Connected`,
+      `${app} is linked and ready to configure.`,
+    );
+  };
+
+  const handleDisconnectApp = async (app: string) => {
+    const nextConns = connectedApps.filter((c) => c !== app);
+    setConnectedApps(nextConns);
+    if (configuringApp === app) setConfiguringApp(null);
+    try {
+      localStorage.setItem("gamura_connected_integrations", JSON.stringify(nextConns));
+    } catch {}
+
+    if (isAuthUser) {
+      try {
+        await setDoc(
+          doc(db, "user_connections", user.uid),
+          {
+            connections: nextConns,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+        addActivity(`Disconnected ${app} integration`, "🔌");
+      } catch (err) {
+        console.warn("Disconnect sync failed:", err);
+      }
+    }
+
+    showToast("🔌", `${app} Disconnected`, `${app} has been unlinked.`);
+  };
+
+  const handleSaveIntegrationEndpoint = async (app: string) => {
+    const nextEndpoints = {
+      ...integrationEndpoints,
+      [app]: integrationEndpoint.trim(),
+    };
+    setIntegrationEndpoints(nextEndpoints);
+    try {
+      localStorage.setItem("gamura_integration_endpoints", JSON.stringify(nextEndpoints));
+    } catch {}
+
+    if (isAuthUser) {
+      try {
+        await setDoc(
+          doc(db, "user_connections", user.uid),
+          {
+            [`${app.toLowerCase()}_endpoint`]: integrationEndpoint.trim(),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } catch {}
+    }
+
+    setConfiguringApp(null);
+    showToast("✅", `${app} Saved`, `Configuration for ${app} updated.`);
   };
 
   return (
@@ -7523,67 +7836,120 @@ const UniverseDashboard = ({
               <GamuraShortLinksManager user={user} />
             </div>
           ) : activeTab === "Integrations" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
-                {
-                  id: "Vercel",
-                  name: "Vercel",
-                  desc: "Manage deployments and edge functions directly.",
-                  ic: <ArrowUpRight size={18} />,
-                  color: "bg-zinc-900 text-white",
-                },
-                {
-                  id: "Netlify",
-                  name: "Netlify",
-                  desc: "Global hosting and serverless form handling.",
-                  ic: <Globe size={18} />,
-                  color: "bg-sky-50 text-sky-600",
-                },
-                {
-                  id: "Slack",
-                  name: "Slack",
-                  desc: "Push system alerts and updates to your workspace.",
-                  ic: <MessageSquare size={18} />,
-                  color: "bg-rose-50 text-rose-600",
-                },
-                {
-                  id: "Discord",
-                  name: "Discord",
-                  desc: "Community webhooks and real-time alerts.",
-                  ic: <MessageCircle size={18} />,
-                  color: "bg-indigo-50 text-indigo-600",
-                },
-              ].map((app, i) => {
-                const isConnected = connectedApps.includes(app.id);
-                return (
-                  <div
-                    key={i}
-                    className="bg-white border border-zinc-200/80 rounded-2xl p-4 flex flex-col gap-3 shadow-xs"
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className={`w-9 h-9 rounded-xl ${app.color} flex items-center justify-center border border-zinc-200/50`}>
-                        {app.ic}
+            <div className="space-y-4">
+              <div className="bg-white border border-zinc-200/80 rounded-2xl p-4 sm:p-5 shadow-xs">
+                <h2 className="text-base font-bold text-zinc-900">Connected Services</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Connect hosting providers or webhook alerts to your Gamura Universe workspace.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {[
+                  {
+                    id: "Vercel",
+                    name: "Vercel",
+                    desc: "Manage deployments and edge functions directly.",
+                    placeholder: "https://vercel.com/your-team/gamura",
+                    ic: <ArrowUpRight size={18} />,
+                    color: "bg-zinc-900 text-white",
+                  },
+                  {
+                    id: "Netlify",
+                    name: "Netlify",
+                    desc: "Global hosting and serverless form handling.",
+                    placeholder: "https://app.netlify.com/sites/your-site",
+                    ic: <Globe size={18} />,
+                    color: "bg-sky-50 text-sky-600",
+                  },
+                  {
+                    id: "Slack",
+                    name: "Slack",
+                    desc: "Push system alerts and updates to your workspace.",
+                    placeholder: "https://hooks.slack.com/services/...",
+                    ic: <MessageSquare size={18} />,
+                    color: "bg-rose-50 text-rose-600",
+                  },
+                  {
+                    id: "Discord",
+                    name: "Discord",
+                    desc: "Community webhooks and real-time alerts.",
+                    placeholder: "https://discord.com/api/webhooks/...",
+                    ic: <MessageCircle size={18} />,
+                    color: "bg-indigo-50 text-indigo-600",
+                  },
+                ].map((app) => {
+                  const isConnected = connectedApps.includes(app.id);
+                  const isEditing = configuringApp === app.id;
+                  const savedUrl = integrationEndpoints[app.id];
+                  return (
+                    <div
+                      key={app.id}
+                      className="bg-white border border-zinc-200/80 rounded-2xl p-4 flex flex-col gap-3 shadow-xs"
+                    >
+                      <div className="flex justify-between items-center gap-2">
+                        <div className={`w-9 h-9 rounded-xl ${app.color} flex items-center justify-center border border-zinc-200/50 shrink-0`}>
+                          {app.ic}
+                        </div>
+                        {isConnected ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                              Connected
+                            </span>
+                            <button
+                              onClick={() => {
+                                setConfiguringApp(isEditing ? null : app.id);
+                                setIntegrationEndpoint(savedUrl || "");
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-[10px] font-semibold cursor-pointer"
+                            >
+                              {isEditing ? "Close" : "Configure"}
+                            </button>
+                            <button
+                              onClick={() => handleDisconnectApp(app.id)}
+                              className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-semibold cursor-pointer"
+                            >
+                              Disconnect
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleConnectApp(app.id)}
+                            className="px-3.5 py-1.5 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-semibold transition-colors cursor-pointer"
+                          >
+                            Connect
+                          </button>
+                        )}
                       </div>
-                      {isConnected ? (
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
-                          Connected
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleConnectApp(app.id)}
-                          className="px-3 py-1 rounded-lg bg-zinc-900 text-white text-[11px] font-semibold hover:bg-zinc-800 transition-colors cursor-pointer"
-                        >
-                          Connect
-                        </button>
+                      <div>
+                        <h3 className="text-sm font-semibold text-zinc-900">{app.name}</h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">{app.desc}</p>
+                        {savedUrl && !isEditing && (
+                          <p className="text-[11px] font-mono text-[#0071E3] mt-1.5 truncate">
+                            {savedUrl}
+                          </p>
+                        )}
+                      </div>
+                      {isEditing && (
+                        <div className="pt-2 border-t border-zinc-100 flex items-center gap-2">
+                          <input
+                            type="url"
+                            value={integrationEndpoint}
+                            onChange={(e) => setIntegrationEndpoint(e.target.value)}
+                            placeholder={app.placeholder}
+                            className="flex-1 bg-[#F5F5F7] border border-zinc-200 rounded-xl px-3 py-1.5 text-xs text-zinc-900 outline-none focus:bg-white focus:border-[#0071E3]"
+                          />
+                          <button
+                            onClick={() => handleSaveIntegrationEndpoint(app.id)}
+                            className="px-3 py-1.5 rounded-xl bg-zinc-900 text-white text-xs font-semibold cursor-pointer shrink-0"
+                          >
+                            Save
+                          </button>
+                        </div>
                       )}
                     </div>
-                    <div>
-                      <h3 className="text-xs font-semibold text-zinc-900">{app.name}</h3>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">{app.desc}</p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <div className="space-y-3.5">
@@ -7723,6 +8089,32 @@ const UniverseDashboard = ({
                             Share
                           </button>
                         </div>
+                        {commentProjectId === project.id && (
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <input
+                              type="text"
+                              value={commentDraft}
+                              onChange={(e) => setCommentDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  submitProjectComment(project);
+                                }
+                              }}
+                              placeholder="Write a comment..."
+                              className="flex-1 bg-white border border-zinc-200 rounded-lg px-2.5 py-1 text-[11px] text-zinc-900 outline-none focus:border-[#0071E3]"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => submitProjectComment(project)}
+                              disabled={!commentDraft.trim()}
+                              className="px-2.5 py-1 rounded-lg bg-[#0071E3] text-white text-[10px] font-semibold disabled:opacity-50 cursor-pointer"
+                            >
+                              Post
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))
                   ) : (
@@ -7901,34 +8293,34 @@ const UniverseDashboard = ({
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="fixed top-[70px] right-6 w-80 bg-zinc-950/90 backdrop-blur-2xl border border-white/15 rounded-3xl shadow-[0_25px_60px_rgba(0,0,0,0.6)] z-[400] overflow-hidden flex flex-col font-sans"
+              className="fixed top-[64px] right-4 sm:right-6 w-80 bg-white/95 backdrop-blur-2xl border border-zinc-200/80 rounded-3xl shadow-2xl z-[400] overflow-hidden flex flex-col font-sans text-[#1D1D1F]"
             >
               {/* User Identity Banner */}
-              <div className="p-6 text-center border-b border-white/5 bg-gradient-to-br from-cyan-500/10 via-transparent to-violet-500/10">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 to-violet-500 mx-auto mb-3 flex items-center justify-center font-black text-white shadow-[0_4px_25px_rgba(56,189,248,0.35)] relative border border-white/20 p-0.5">
+              <div className="p-6 text-center border-b border-zinc-100 bg-[#F5F5F7]/70">
+                <div className="w-16 h-16 rounded-2xl bg-[#1D1D1F] mx-auto mb-3 flex items-center justify-center font-bold text-white shadow-sm relative border border-zinc-200 overflow-hidden">
                   {userInfo?.avatarUrl ? (
                     <img
                       src={userInfo.avatarUrl}
-                      className="w-full h-full object-cover rounded-2xl"
+                      className="w-full h-full object-cover"
                       alt="User"
                     />
                   ) : user?.photoURL ? (
                     <img
                       src={user.photoURL}
-                      className="w-full h-full object-cover rounded-2xl"
+                      className="w-full h-full object-cover"
                       alt="User"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center font-sans tracking-tight text-xl font-bold bg-zinc-900 border border-white/10 rounded-2xl text-cyan-400">
+                    <div className="w-full h-full flex items-center justify-center text-xl font-bold text-white">
                       {displayName.substring(0, 1).toUpperCase()}
                     </div>
                   )}
                 </div>
-                <div className="text-[15px] font-black tracking-tight text-white">
+                <div className="text-[15px] font-bold tracking-tight text-[#1D1D1F]">
                   {displayName}
                 </div>
-                <div className="text-[9px] font-bold text-cyan-400 uppercase tracking-[0.25em] mt-1 flex items-center justify-center gap-1.5 font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />{" "}
+                <div className="text-[11px] font-semibold text-[#0071E3] mt-1 flex items-center justify-center gap-1.5 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   {gamuraId}
                 </div>
               </div>
@@ -7936,8 +8328,8 @@ const UniverseDashboard = ({
               {/* Accounts Switcher Block */}
               {gamuraAccounts.filter((acc) => acc.uid !== user?.uid).length >
                 0 && (
-                <div className="p-4 border-b border-white/5 bg-black/40">
-                  <div className="text-[8px] font-black text-zinc-500 tracking-[0.25em] uppercase mb-2 px-2 font-mono">
+                <div className="p-4 border-b border-zinc-100 bg-[#F5F5F7]/40">
+                  <div className="text-[10px] font-semibold text-[#6E6E73] uppercase tracking-wider mb-2 px-2">
                     Switch ID
                   </div>
                   <div className="space-y-1 max-h-36 overflow-y-auto no-scrollbar">
@@ -7950,8 +8342,8 @@ const UniverseDashboard = ({
                             setProfileOpen(false);
                             showToast(
                               "🔄",
-                              "Switching Host",
-                              `Preparing secure connection for @${acc.username}...`,
+                              "Switching ID",
+                              `Preparing session for @${acc.username}...`,
                             );
                             setCurrentUserInfo(null);
                             await firebaseSignOut(auth);
@@ -7959,10 +8351,10 @@ const UniverseDashboard = ({
                             setUsername(acc.username || "");
                             setCurrentPage("login");
                           }}
-                          className="flex items-center justify-between p-2.5 rounded-xl hover:bg-white/5 cursor-pointer group transition-all"
+                          className="flex items-center justify-between p-2.5 rounded-xl hover:bg-zinc-100 cursor-pointer group transition-all"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-white/10 flex items-center justify-center overflow-hidden">
+                            <div className="w-8 h-8 rounded-lg bg-zinc-200/70 flex items-center justify-center overflow-hidden">
                               {acc.avatarUrl ? (
                                 <img
                                   src={acc.avatarUrl}
@@ -7970,22 +8362,22 @@ const UniverseDashboard = ({
                                   alt="Saved user"
                                 />
                               ) : (
-                                <span className="text-xs font-bold text-zinc-400 font-sans">
+                                <span className="text-xs font-bold text-[#1D1D1F]">
                                   {acc.nickname?.slice(0, 1).toUpperCase()}
                                 </span>
                               )}
                             </div>
                             <div className="text-left">
-                              <div className="text-xs font-bold text-zinc-200 truncate max-w-[120px]">
+                              <div className="text-xs font-semibold text-[#1D1D1F] truncate max-w-[120px]">
                                 @{acc.username}
                               </div>
-                              <div className="text-[9px] text-zinc-500 truncate max-w-[120px]">
+                              <div className="text-[10px] text-[#6E6E73] truncate max-w-[120px]">
                                 {acc.nickname}
                               </div>
                             </div>
                           </div>
-                          <span className="text-[8px] font-bold tracking-wider text-cyan-500 bg-cyan-500/10 px-2 py-0.5 rounded-md hover:bg-cyan-500 hover:text-white transition-all opacity-0 group-hover:opacity-100 uppercase">
-                            Link
+                          <span className="text-[10px] font-semibold text-[#0071E3] bg-blue-50 px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-all">
+                            Switch
                           </span>
                         </div>
                       ))}
@@ -7994,7 +8386,7 @@ const UniverseDashboard = ({
               )}
 
               {/* Action Rows */}
-              <div className="p-3 space-y-0.5">
+              <div className="p-2.5 space-y-0.5">
                 {[
                   {
                     label: "Edit Profile",
@@ -8046,16 +8438,18 @@ const UniverseDashboard = ({
                 ].map((item, i) => (
                   <div
                     key={i}
-                    className={`flex items-center gap-3.5 p-3 rounded-2xl transition-all duration-300 cursor-pointer group ${item.danger ? "text-red-400 hover:bg-red-500/10" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}
+                    className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors cursor-pointer ${
+                      item.danger
+                        ? "text-red-600 hover:bg-red-50"
+                        : "text-zinc-700 hover:text-zinc-950 hover:bg-zinc-100"
+                    }`}
                     onClick={() => {
                       if (item.action) item.action();
                       setProfileOpen(false);
                     }}
                   >
-                    <div className="transition-transform group-hover:scale-110 text-zinc-400 group-hover:text-current">
-                      {item.icon}
-                    </div>
-                    <span className="text-xs font-bold tracking-tight">
+                    <div>{item.icon}</div>
+                    <span className="text-xs font-semibold tracking-tight">
                       {item.label}
                     </span>
                   </div>

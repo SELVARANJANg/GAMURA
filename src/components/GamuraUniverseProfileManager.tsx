@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   collection,
   query,
@@ -117,6 +117,7 @@ export default function GamuraUniverseProfileManager({
   const [showPublishSuccess, setShowPublishSuccess] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const handleInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -614,6 +615,7 @@ export default function GamuraUniverseProfileManager({
               {window.location.host}/@
             </span>
             <input
+              ref={handleInputRef}
               type="text"
               value={username}
               onChange={(e) =>
@@ -1151,15 +1153,22 @@ export default function GamuraUniverseProfileManager({
 
           <button
             type="button"
-            onClick={handleSave}
+            onClick={() => {
+              if (!username.trim()) {
+                setSaveError("Enter your desired @handle at the top first to claim your free URL.");
+                handleInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                setTimeout(() => handleInputRef.current?.focus(), 250);
+                return;
+              }
+              handleSave();
+            }}
             disabled={
               saving ||
-              !username.trim() ||
               checkStatus === "taken" ||
               checkStatus === "reserved" ||
               checkStatus === "invalid"
             }
-            className="w-full sm:w-auto px-7 py-3 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-50 text-white font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm whitespace-nowrap"
+            className="w-full sm:w-auto px-7 py-3 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] disabled:opacity-60 text-white font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm whitespace-nowrap"
           >
             {saving ? (
               <Loader2 size={16} className="animate-spin" />

@@ -52,7 +52,8 @@ service cloud.firestore {
 
     function isValidNeuralProfile(data) {
       return data.uid is string && (data.uid == request.auth.uid)
-        && (data.nickname is string);
+        && (data.nickname is string)
+        && (!('lastPulse' in data) || data.lastPulse is timestamp || data.lastPulse is number || data.lastPulse == request.time);
     }
 
     function isValidNeuralChat(data) {
@@ -112,7 +113,7 @@ service cloud.firestore {
       // Sub-collection: Notifications (Pillar 1: Master Gate)
       match /notifications/{notifId} {
         allow read, list: if isSignedIn() && request.auth.uid == userId;
-        allow create: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn();
         allow update: if isSignedIn() && request.auth.uid == userId;
         allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       }
@@ -162,12 +163,15 @@ service cloud.firestore {
     // Shared Projects
     match /shared_projects/{projectId} {
       allow read, list: if true; // Publicly viewable
-      allow create: if isSignedIn() && isValidId(projectId) && request.auth.uid == projectId
+      allow create: if isSignedIn() && isValidId(projectId)
         && isValidSharedProject(incoming());
-      allow update: if isSignedIn() && request.auth.uid == projectId
-        && isValidSharedProject(incoming())
-        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'link', 'image', 'timestamp', 'userName', 'userId']);
-      allow delete: if isSignedIn() && (request.auth.uid == projectId || isAdmin());
+      allow update: if isSignedIn() && (
+        (existing().userId == request.auth.uid
+          && isValidSharedProject(incoming())
+          && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'link', 'image', 'timestamp', 'userName', 'userId', 'likes', 'comments']))
+        || incoming().diff(existing()).affectedKeys().hasOnly(['likes', 'comments'])
+      );
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
     }
 
     // Neural Link
@@ -175,7 +179,7 @@ service cloud.firestore {
       allow read, list: if true;
       allow create: if isSignedIn() && isValidNeuralProfile(incoming()) && incoming().nickname == nickname;
       allow update: if isSignedIn() && existing().uid == request.auth.uid && isValidNeuralProfile(incoming())
-        && incoming().diff(existing()).affectedKeys().hasOnly(['avatarUrl', 'uid', 'nickname']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['avatarUrl', 'uid', 'nickname', 'lastPulse']);
       allow delete: if isSignedIn() && (resource != null && (resource.data.uid == request.auth.uid || isAdmin()));
     }
 
