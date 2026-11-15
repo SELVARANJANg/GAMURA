@@ -1,5 +1,16 @@
 import React, { useState } from "react";
-import { Globe, Code2, FileText } from "lucide-react";
+import {
+  Globe,
+  Code2,
+  FileText,
+  Music,
+  Calculator,
+  Palette,
+  Sparkles,
+  TrendingUp,
+  StickyNote,
+  User,
+} from "lucide-react";
 import type { StoreAppItem } from "../utils/gamuraStoreApps";
 
 export default function StoreAppGlyph({
@@ -11,25 +22,34 @@ export default function StoreAppGlyph({
   sizeClass?: string;
   iconPx?: number;
 }) {
-  const [imgFallback, setImgFallback] = useState(false);
+  // stage 0 -> primary logoUrl, stage 1 -> logoFallbackUrl, stage 2 -> vector glyph fallback
+  const [imgStage, setImgStage] = useState(0);
 
-  if (app.logoUrl) {
-    const src =
-      imgFallback && app.logoFallbackUrl ? app.logoFallbackUrl : app.logoUrl;
+  const activeImgSrc =
+    imgStage === 0
+      ? app.logoUrl
+      : imgStage === 1
+        ? app.logoFallbackUrl
+        : undefined;
+
+  if (activeImgSrc) {
     return (
       <div
-        className={`${sizeClass} rounded-[22%] bg-white border border-zinc-200/80 p-1 flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.08)] shrink-0 select-none overflow-hidden`}
+        className={`${sizeClass} rounded-[22%] bg-white border border-black/[0.08] p-1 flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.08)] shrink-0 select-none overflow-hidden`}
       >
         <img
-          src={src}
+          src={activeImgSrc}
           alt={app.name}
           referrerPolicy="no-referrer"
+          loading="lazy"
           onError={() => {
-            if (!imgFallback && app.logoFallbackUrl) {
-              setImgFallback(true);
+            if (imgStage === 0 && app.logoFallbackUrl) {
+              setImgStage(1);
+            } else {
+              setImgStage(2);
             }
           }}
-          className="w-full h-full object-contain scale-[1.24]"
+          className="w-full h-full object-contain rounded-[16%]"
         />
       </div>
     );
@@ -74,6 +94,30 @@ export default function StoreAppGlyph({
         return (
           <FileText size={iconPx} strokeWidth={2.1} className="text-white" />
         );
+      case "music":
+        return <Music size={iconPx} strokeWidth={2.2} className="text-white" />;
+      case "calc":
+        return (
+          <Calculator size={iconPx} strokeWidth={2.1} className="text-white" />
+        );
+      case "art":
+        return (
+          <Palette size={iconPx} strokeWidth={2.1} className="text-white" />
+        );
+      case "sparkles":
+        return (
+          <Sparkles size={iconPx} strokeWidth={2.1} className="text-white" />
+        );
+      case "chart":
+        return (
+          <TrendingUp size={iconPx} strokeWidth={2.2} className="text-white" />
+        );
+      case "notes":
+        return (
+          <StickyNote size={iconPx} strokeWidth={2.1} className="text-white" />
+        );
+      case "user":
+        return <User size={iconPx} strokeWidth={2.2} className="text-white" />;
       case "gainosor":
         return (
           <svg

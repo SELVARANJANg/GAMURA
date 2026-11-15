@@ -605,19 +605,28 @@ export default function GamuraStoreLaunch({
                       style={{
                         background: `linear-gradient(135deg, ${app.c1}, ${app.c2})`,
                       }}
-                      className="min-w-[270px] sm:min-w-[320px] flex-1 snap-center rounded-[22px] p-5 min-h-[168px] text-white text-left relative overflow-hidden flex flex-col justify-end shadow-sm hover:scale-[1.01] transition-transform cursor-pointer"
+                      className="min-w-[260px] sm:min-w-[300px] flex-1 snap-center rounded-[22px] p-5 min-h-[172px] text-white text-left relative overflow-hidden flex flex-col justify-between shadow-sm hover:scale-[1.01] transition-transform cursor-pointer"
                     >
                       <span className="absolute -right-2 -top-4 text-[120px] font-black opacity-15 pointer-events-none select-none leading-none">
                         {app.name.charAt(0)}
                       </span>
-                      <span className="text-[10px] font-bold tracking-wider uppercase opacity-90">
-                        {app.cat === "Games" ? "Game" : "Featured"}
-                      </span>
-                      <div className="text-xl sm:text-2xl font-bold tracking-tight mt-0.5">
-                        {app.name}
+                      <div className="relative z-10 flex items-start justify-between gap-2">
+                        <StoreAppGlyph
+                          app={app}
+                          sizeClass="w-12 h-12 text-lg"
+                          iconPx={22}
+                        />
+                        <span className="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-xs text-[10px] font-bold tracking-wider uppercase">
+                          {app.cat}
+                        </span>
                       </div>
-                      <div className="text-xs sm:text-sm opacity-90 line-clamp-1">
-                        {app.tag}
+                      <div className="relative z-10 mt-3">
+                        <div className="text-lg sm:text-xl font-bold tracking-tight line-clamp-1">
+                          {app.name}
+                        </div>
+                        <div className="text-xs opacity-90 line-clamp-1 mt-0.5">
+                          {app.tag}
+                        </div>
                       </div>
                     </button>
                   ))}
@@ -886,8 +895,12 @@ export default function GamuraStoreLaunch({
                   >
                     {[
                       "Platform",
+                      "AI",
                       "Games",
                       "Developer tools",
+                      "Music & Audio",
+                      "Finance",
+                      "Portfolio",
                       "Productivity",
                       "Creative",
                       "Education",
