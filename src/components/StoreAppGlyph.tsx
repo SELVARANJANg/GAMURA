@@ -74,6 +74,41 @@ export default function StoreAppGlyph({
         return (
           <FileText size={iconPx} strokeWidth={2.1} className="text-white" />
         );
+      case "gainosor":
+        return (
+          <svg
+            width={iconPx}
+            height={iconPx}
+            viewBox="0 0 36 36"
+            fill="none"
+            className="text-white"
+          >
+            <path
+              d="M9 26L14 10L20 17L27 9L25 26H9Z"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+            />
+            <circle cx="21" cy="13" r="1.8" fill="currentColor" />
+          </svg>
+        );
+      case "gigor":
+        return (
+          <svg
+            width={iconPx}
+            height={iconPx}
+            viewBox="0 0 36 36"
+            fill="none"
+            className="text-white"
+          >
+            <path
+              d="M20 6L10 20H18L16 30L26 16H18L20 6Z"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+            />
+          </svg>
+        );
       default:
         return (
           <span className="font-bold text-white leading-none">

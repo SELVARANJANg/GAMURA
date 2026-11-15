@@ -43,7 +43,7 @@ const APPLE_FONT_STYLE: React.CSSProperties = {
 };
 
 type StorePage = "home" | "search" | "lib" | "dev";
-type HomeTab = "foryou" | "top" | "cats" | "new";
+type HomeTab = "foryou" | "games" | "top" | "cats" | "new";
 type InstallDestination = "universe" | "mobile" | "both";
 
 export default function GamuraStoreLaunch({
@@ -450,6 +450,7 @@ export default function GamuraStoreLaunch({
           <div className="max-w-5xl mx-auto px-4 sm:px-6 flex items-center gap-2 overflow-x-auto no-scrollbar border-t border-black/[0.04]">
             {[
               { id: "foryou" as const, label: "For you" },
+              { id: "games" as const, label: "Games" },
               { id: "top" as const, label: "Top charts" },
               { id: "cats" as const, label: "Categories" },
               { id: "new" as const, label: "New" },
@@ -596,7 +597,7 @@ export default function GamuraStoreLaunch({
 
                 {/* Featured Carousel */}
                 <div className="flex gap-3.5 overflow-x-auto no-scrollbar pb-1 snap-x snap-mandatory">
-                  {allApps.slice(0, 6).map((app) => (
+                  {allApps.map((app) => (
                     <button
                       key={app.id}
                       type="button"
@@ -610,7 +611,7 @@ export default function GamuraStoreLaunch({
                         {app.name.charAt(0)}
                       </span>
                       <span className="text-[10px] font-bold tracking-wider uppercase opacity-90">
-                        Featured
+                        {app.cat === "Games" ? "Game" : "Featured"}
                       </span>
                       <div className="text-xl sm:text-2xl font-bold tracking-tight mt-0.5">
                         {app.name}
@@ -621,6 +622,36 @@ export default function GamuraStoreLaunch({
                     </button>
                   ))}
                 </div>
+
+                {/* Games on Launch (GAINOSOR, GIGOR, Gamura Galaxy) */}
+                {(() => {
+                  const gameApps = allApps.filter((a) => a.cat === "Games");
+                  if (gameApps.length === 0) return null;
+                  return (
+                    <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <h2 className="text-lg font-bold tracking-tight text-[#1D1D1F]">
+                            Games on Launch
+                          </h2>
+                          <p className="text-xs text-[#6E6E73]">
+                            Play instantly or install GAINOSOR &amp; GIGOR to Universe Apps
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setTab("games")}
+                          className="text-xs font-semibold text-[#059669] hover:underline cursor-pointer shrink-0"
+                        >
+                          See all ({gameApps.length})
+                        </button>
+                      </div>
+                      <div className="divide-y divide-zinc-100">
+                        {gameApps.map((app) => renderAppRow(app))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Gamura Originals */}
                 <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
@@ -645,6 +676,24 @@ export default function GamuraStoreLaunch({
                   <div className="divide-y divide-zinc-100">
                     {allApps.map((app) => renderAppRow(app))}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {tab === "games" && (
+              <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-3">
+                <div className="px-2">
+                  <h2 className="text-lg font-bold tracking-tight text-[#1D1D1F]">
+                    Games on Gamura Launch
+                  </h2>
+                  <p className="text-xs text-[#6E6E73]">
+                    Featured arcade &amp; action web games including GAINOSOR and GIGOR.
+                  </p>
+                </div>
+                <div className="divide-y divide-zinc-100">
+                  {allApps
+                    .filter((a) => a.cat === "Games")
+                    .map((app, i) => renderAppRow(app, i + 1))}
                 </div>
               </div>
             )}

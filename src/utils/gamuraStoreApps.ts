@@ -4,6 +4,8 @@ export type StoreIconKind =
   | "code"
   | "globe"
   | "pdf"
+  | "gainosor"
+  | "gigor"
   | "letter";
 
 export interface StoreAppItem {
@@ -139,6 +141,40 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     age: "3+",
     chart: "No. 1",
     dl: "Featured",
+    size: "Web · 2 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gainosor",
+    name: "GAINOSOR",
+    cat: "Games",
+    tag: "High-speed arcade survival adventure",
+    desc: "Play GAINOSOR directly from Gamura Launch Store. Fast-paced responsive arcade action engineered for mobile and desktop browsers.",
+    url: "https://gainosor.vercel.app/",
+    c1: "#10b981",
+    c2: "#065f46",
+    iconKind: "gainosor",
+    rating: 4.9,
+    age: "3+",
+    chart: "No. 1 Game",
+    dl: "Game",
+    size: "Web · 2 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gigor",
+    name: "GIGOR",
+    cat: "Games",
+    tag: "Kinetic reflex & precision challenge game",
+    desc: "Play GIGOR directly from Gamura Launch Store. Test your reflexes, climb high scores, and install straight to your Universe Apps dock or mobile home.",
+    url: "https://gigor.vercel.app/",
+    c1: "#f97316",
+    c2: "#dc2626",
+    iconKind: "gigor",
+    rating: 4.9,
+    age: "3+",
+    chart: "No. 2 Game",
+    dl: "Game",
     size: "Web · 2 MB",
     isBuiltin: true,
   },
