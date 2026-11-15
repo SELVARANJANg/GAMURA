@@ -11,7 +11,13 @@ import {
   onSnapshot,
   limit,
 } from "firebase/firestore";
-import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  onAuthStateChanged,
+} from "firebase/auth";
 import { auth, db } from "../firebase";
 import {
   Loader2,
@@ -89,6 +95,14 @@ const APPLE_FONT_STYLE: React.CSSProperties = {
     '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", system-ui, sans-serif',
 };
 
+const withTimeout = <T,>(promise: Promise<T>, ms = 4500): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Network request timed out")), ms)
+    ),
+  ]);
+
 export default function GamuraUniverseProfileManager({
   user,
   initialHandle = "",
@@ -125,6 +139,16 @@ export default function GamuraUniverseProfileManager({
     const unsub = onAuthStateChanged(auth, (u) => {
       setAuthUser(u);
     });
+    getRedirectResult(auth)
+      .then((res) => {
+        if (res?.user) {
+          setAuthUser(res.user);
+          if (showToast) {
+            showToast("✅", "Signed In", "Connected with Google. Ready to publish.", "success");
+          }
+        }
+      })
+      .catch(() => null);
     return () => unsub();
   }, []);
 
@@ -201,60 +225,84 @@ export default function GamuraUniverseProfileManager({
       return;
     }
 
+    let cancelled = false;
     setLoading(true);
+
+    const hydrateProfile = (data: any, docId?: string) => {
+      if (cancelled) return;
+      setProfile(data);
+      if (!initialHandle) setUsername(data.username || docId || "");
+      setBio(data.bio || "");
+      setDisplayName(data.displayName || "");
+      setWebsite(data.website || "");
+      setGithub(data.github || "");
+      setLinkedin(data.linkedin || "");
+      setTwitter(data.twitter || "");
+      setYoutube(data.youtube || "");
+      setProjects(data.projects || []);
+      setBlocks(data.blocks || []);
+      setLoading(false);
+    };
+
     const docRef = doc(db, "gamura_developers", effectiveUser.uid);
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 3500);
+
     const unsubDoc = onSnapshot(
       docRef,
-      (docSnap) => {
+      async (docSnap) => {
+        if (cancelled) return;
         if (docSnap.exists()) {
-          const data = docSnap.data();
-          setProfile(data);
-          if (!initialHandle) setUsername(data.username || "");
-          setBio(data.bio || "");
-          setDisplayName(data.displayName || "");
-          setWebsite(data.website || "");
-          setGithub(data.github || "");
-          setLinkedin(data.linkedin || "");
-          setTwitter(data.twitter || "");
-          setYoutube(data.youtube || "");
-          setProjects(data.projects || []);
-          setBlocks(data.blocks || []);
-          setLoading(false);
-        } else if (effectiveUser.email) {
-          const q = query(
-            collection(db, "gamura_developers"),
-            where("email", "==", effectiveUser.email)
-          );
-          getDocs(q)
-            .then((snap) => {
-              if (!snap.empty) {
-                const data = snap.docs[0].data();
-                setProfile(data);
-                if (!initialHandle)
-                  setUsername(data.username || snap.docs[0].id || "");
-                setBio(data.bio || "");
-                setDisplayName(data.displayName || "");
-                setWebsite(data.website || "");
-                setGithub(data.github || "");
-                setLinkedin(data.linkedin || "");
-                setTwitter(data.twitter || "");
-                setYoutube(data.youtube || "");
-                setProjects(data.projects || []);
-                setBlocks(data.blocks || []);
-              }
-              setLoading(false);
-            })
-            .catch(() => setLoading(false));
-        } else {
-          setLoading(false);
+          hydrateProfile(docSnap.data());
+          return;
         }
+        try {
+          const byUidSnap = await withTimeout(
+            getDocs(
+              query(
+                collection(db, "gamura_developers"),
+                where("uid", "==", effectiveUser.uid),
+                limit(1)
+              )
+            ),
+            2800
+          );
+          if (!byUidSnap.empty) {
+            hydrateProfile(byUidSnap.docs[0].data(), byUidSnap.docs[0].id);
+            return;
+          }
+          if (effectiveUser.email) {
+            const byEmailSnap = await withTimeout(
+              getDocs(
+                query(
+                  collection(db, "gamura_developers"),
+                  where("email", "==", effectiveUser.email),
+                  limit(1)
+                )
+              ),
+              2800
+            );
+            if (!byEmailSnap.empty) {
+              hydrateProfile(byEmailSnap.docs[0].data(), byEmailSnap.docs[0].id);
+              return;
+            }
+          }
+        } catch {
+          // ignore fallback timeout
+        }
+        if (!cancelled) setLoading(false);
       },
       () => {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     );
 
-    return () => unsubDoc();
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimer);
+      unsubDoc();
+    };
   }, [effectiveUser?.uid, effectiveUser?.email, initialHandle]);
 
   // Subscribe to live public claimed URLs directory
@@ -284,7 +332,7 @@ export default function GamuraUniverseProfileManager({
     return () => unsubDir();
   }, []);
 
-  // Real-time handle availability check
+  // Real-time handle availability check (checks slug docs, username reservations, query fallback, and live directory)
   useEffect(() => {
     const clean = username.trim().toLowerCase();
     if (!clean) {
@@ -304,55 +352,91 @@ export default function GamuraUniverseProfileManager({
       return;
     }
 
+    let cancelled = false;
+
     const check = async () => {
+      // Instant check against already-loaded live directory
+      const directoryMatch = liveDirectory.find(
+        (item) => (item.username || "").toLowerCase() === clean
+      );
+      if (directoryMatch) {
+        if (effectiveUser?.uid && directoryMatch.uid === effectiveUser.uid) {
+          setCheckStatus("available");
+        } else {
+          setCheckStatus("taken");
+        }
+        return;
+      }
+
       setCheckStatus("checking");
       try {
-        const [devDoc, usernameDoc] = await Promise.all([
-          getDoc(doc(db, "gamura_developers", clean)),
-          getDoc(doc(db, "usernames", clean)),
-        ]);
+        const [devDoc, usernameDoc, usernameQuery] = await withTimeout(
+          Promise.all([
+            getDoc(doc(db, "gamura_developers", clean)).catch(() => null),
+            getDoc(doc(db, "usernames", clean)).catch(() => null),
+            getDocs(
+              query(
+                collection(db, "gamura_developers"),
+                where("username", "==", clean),
+                limit(1)
+              )
+            ).catch(() => null),
+          ]),
+          3500
+        );
 
-        if (devDoc.exists()) {
+        if (cancelled) return;
+
+        if (devDoc && devDoc.exists()) {
           const ownerUid = devDoc.data()?.uid;
-          if (effectiveUser?.uid && ownerUid === effectiveUser.uid) {
-            setCheckStatus("available");
-          } else {
-            setCheckStatus("taken");
-          }
+          setCheckStatus(effectiveUser?.uid && ownerUid === effectiveUser.uid ? "available" : "taken");
           return;
         }
 
-        if (usernameDoc.exists()) {
+        if (usernameDoc && usernameDoc.exists()) {
           const ownerUid = usernameDoc.data()?.uid;
-          if (effectiveUser?.uid && ownerUid === effectiveUser.uid) {
-            setCheckStatus("available");
-          } else {
-            setCheckStatus("taken");
-          }
+          setCheckStatus(effectiveUser?.uid && ownerUid === effectiveUser.uid ? "available" : "taken");
+          return;
+        }
+
+        if (usernameQuery && !usernameQuery.empty) {
+          const ownerUid = usernameQuery.docs[0].data()?.uid;
+          setCheckStatus(effectiveUser?.uid && ownerUid === effectiveUser.uid ? "available" : "taken");
           return;
         }
 
         setCheckStatus("available");
       } catch {
-        setCheckStatus("none");
+        if (!cancelled) setCheckStatus("none");
       }
     };
 
-    const timer = setTimeout(check, 350);
-    return () => clearTimeout(timer);
-  }, [username, profile?.username, effectiveUser?.uid]);
+    const timer = setTimeout(check, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [username, profile?.username, effectiveUser?.uid, liveDirectory]);
 
   const handleQuickGoogleSignIn = async () => {
     setSigningIn(true);
     setSaveError(null);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
     try {
-      const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       if (showToast) {
         showToast("✅", "Signed In", "Ready to publish your Gamura URL.", "success");
       }
     } catch (err: any) {
-      const msg = err?.message || "Google sign-in was cancelled or blocked.";
+      if (err?.code === "auth/popup-blocked" && typeof window !== "undefined" && window.self === window.top) {
+        await signInWithRedirect(auth, provider).catch(() => null);
+        return;
+      }
+      const msg =
+        err?.code === "auth/popup-closed-by-user"
+          ? "Google sign-in popup was closed. Please try again."
+          : err?.message || "Google sign-in was cancelled or blocked.";
       setSaveError(msg);
       if (showToast) showToast("⚠️", "Sign-In Required", msg, "warning");
     } finally {
@@ -395,31 +479,40 @@ export default function GamuraUniverseProfileManager({
       return;
     }
 
-    let activeAuthUser = auth.currentUser;
-    if (!activeAuthUser) {
-      setSaving(true);
-      try {
-        const cred = await signInWithPopup(auth, new GoogleAuthProvider());
-        activeAuthUser = cred.user;
-      } catch (err: any) {
-        setSaving(false);
-        const msg =
-          err?.code === "auth/popup-closed-by-user"
-            ? "Sign-in popup closed. Sign in with Google to lock and publish your URL."
-            : err?.message || "Please sign in with Google to permanently claim your URL.";
-        setSaveError(msg);
-        if (showToast) showToast("🔐", "Sign In to Claim", msg, "info");
-        return;
-      }
-    }
-
     setSaving(true);
     try {
+      let activeAuthUser = auth.currentUser;
+      if (!activeAuthUser) {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        try {
+          const cred = await signInWithPopup(auth, provider);
+          activeAuthUser = cred.user;
+        } catch (err: any) {
+          if (err?.code === "auth/popup-blocked" && typeof window !== "undefined" && window.self === window.top) {
+            await signInWithRedirect(auth, provider).catch(() => null);
+            return;
+          }
+          const msg =
+            err?.code === "auth/popup-closed-by-user"
+              ? "Sign-in popup closed. Sign in with Google to lock and publish your URL."
+              : err?.message || "Please sign in with Google to permanently claim your URL.";
+          setSaveError(msg);
+          if (showToast) showToast("🔐", "Sign In to Claim", msg, "info");
+          return;
+        }
+      }
+
+      if (!activeAuthUser) {
+        setSaveError("Sign in with Google or your Gamura ID first to publish your URL.");
+        return;
+      }
+
       const uid = activeAuthUser.uid;
       const email = activeAuthUser.email || `${cleanUser}@gamura.app`;
       const payload: any = {
         username: cleanUser,
-        displayName: displayName.trim() || cleanUser,
+        displayName: displayName.trim() || activeAuthUser.displayName || cleanUser,
         bio: bio.trim(),
         website: website.trim(),
         github: github.trim(),
@@ -439,22 +532,45 @@ export default function GamuraUniverseProfileManager({
         updatedAt: serverTimestamp(),
       };
 
-      const devSlugRef = doc(db, "gamura_developers", cleanUser);
-      await setDoc(devSlugRef, payload, { merge: true }).catch((err) => {
-        handleFirestoreError(err, OperationType.WRITE, `gamura_developers/${cleanUser}`);
-      });
-
-      await setDoc(doc(db, "gamura_developers", uid), payload, { merge: true }).catch(
-        () => null
-      );
-
-      const unameRef = doc(db, "usernames", cleanUser);
-      const unameSnap = await getDoc(unameRef).catch(() => null);
-      if (!unameSnap || !unameSnap.exists()) {
-        await setDoc(unameRef, { uid }).catch(() => null);
+      // Cache locally immediately so opening /@username renders without delay
+      try {
+        localStorage.setItem(
+          `gamura_profile_cache_${cleanUser}`,
+          JSON.stringify({ ...payload, updatedAt: Date.now() })
+        );
+      } catch {
+        // ignore storage limits
       }
 
-      setProfile(payload);
+      const devSlugRef = doc(db, "gamura_developers", cleanUser);
+      const uidMirrorRef = doc(db, "gamura_developers", uid);
+      const unameRef = doc(db, "usernames", cleanUser);
+
+      // Run Firestore writes concurrently with a 5.5s timeout so flaky mobile WebChannels never freeze the spinner
+      let permissionFailure: any = null;
+      const writeOps = Promise.all([
+        setDoc(devSlugRef, payload, { merge: true }).catch((err) => {
+          if (String(err?.code || err?.message || "").includes("permission")) {
+            permissionFailure = err;
+          }
+          handleFirestoreError(err, OperationType.WRITE, `gamura_developers/${cleanUser}`);
+        }),
+        setDoc(uidMirrorRef, payload, { merge: true }).catch(() => null),
+        setDoc(unameRef, { uid }, { merge: true }).catch(() => null),
+      ]);
+
+      await Promise.race([
+        writeOps,
+        new Promise<void>((resolve) => setTimeout(resolve, 5500)),
+      ]);
+
+      if (permissionFailure) {
+        throw permissionFailure;
+      }
+
+      setProfile({ ...payload, updatedAt: Date.now() });
+      setUsername(cleanUser);
+      setCheckStatus("available");
       setShowPublishSuccess(true);
       if (showToast) {
         showToast(

@@ -1,5 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { doc, onSnapshot, serverTimestamp, updateDoc, increment } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  updateDoc,
+  increment,
+  where,
+} from "firebase/firestore";
 import { auth, db } from "../firebase";
 import {
   Sparkles,
@@ -20,7 +32,6 @@ import {
   FileText,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { handleFirestoreError, OperationType } from "../firebaseErrorHandler";
 
 interface ClaimedProfileViewProps {
   username: string;
@@ -32,6 +43,14 @@ const APPLE_FONT_STYLE: React.CSSProperties = {
   fontFamily:
     '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", system-ui, sans-serif',
 };
+
+const withTimeout = <T,>(promise: Promise<T>, ms = 3200): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Request timeout")), ms)
+    ),
+  ]);
 
 export default function ClaimedProfileView({
   username,
@@ -56,12 +75,63 @@ export default function ClaimedProfileView({
       return;
     }
 
-    const docRef = doc(db, "gamura_developers", normalizedUsername);
+    let cancelled = false;
+    let resolvedDocRef = doc(db, "gamura_developers", normalizedUsername);
+
+    // 1. Instant local cache check so previously claimed pages load immediately
+    try {
+      const cachedRaw = localStorage.getItem(`gamura_profile_cache_${normalizedUsername}`);
+      if (cachedRaw) {
+        const cachedData = JSON.parse(cachedRaw);
+        if (cachedData && cachedData.username) {
+          setProfile(cachedData);
+          setExistsCheck(true);
+          setLoading(false);
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+
+    const persistCache = (data: any) => {
+      try {
+        localStorage.setItem(
+          `gamura_profile_cache_${normalizedUsername}`,
+          JSON.stringify({ ...data, updatedAt: Date.now() })
+        );
+      } catch {
+        // ignore storage errors
+      }
+    };
+
+    const resolveFallbackByUsernameField = async () => {
+      try {
+        const qByUsername = query(
+          collection(db, "gamura_developers"),
+          where("username", "==", normalizedUsername),
+          limit(1)
+        );
+        const qSnap = await withTimeout(getDocs(qByUsername), 3000);
+        if (!qSnap.empty && !cancelled) {
+          const foundDoc = qSnap.docs[0];
+          resolvedDocRef = foundDoc.ref;
+          const data = foundDoc.data();
+          setProfile(data);
+          setExistsCheck(true);
+          persistCache(data);
+          setLoading(false);
+          return true;
+        }
+      } catch {
+        // ignore query error
+      }
+      return false;
+    };
 
     const logView = async () => {
       if (!auth.currentUser) return;
       try {
-        await updateDoc(docRef, {
+        await updateDoc(resolvedDocRef, {
           views: increment(1),
           visitors: increment(1),
           engagements: increment(1),
@@ -71,32 +141,70 @@ export default function ClaimedProfileView({
         // view metric increment skipped if permissions disallow
       }
     };
-    logView();
+
+    // Fast one-shot lookup race so mobile browsers never spin infinitely
+    (async () => {
+      try {
+        const directSnap = await withTimeout(getDoc(resolvedDocRef), 3000);
+        if (cancelled) return;
+        if (directSnap.exists()) {
+          const data = directSnap.data();
+          setProfile(data);
+          setExistsCheck(true);
+          persistCache(data);
+          setLoading(false);
+          logView();
+          return;
+        }
+        const foundViaQuery = await resolveFallbackByUsernameField();
+        if (!cancelled) {
+          if (!foundViaQuery) {
+            setExistsCheck((prev) => prev);
+          }
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          await resolveFallbackByUsernameField();
+          if (!cancelled) setLoading(false);
+        }
+      }
+    })();
+
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 3600);
 
     const unsub = onSnapshot(
-      docRef,
-      (docSnap) => {
+      resolvedDocRef,
+      async (docSnap) => {
+        if (cancelled) return;
         if (docSnap.exists()) {
-          setProfile(docSnap.data());
+          const data = docSnap.data();
+          setProfile(data);
           setExistsCheck(true);
+          persistCache(data);
+          setLoading(false);
         } else {
-          setProfile(null);
-          setExistsCheck(false);
+          const found = await resolveFallbackByUsernameField();
+          if (!found && !cancelled) {
+            setProfile((prev: any) => prev || null);
+            setExistsCheck((prev) => prev);
+            setLoading(false);
+          }
         }
-        setLoading(false);
       },
       (error) => {
-        console.error("Firestore loading error:", error);
-        handleFirestoreError(
-          error,
-          OperationType.GET,
-          `gamura_developers/${normalizedUsername}`
-        );
-        setLoading(false);
+        console.warn("Claimed profile live listener fallback:", error);
+        if (!cancelled) setLoading(false);
       }
     );
 
-    return () => unsub();
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimer);
+      unsub();
+    };
   }, [username]);
 
   const trackClick = async () => {

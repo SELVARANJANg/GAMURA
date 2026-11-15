@@ -114,6 +114,8 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   sendPasswordResetEmail,
   EmailAuthProvider,
   reauthenticateWithCredential,
@@ -395,75 +397,39 @@ const GamuraLoader = ({ onFinish }: { onFinish: () => void }) => {
 
   return (
     <div
-      className={`fixed inset-0 bg-[#05070c] text-white z-[9999] flex flex-col items-center justify-center overflow-hidden font-sans transition-opacity duration-300 ${isFading ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+      className={`fixed inset-0 bg-[#F5F5F7] text-[#1D1D1F] z-[9999] flex flex-col items-center justify-center overflow-hidden font-sans transition-opacity duration-300 ${isFading ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+      style={{
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", sans-serif',
+      }}
     >
       <canvas
         ref={canvasRef}
-        className="fixed inset-0 pointer-events-none z-0"
+        className="fixed inset-0 pointer-events-none z-0 opacity-20"
       />
-      <div className="relative z-10 flex flex-col items-center gap-10">
-        <div className="logo-wrap-loader">
-          <div className="ring-outer"></div>
-          <div className="ring-inner"></div>
-          <svg className="svg-ring" viewBox="0 0 240 240">
-            <defs>
-              <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#6339dc" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.9" />
-              </linearGradient>
-            </defs>
-            <circle
-              cx="120"
-              cy="120"
-              r="112"
-              fill="none"
-              stroke="url(#arcGrad)"
-              strokeWidth="3"
-              strokeDasharray="350 352"
-              strokeLinecap="round"
-            />
-          </svg>
-          <div className="orbit-loader">
-            <div className="orbit-dot-loader orbit-dot-1-loader"></div>
-            <div className="orbit-dot-loader orbit-dot-2-loader"></div>
-          </div>
-          <div className="orbit-2-loader">
-            <div className="orbit-dot-loader orbit-dot-3-loader"></div>
-          </div>
-          <div className="halo-loader"></div>
+      <div className="relative z-10 flex flex-col items-center gap-7 px-6">
+        <div className="w-28 h-28 rounded-[28px] bg-white border border-black/[0.06] shadow-[0_8px_30px_rgba(0,0,0,0.06)] flex items-center justify-center p-4">
           <SafeImage
             srcs={loaderImgSources}
             alt="Gamura"
-            className="logo-img-loader rounded-full border-4 border-white/10 shadow-2xl"
+            className="w-full h-full object-contain mix-blend-multiply"
           />
         </div>
         <div className="flex flex-col items-center gap-1">
-          <div className="percent-num-loader">{Math.round(progress)}%</div>
-          <div className="text-[11px] tracking-[4px] uppercase text-zinc-400 font-semibold">
-            Loading
+          <div className="text-3xl font-bold tracking-tight text-[#1D1D1F] tabular-nums">
+            {Math.round(progress)}%
+          </div>
+          <div className="text-xs tracking-wide text-[#6E6E73] font-medium">
+            Opening Gamura...
           </div>
         </div>
-        <div className="w-[320px]">
-          <div className="w-full h-1.5 bg-zinc-100/50 rounded-full overflow-visible relative">
+        <div className="w-[240px]">
+          <div className="w-full h-1.5 bg-zinc-200 rounded-full overflow-hidden">
             <div
-              className="track-fill-loader h-full"
+              className="h-full bg-[#0071E3] rounded-full transition-all duration-75"
               style={{ width: `${progress}%` }}
-            ></div>
+            />
           </div>
-        </div>
-        <div className="flex gap-2">
-          <div
-            className="dot-bounce-loader"
-            style={{ animationDelay: "0s" }}
-          ></div>
-          <div
-            className="dot-bounce-loader"
-            style={{ animationDelay: "0.2s" }}
-          ></div>
-          <div
-            className="dot-bounce-loader"
-            style={{ animationDelay: "0.4s" }}
-          ></div>
         </div>
       </div>
     </div>
@@ -2520,10 +2486,15 @@ const GalaxyCoreView = () => {
     measureLatency();
     const timer = setInterval(measureLatency, 8000);
 
-    const connRef = ref(rtdb, ".info/connected");
-    const unsubConn = onValue(connRef, (snap) => {
-      setRtdbOnline(snap.val() === true);
-    });
+    const unsubConn = rtdb
+      ? onValue(
+          ref(rtdb, ".info/connected"),
+          (snap) => {
+            setRtdbOnline(snap.val() === true);
+          },
+          () => setRtdbOnline(false),
+        )
+      : () => {};
 
     const unsubStats = onSnapshot(
       doc(db, "system", "stats"),
@@ -5845,34 +5816,53 @@ const UniverseDashboard = ({
 
   useEffect(() => {
     // Manage Connection Status
-    const connectedRef = ref(rtdb, '.info/connected');
-    const unsubConn = onValue(connectedRef, (snap) => {
-       setIsConnected(snap.val() === true);
-    });
+    const unsubConn = rtdb
+      ? onValue(
+          ref(rtdb, '.info/connected'),
+          (snap) => {
+            setIsConnected(snap.val() === true);
+          },
+          () => setIsConnected(false),
+        )
+      : (() => {
+          setIsConnected(typeof navigator !== "undefined" ? navigator.onLine : true);
+          return () => {};
+        })();
 
-    const listRef = ref(rtdb, "/presence");
-    const unsub = onValue(listRef, (snap) => {
-      const data = snap.val() || {};
-      setPresenceData(data);
-    });
+    const unsub = rtdb
+      ? onValue(
+          ref(rtdb, "/presence"),
+          (snap) => {
+            const data = snap.val() || {};
+            setPresenceData(data);
+          },
+          () => {},
+        )
+      : () => {};
     
     // Broadcasts Listener
     const broadcastsQuery = query(collection(db, "broadcasts"), orderBy("timestamp", "desc"), limit(1));
     let initialBroadcastLoad = true;
-    const unsubBroadcasts = onSnapshot(broadcastsQuery, (snap) => {
-      if (initialBroadcastLoad) {
-        initialBroadcastLoad = false;
-        return;
-      }
-      snap.docChanges().forEach((change) => {
-        if (change.type === "added") {
-          const data = change.doc.data();
-          if (data.senderUid !== user?.uid) {
-            showToast("📡", "GLOBAL BROADCAST", `${data.message}`);
-          }
+    const unsubBroadcasts = onSnapshot(
+      broadcastsQuery,
+      (snap) => {
+        if (initialBroadcastLoad) {
+          initialBroadcastLoad = false;
+          return;
         }
-      });
-    });
+        snap.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const data = change.doc.data();
+            if (data.senderUid !== user?.uid) {
+              showToast("📡", "GLOBAL BROADCAST", `${data.message}`);
+            }
+          }
+        });
+      },
+      (err) => {
+        console.warn("Broadcasts listener warning:", err?.message || err);
+      },
+    );
     
     return () => {
       unsub();
@@ -7296,57 +7286,47 @@ const UniverseDashboard = ({
         .hover\:border-red-500\/30:hover { border-color: rgba(var(--aura-accent-rgb), 0.3) !important; }
       `}</style>
       {/* Toast Notification Container */}
-      <div className="fixed bottom-6 right-6 z-[99999] flex flex-col gap-3 pointer-events-none">
+      <div className="fixed bottom-20 right-4 sm:right-6 z-[99999] flex flex-col gap-2.5 pointer-events-none">
         <AnimatePresence>
           {toasts.map((t) => {
             const scheme = {
               success: {
-                border: "border-emerald-500/20 bg-[#071912]/95",
-                bar: "bg-emerald-400 shadow-[0_0_12px_#34d399]",
-                iconBg:
-                  "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
+                border: "border-emerald-200 bg-white/95",
+                iconBg: "bg-emerald-50 text-emerald-700 border border-emerald-200/80",
               },
               error: {
-                border: "border-red-500/20 bg-[#140507]/95",
-                bar: "bg-red-400 shadow-[0_0_12px_#f87171]",
-                iconBg: "bg-red-500/10 text-red-500 border border-red-500/20",
+                border: "border-red-200 bg-white/95",
+                iconBg: "bg-red-50 text-red-600 border border-red-200/80",
               },
               warning: {
-                border: "border-[#f59e0b]/20 bg-[#140d05]/95",
-                bar: "bg-amber-400 shadow-[0_0_12px_#fbbf24]",
-                iconBg:
-                  "bg-[#f59e0b]/10 text-amber-400 border border-[#f59e0b]/20",
+                border: "border-amber-200 bg-white/95",
+                iconBg: "bg-amber-50 text-amber-700 border border-amber-200/80",
               },
               info: {
-                border: "border-cyan-500/20 bg-[#05111c]/95",
-                bar: "bg-cyan-400 shadow-[0_0_12px_#22d3ee]",
-                iconBg:
-                  "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20",
+                border: "border-blue-200 bg-white/95",
+                iconBg: "bg-blue-50 text-[#0071E3] border border-blue-200/80",
               },
             }[t.type || "info"];
 
             return (
               <motion.div
                 key={t.id}
-                initial={{ opacity: 0, x: 20, y: 10, scale: 0.95 }}
+                initial={{ opacity: 0, x: 20, y: 10, scale: 0.96 }}
                 animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9, x: 20 }}
-                className={`min-w-[280px] ${scheme.border} border p-4 pointer-events-auto shadow-2xl relative overflow-hidden backdrop-blur-md rounded-xl`}
+                exit={{ opacity: 0, scale: 0.94, x: 20 }}
+                className={`min-w-[270px] max-w-[340px] ${scheme.border} border p-3.5 pointer-events-auto shadow-[0_8px_28px_rgba(0,0,0,0.12)] backdrop-blur-xl rounded-2xl`}
               >
-                <div
-                  className={`absolute inset-y-0 left-0 w-1 ${scheme.bar}`}
-                />
-                <div className="flex items-start gap-3 pl-1">
+                <div className="flex items-start gap-3">
                   <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-black ${scheme.iconBg}`}
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${scheme.iconBg}`}
                   >
                     {t.ic}
                   </div>
-                  <div className="flex-1">
-                    <h4 className="text-[11px] font-black text-white uppercase tracking-tighter leading-tight">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-xs font-semibold text-[#1D1D1F] leading-snug">
                       {t.title}
                     </h4>
-                    <p className="text-[10px] font-bold text-zinc-400 uppercase mt-0.5 leading-tight">
+                    <p className="text-[11px] text-[#6E6E73] mt-0.5 leading-snug">
                       {t.content}
                     </p>
                   </div>
@@ -7354,9 +7334,9 @@ const UniverseDashboard = ({
                     onClick={() =>
                       setToasts((prev) => prev.filter((tt) => tt.id !== t.id))
                     }
-                    className="text-zinc-600 hover:text-white transition-colors"
+                    className="text-zinc-400 hover:text-zinc-900 transition-colors p-1 cursor-pointer"
                   >
-                    <X size={12} />
+                    <X size={13} />
                   </button>
                 </div>
               </motion.div>
@@ -7367,11 +7347,11 @@ const UniverseDashboard = ({
 
       <style>{`
         .universe-dashboard-root {
-          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Plus Jakarta Sans', system-ui, sans-serif;
           background: #f5f5f7;
           color: #1d1d1f;
           min-height: 100vh;
-          overflow-x: hidden;
+          overflow-x: clip;
         }
         .universe-dashboard-root * { box-sizing: border-box; }
 
@@ -7380,24 +7360,27 @@ const UniverseDashboard = ({
           display: flex;
           flex-direction: column;
           background: #f5f5f7;
-          padding-bottom: 72px;
+          padding-top: 54px;
+          padding-bottom: 76px;
         }
         .ud-topbar {
-          position: sticky;
+          position: fixed;
           top: 0;
+          left: 0;
+          right: 0;
           z-index: 300;
-          height: 52px;
-          background: rgba(255, 255, 255, 0.88);
+          height: 54px;
+          background: rgba(255, 255, 255, 0.92);
           backdrop-filter: saturate(180%) blur(20px);
           border-bottom: 1px solid rgba(0, 0, 0, 0.06);
           display: flex;
           align-items: center;
-          gap: 10px;
-          padding: 0 16px;
+          gap: 8px;
+          padding: 0 12px;
         }
         .ud-content {
           flex: 1;
-          padding: 16px;
+          padding: 18px 14px 24px;
           display: flex;
           flex-direction: column;
           gap: 14px;
@@ -7406,8 +7389,8 @@ const UniverseDashboard = ({
           width: 100%;
         }
         @media (min-width: 768px) {
-          .ud-topbar { padding: 0 24px; }
-          .ud-content { padding: 20px 24px; gap: 16px; }
+          .ud-topbar { padding: 0 24px; gap: 12px; }
+          .ud-content { padding: 22px 24px 28px; gap: 16px; }
         }
       `}</style>
 
@@ -7696,10 +7679,9 @@ const UniverseDashboard = ({
               href="/join-selvaranjan"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-2.5 sm:px-3 h-8 rounded-full bg-gradient-to-r from-emerald-50 to-sky-50 hover:from-emerald-100 hover:to-sky-100 border border-emerald-200/80 text-zinc-900 text-[11px] font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+              className="px-2.5 sm:px-3 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200/80 text-zinc-900 text-[11px] font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0"
               title="Join Selvaranjan on Gamura"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#059669] shrink-0" />
               <span className="sm:hidden">Join Selvaranjan</span>
               <span className="hidden sm:inline">Join Selvaranjan on Gamura</span>
               <ArrowUpRight size={12} className="text-[#059669] shrink-0" />
@@ -9111,15 +9093,29 @@ export default function App() {
 
   const handleGoogleSignIn = async () => {
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
     setIsAuthLoading(true);
     setAuthError(null);
+    setCreatedGamuraIdInfo(null);
     try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
+      await signInWithPopup(auth, provider);
       setIsAuthLoading(false);
       setCurrentPage("universe-active");
     } catch (error: any) {
       setIsAuthLoading(false);
+      if (
+        error.code === "auth/popup-blocked" &&
+        typeof window !== "undefined" &&
+        window.self === window.top
+      ) {
+        try {
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch {
+          // fall through to message
+        }
+      }
+
       const isPopupError =
         error.code === "auth/popup-blocked" ||
         error.code === "auth/popup-closed-by-user" ||
@@ -9130,63 +9126,44 @@ export default function App() {
 
       if (error.code === "auth/operation-not-allowed") {
         setAuthError(
-          <div className="space-y-1.5 text-red-600 dark:text-red-400 p-1">
-            <p className="font-extrabold uppercase tracking-wide text-xs text-left">
-              Google Sign-In Off
-            </p>
-            <p className="text-[10px] normal-case leading-relaxed text-left opacity-90">
-              Please activate Google as a Sign-In provider in your Firebase
-              Authentication settings first.
+          <div className="space-y-1 text-red-700 text-left">
+            <p className="font-semibold text-xs">Google Sign-In is Not Enabled</p>
+            <p className="text-xs leading-relaxed opacity-90">
+              Enable Google as a Sign-In provider in Firebase Authentication settings first.
             </p>
           </div>,
         );
       } else if (error.code === "auth/unauthorized-domain") {
         setAuthError(
-          <div className="space-y-1.5 text-red-600 dark:text-red-400 p-1 bg-red-500/10 rounded-xl">
-            <p className="font-extrabold uppercase tracking-wide text-[10px] text-left">
-              Domain Not Authorized
-            </p>
-            <p className="text-[10px] normal-case leading-relaxed text-left opacity-90">
-              Please add <strong className="font-bold">{window.location.hostname}</strong> to your Firebase Console under Authentication &gt; Settings &gt; Authorized domains.
+          <div className="space-y-1 text-red-700 text-left">
+            <p className="font-semibold text-xs">Domain Not Authorized</p>
+            <p className="text-xs leading-relaxed opacity-90">
+              Add <strong>{window.location.hostname}</strong> to Firebase Authentication &gt; Authorized domains.
             </p>
           </div>,
         );
       } else if (isPopupError) {
         setAuthError(
-          <div className="space-y-2 text-zinc-800 dark:text-zinc-200 p-1 text-left normal-case tracking-normal">
-            <p className="font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 text-xs flex items-center gap-1.5">
-              <span>🔒</span> Browser Sandbox Restricted
+          <div className="space-y-2 text-[#1D1D1F] text-left">
+            <p className="font-semibold text-amber-700 text-xs">
+              Popup Blocked or Cancelled
             </p>
-            <p className="text-[11px] leading-relaxed opacity-90">
-              The Google login popup was closed or restricted by the security
-              sandbox rules of this embedded preview.
+            <p className="text-xs text-[#6E6E73] leading-relaxed">
+              Your browser closed or restricted the Google popup. Try again, open in a standard tab, or use Google Redirect.
             </p>
-            <div className="bg-amber-500/10 dark:bg-amber-500/5 p-2 rounded-lg space-y-1 my-1">
-              <p className="text-[9.5px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                ⚡ Bypass instantly by doing either:
-              </p>
-              <ol className="list-decimal pl-4.5 text-[10.5px] space-y-1 font-medium leading-relaxed text-zinc-600 dark:text-zinc-300">
-                <li>
-                  Click the{" "}
-                  <strong className="text-zinc-900 dark:text-zinc-100">
-                    "Open in standard tab"
-                  </strong>{" "}
-                  icon in the top-right header of your screen to bypass the
-                  sandbox, OR
-                </li>
-                <li>
-                  Simply input a username and password under{" "}
-                  <strong className="text-zinc-900 dark:text-zinc-100 font-bold uppercase">
-                    "Create Gamura ID"
-                  </strong>{" "}
-                  to register instantly!
-                </li>
-              </ol>
-            </div>
+            {typeof window !== "undefined" && window.self === window.top && (
+              <button
+                type="button"
+                onClick={() => signInWithRedirect(auth, provider).catch(() => null)}
+                className="w-full py-2 px-3 rounded-xl bg-[#0071E3] text-white text-xs font-semibold hover:bg-[#0077ED] transition-colors cursor-pointer"
+              >
+                Continue via Google Redirect
+              </button>
+            )}
           </div>,
         );
       } else {
-        setAuthError("Google authentication failed: " + error.message);
+        setAuthError("Google authentication failed: " + (error.message || "Please try again."));
       }
     } finally {
       setIsAuthLoading(false);
@@ -9196,6 +9173,7 @@ export default function App() {
   const handleAppleSignIn = async () => {
     setIsAuthLoading(true);
     setAuthError(null);
+    setCreatedGamuraIdInfo(null);
     try {
       const provider = new OAuthProvider("apple.com");
       await signInWithPopup(auth, provider);
@@ -9205,10 +9183,10 @@ export default function App() {
       setIsAuthLoading(false);
       if (error.code === "auth/operation-not-allowed") {
         setAuthError(
-          <div className="space-y-1 text-xs text-left">
-            <p className="font-bold uppercase tracking-wider text-amber-500">Apple Auth Provider Not Enabled</p>
-            <p className="text-[11px] text-zinc-400">Please enable Apple in Firebase Authentication console &gt; Sign-in method, or sign in with Google / Gamura ID.</p>
-          </div>
+          <div className="space-y-1 text-xs text-left text-amber-800">
+            <p className="font-semibold">Apple Sign-In Not Enabled</p>
+            <p className="opacity-85">Enable Apple in Firebase Authentication &gt; Sign-in method, or sign in with Google or Gamura ID.</p>
+          </div>,
         );
       } else if (
         error.code === "auth/popup-closed-by-user" ||
@@ -9241,6 +9219,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    getRedirectResult(auth)
+      .then((res) => {
+        if (res?.user) {
+          setCreatedGamuraIdInfo(null);
+          setAuthError(null);
+          setCurrentPage((prev) => (prev === "login" || prev === "signup" ? "universe-active" : prev));
+        }
+      })
+      .catch(() => null);
+
     const testConnection = async () => {
       try {
         const { getDocFromServer } = await import("firebase/firestore");
@@ -9266,27 +9254,29 @@ export default function App() {
 
       if (user) {
         // --- REALTIME PRESENCE START ---
-        try {
-          const userStatusDatabaseRef = ref(rtdb, `/presence/${user.uid}`);
-          const isOfflineForDatabase = {
-            online: false,
-            lastSeen: rtdbServerTimestamp(),
-          };
-          const isOnlineForDatabase = {
-            online: true,
-            lastSeen: rtdbServerTimestamp(),
-          };
-          
-          const connectedRef = ref(rtdb, '.info/connected');
-          onValue(connectedRef, (snap) => {
-            if (snap.val() === true) {
-              onDisconnect(userStatusDatabaseRef).set(isOfflineForDatabase).then(() => {
-                set(userStatusDatabaseRef, isOnlineForDatabase);
-              });
-            }
-          });
-        } catch(e) {
-          console.warn("RTDB Presence ignored:", e);
+        if (rtdb) {
+          try {
+            const userStatusDatabaseRef = ref(rtdb, `/presence/${user.uid}`);
+            const isOfflineForDatabase = {
+              online: false,
+              lastSeen: rtdbServerTimestamp(),
+            };
+            const isOnlineForDatabase = {
+              online: true,
+              lastSeen: rtdbServerTimestamp(),
+            };
+
+            const connectedRef = ref(rtdb, '.info/connected');
+            onValue(connectedRef, (snap) => {
+              if (snap.val() === true) {
+                onDisconnect(userStatusDatabaseRef).set(isOfflineForDatabase).then(() => {
+                  set(userStatusDatabaseRef, isOnlineForDatabase);
+                });
+              }
+            });
+          } catch (e) {
+            console.warn("RTDB Presence ignored:", e);
+          }
         }
         // --- REALTIME PRESENCE END ---
 
@@ -10235,95 +10225,83 @@ ${targetContext}`;
 
   if (createdGamuraIdInfo) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-white relative flex flex-col items-center justify-center p-6 select-none overflow-hidden font-sans">
-        {/* Decorative Grid Background */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f293710_1px,transparent_1px),linear-gradient(to_bottom,#1f293710_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none opacity-40" />
-
-        {/* Rotating Radial Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-sky-500/10 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-purple-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse" />
-
+      <div
+        className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] relative flex flex-col items-center justify-center p-5 select-none"
+        style={{
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", sans-serif',
+        }}
+      >
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-          className="w-full max-w-md bg-zinc-900/80 border border-zinc-800 backdrop-blur-xl p-8 rounded-3xl shadow-2xl relative z-10 text-center space-y-8"
+          initial={{ opacity: 0, scale: 0.96, y: 12 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          className="w-full max-w-md bg-white border border-black/[0.06] p-7 sm:p-8 rounded-[28px] shadow-[0_12px_40px_rgba(0,0,0,0.06)] text-center space-y-6"
         >
-          {/* Animated Avatar Core Badge */}
-          <div className="relative mx-auto w-24 h-24">
-            <div className="absolute inset-0 bg-gradient-to-tr from-sky-500 to-purple-500 rounded-2xl blur opacity-30 animate-pulse" />
-            <div className="relative w-full h-full bg-zinc-950 border border-zinc-800 rounded-2xl flex items-center justify-center font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-purple-400 text-3xl font-sans">
-              G
+          {/* Apple ID Emblem + Emerald Verification Check */}
+          <div className="relative mx-auto w-20 h-20">
+            <div className="w-full h-full bg-[#F5F5F7] border border-zinc-200/80 rounded-2xl flex items-center justify-center p-3 shadow-xs">
+              <SafeImage
+                srcs={logoSources}
+                alt="Gamura"
+                className="w-full h-full object-contain mix-blend-multiply"
+                fallbackIcon={Sparkles}
+              />
             </div>
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-              className="absolute -bottom-1 -right-1 bg-gradient-to-r from-emerald-400 to-teal-500 p-1.5 rounded-xl border-2 border-zinc-900 shadow-md text-white"
+              transition={{ delay: 0.2, type: "spring", stiffness: 260 }}
+              className="absolute -bottom-1.5 -right-1.5 bg-[#059669] p-1.5 rounded-full border-2 border-white shadow-sm text-white"
             >
-              <Check size={16} strokeWidth={3} />
+              <Check size={14} strokeWidth={3} />
             </motion.div>
           </div>
 
-          <div className="space-y-2">
-            <h2 className="text-xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-white via-zinc-100 to-zinc-400 uppercase font-sans">
-              GAMURA ID ACTIVATED
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-[#059669]">
+              Account Ready
+            </p>
+            <h2 className="text-2xl font-bold tracking-tight text-[#1D1D1F]">
+              Gamura ID Activated
             </h2>
-            <p className="text-[10px] text-zinc-400 tracking-wide leading-relaxed font-sans font-medium uppercase px-2">
-              Your cryptographic identity link has been securely established on
-              the decentralised node.
+            <p className="text-sm text-[#6E6E73] leading-relaxed">
+              Your Gamura account is ready across Universe, Store, and Cloud apps.
             </p>
           </div>
 
-          {/* Gamura ID Card Details */}
-          <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl p-5 text-left relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-3 text-zinc-800/40 group-hover:text-zinc-600 transition-colors">
-              <Shield size={40} className="stroke-1 animate-pulse" />
+          {/* Apple Inset Grouped Account Summary */}
+          <div className="bg-[#F5F5F7] border border-zinc-200/70 rounded-2xl divide-y divide-zinc-200/70 text-left overflow-hidden">
+            <div className="px-4 py-3 flex items-center justify-between gap-3">
+              <span className="text-xs text-[#6E6E73] font-medium">Gamura ID</span>
+              <span className="text-sm font-semibold text-[#1D1D1F] font-mono">
+                @{createdGamuraIdInfo.username}
+              </span>
             </div>
-            <div className="space-y-4 relative z-10">
-              <div>
-                <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest leading-none mb-1">
-                  GAMURA UNIQUE ID
-                </div>
-                <div className="text-lg font-mono font-bold tracking-tight flex items-center gap-1.5 text-sky-450 text-zinc-100">
-                  <User size={16} className="text-sky-500" />@
-                  {createdGamuraIdInfo.username}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest leading-none mb-1">
-                  SECURE CREDENTIAL OWNER
-                </div>
-                <div className="text-sm font-sans font-bold text-zinc-205 uppercase tracking-wide text-zinc-200">
-                  {createdGamuraIdInfo.nickname}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest leading-none mb-1">
-                  NODE ACCESS KEY (UID)
-                </div>
-                <div className="text-[10px] font-mono text-zinc-450 truncate tracking-wider text-zinc-400">
-                  {createdGamuraIdInfo.uid}
-                </div>
-              </div>
+            <div className="px-4 py-3 flex items-center justify-between gap-3">
+              <span className="text-xs text-[#6E6E73] font-medium">Display Name</span>
+              <span className="text-sm font-semibold text-[#1D1D1F] truncate">
+                {createdGamuraIdInfo.nickname}
+              </span>
+            </div>
+            <div className="px-4 py-3 flex items-center justify-between gap-3">
+              <span className="text-xs text-[#6E6E73] font-medium shrink-0">Account UID</span>
+              <span className="text-xs font-mono text-[#6E6E73] truncate tabular-nums">
+                {createdGamuraIdInfo.uid}
+              </span>
             </div>
           </div>
 
-          {/* Enter Button */}
           <button
+            type="button"
             onClick={() => {
               setCreatedGamuraIdInfo(null);
-              setCurrentPage("blank");
+              setCurrentPage("universe-active");
             }}
-            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-purple-600 hover:from-sky-400 hover:to-purple-500 text-white font-sans text-xs font-black uppercase tracking-widest hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer shadow-lg shadow-sky-500/15 flex items-center justify-center gap-2 group border border-zinc-800/10"
+            className="w-full py-3.5 px-6 rounded-2xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-sm font-semibold active:scale-[0.99] transition-all cursor-pointer shadow-sm flex items-center justify-center gap-2 min-h-[48px]"
           >
-            <span>Activate & Enter Gamura Universe</span>
-            <ArrowRight
-              size={14}
-              className="group-hover:translate-x-1 transition-transform"
-            />
+            <span>Enter Gamura Universe</span>
+            <ArrowRight size={16} />
           </button>
         </motion.div>
       </div>
@@ -11012,421 +10990,351 @@ ${targetContext}`;
 
   if (currentPage === "signup") {
     return (
-      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-6">
-        <button
-          onClick={() => {
-            setAuthError(null);
-            setCurrentPage("login");
-          }}
-          className="absolute top-4 left-4 p-2 text-zinc-400 hover:text-black dark:hover:text-white dark:text-white transition-colors text-xs font-medium"
-        >
-          ← Back to Login
-        </button>
-
-        <div className="w-full max-w-sm space-y-8">
-          <div className="text-center space-y-4">
-            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800/50 mx-auto bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
-              <SafeImage
-                srcs={secondaryLogoSources}
-                alt="GPG Logo"
-                className="w-full h-full object-cover"
-                fallbackIcon={Sparkles}
-              />
-            </div>
-            <div className="space-y-1">
-              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase tracking-widest">
-                GAMURA SIGNUP
-              </h2>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                Create unique Gamura ID
-              </p>
-            </div>
-          </div>
-
-          <form
-            className="space-y-4"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (username.length < 6) {
-                setAuthError("Username must be at least 6 characters long.");
-                return;
-              }
-              if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
-                setAuthError("Username can only contain letters, numbers, underscores, and hyphens.");
-                return;
-              }
-              if (password.length < 8) {
-                setAuthError("Password must be at least 8 characters long.");
-                return;
-              }
-              setAuthError(null);
-              setIsAuthLoading(true);
-
-              try {
-                const usernameLower = username.trim().toLowerCase();
-                const usernameDoc = await getDoc(
-                  doc(db, "usernames", usernameLower),
-                ).catch(() => null);
-                if (usernameDoc && usernameDoc.exists()) {
-                  setAuthError(
-                    "This Gamura ID is already taken. Please choose another.",
-                  );
-                  setIsAuthLoading(false);
-                  return;
-                }
-
-                const finalEmail =
-                  email.trim() || `${usernameLower}@gamura.app`;
-
-                // Prevent race conditions in onAuthStateChanged
-                (window as any).isRegisteringUser = true;
-
-                let user;
-                try {
-                  const userCredential = await createUserWithEmailAndPassword(
-                    auth,
-                    finalEmail,
-                    password,
-                  );
-                  user = userCredential.user;
-                } catch (regErr: any) {
-                  if (
-                    regErr.code === "auth/email-already-in-use" ||
-                    (regErr.message &&
-                      regErr.message
-                        .toLowerCase()
-                        .includes("email-already-in-use"))
-                  ) {
-                    try {
-                      const userCredential = await signInWithEmailAndPassword(
-                        auth,
-                        finalEmail,
-                        password,
-                      );
-                      user = userCredential.user;
-                    } catch (loginErr) {
-                      throw regErr; // Throw original registration error if password doesn't match
-                    }
-                  } else {
-                    throw regErr;
-                  }
-                }
-
-                try {
-                  // Run background writes concurrently to skip waiting for server ack
-                  Promise.all([
-                    (async () => {
-                      try {
-                        const statsRef = doc(db, "system", "stats");
-                        const statsDoc = await getDoc(statsRef).catch(
-                          () => null,
-                        );
-                        if (statsDoc && !statsDoc.exists()) {
-                          await setDoc(
-                            statsRef,
-                            { loginCount: 1, totalUsers: 1 },
-                            { merge: true },
-                          );
-                        } else {
-                          await updateDoc(statsRef, {
-                            totalUsers: increment(1),
-                            loginCount: increment(1),
-                          });
-                        }
-                      } catch (e) {
-                        console.error("Failed to increment total users", e);
-                      }
-                    })(),
-                    setDoc(doc(db, "usernames", usernameLower), {
-                      uid: user.uid,
-                    }).catch((err) => {
-                      console.warn(
-                        "Failsafe warning: Username reservation skipped (likely offline)",
-                        err,
-                      );
-                    }),
-                    setDoc(doc(db, "users", user.uid), {
-                      uid: user.uid,
-                      email: finalEmail,
-                      username: username,
-                      nickname: nickname,
-                      createdAt: Date.now(),
-                      gpgTimestamps: [],
-                      lastLogin: Date.now(),
-                    }).catch((err) => {
-                      console.warn(
-                        "Failsafe warning: User document creation skipped (likely offline)",
-                        err,
-                      );
-                    }),
-                    setDoc(doc(db, "gamura_developers", usernameLower), {
-                      uid: user.uid,
-                      username: username,
-                      email: finalEmail,
-                      blocks: [],
-                      published: false,
-                      plan: "Starter",
-                      clicks: 0,
-                      views: 1,
-                      visitors: 1,
-                      engagements: 1,
-                      updatedAt: serverTimestamp(),
-                    }).catch((err) => {
-                      console.warn(
-                        "Failsafe warning: Developer profile skipped",
-                        err,
-                      );
-                    }),
-                  ]);
-
-                  // 3. Set current user states so the app is instantly active
-                  const userInfoObj = {
-                    username: username,
-                    nickname: nickname,
-                    gpgTimestamps: [],
-                  };
-                  setCurrentUserInfo(userInfoObj);
-
-                  try {
-                    localStorage.setItem(
-                      `gamura_user_info_${user.uid}`,
-                      JSON.stringify(userInfoObj),
-                    );
-                    localStorage.setItem(
-                      `gamura_id_email_${usernameLower}`,
-                      finalEmail,
-                    );
-                  } catch (stErr) {
-                    console.warn("Local storage write skipped:", stErr);
-                  }
-
-                  // Add activity log in background to eliminate registration latency
-                  setDoc(doc(collection(db, "activities")), {
-                    title: `${username} created a Gamura ID`,
-                    ic: "✨",
-                    timestamp: serverTimestamp(),
-                    user: username,
-                    userId: user.uid,
-                  }).catch((err) =>
-                    console.error("Silent activity warning:", err),
-                  );
-
-                  setCreatedGamuraIdInfo({
-                    username: username,
-                    nickname: nickname,
-                    uid: user.uid,
-                  });
-
-                  setUsername("");
-                  setPassword("");
-                  setEmail("");
-                  setNickname("");
-                } catch (dbError) {
-                  console.error(
-                    "Silent db fallback activated for login registration",
-                    dbError,
-                  );
-                } finally {
-                  (window as any).isRegisteringUser = false;
-                }
-              } catch (error: any) {
-                (window as any).isRegisteringUser = false;
-                if (error.code === "auth/email-already-in-use") {
-                  setAuthError("This Email or Gamura ID already exists.");
-                } else if (error.code === "auth/operation-not-allowed") {
-                  setAuthError(
-                    <div className="space-y-2">
-                      <p className="font-bold">Auth Not Enabled</p>
-                      <p className="text-[10px] lowercase leading-relaxed opacity-80">
-                        Enable Email/Password in Firebase Console &gt; Auth &gt;
-                        Sign-in method.
-                      </p>
-                    </div>,
-                  );
-                } else {
-                  setAuthError(error.message);
-                }
-              } finally {
-                setIsAuthLoading(false);
-              }
-            }}
-          >
-            {authError && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={
-                  typeof authError === "string"
-                    ? "bg-red-50 text-red-600 text-[10px] font-bold uppercase tracking-wider p-3 rounded-xl border border-red-100 text-center"
-                    : "bg-amber-50/50 dark:bg-amber-950/20 text-zinc-800 dark:text-zinc-200 p-4 rounded-xl border border-amber-200/50 dark:border-amber-900/30 text-center"
-                }
-              >
-                {authError}
-              </motion.div>
-            )}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1">
-                Nickname
-              </label>
-              <div className="relative">
-                <Sparkles
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                  size={18}
-                />
-                <input
-                  type="text"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="What should we call you?"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1">
-                Email{" "}
-                <span className="text-[8px] opacity-60">
-                  (Optional for Recovery)
-                </span>
-              </label>
-              <div className="relative">
-                <Mail
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                  size={18}
-                />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Recovery email"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1">
-                Username
-              </label>
-              <div className="relative">
-                <User
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                  size={18}
-                />
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Choose a username"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1">
-                Password
-              </label>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                  size={18}
-                />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Create a password"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
-                  required
-                />
-              </div>
-            </div>
-
+      <div
+        className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] relative flex flex-col items-center justify-center p-4 sm:p-6"
+        style={{
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", sans-serif',
+        }}
+      >
+        <div className="w-full max-w-md">
+          <div className="mb-4">
             <button
-              type="submit"
-              disabled={isAuthLoading}
-              className="w-full bg-black text-white dark:bg-white dark:text-black rounded-xl py-3.5 font-semibold text-sm hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] mt-4 flex items-center justify-center gap-2"
-            >
-              {isAuthLoading ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                "Sign Up"
-              )}
-            </button>
-
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-zinc-100 dark:border-zinc-800/50"></div>
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
-                <span className="bg-white dark:bg-zinc-950 px-2 text-zinc-400">
-                  Or continue with
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={isAuthLoading}
-                className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 transition-all active:scale-[0.98] shadow-sm"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    fill="#EA4335"
-                  />
-                </svg>
-                <span>Continue with Google</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleAppleSignIn}
-                disabled={isAuthLoading}
-                className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 transition-all active:scale-[0.98] shadow-sm"
-              >
-                <svg
-                  className="w-4 h-4 text-black dark:text-white"
-                  fill="currentColor"
-                  viewBox="0 0 170 170"
-                >
-                  <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.37.13-9.13-1.9-14.29-6.07-3.57-2.9-7.51-7.7-11.83-14.42-7.51-11.61-13-25.01-16.48-40.17-3.48-15.17-3.17-29.17.9-42 4.07-12.9 10.9-22.75 20.48-29.58 9.58-6.82 19.9-10.28 30.93-10.39 5.71 0 11.66 1.41 17.84 4.19 6.18 2.78 10.36 4.17 12.54 4.17 2.01 0 6.03-1.34 12.06-4.01 6.03-2.68 11.47-3.96 16.32-3.85 11.52.45 21.01 4.54 28.48 12.27 7.47 7.72 11.75 16.93 12.83 27.65-11.61 5.37-19.16 12.8-22.65 22.28-3.48 9.48-2.6 19.24 2.65 29.27 3.35 6.43 8.01 11.63 13.98 15.61 5.96 3.97 12.18 6.17 18.63 6.6-1.56 4.58-3.57 9.52-6.03 14.83zm-27.14-101.46c0-7.72 2.73-14.75 8.19-21.08 5.46-6.33 11.96-10.03 19.51-11.1 0.45 7.82-2.3 14.93-8.25 21.34-5.95 6.41-12.43 10.27-19.45 10.84 0 0 .0-.10 0-1z" />
-                </svg>
-                <span>Continue with Apple</span>
-              </button>
-            </div>
-          </form>
-
-          <p className="text-center text-xs text-zinc-400">
-            Already have an account?{" "}
-            <span
+              type="button"
               onClick={() => {
                 setAuthError(null);
                 setCurrentPage("login");
               }}
-              className="text-black dark:text-white font-medium cursor-pointer hover:underline"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-zinc-200/80 text-xs font-semibold text-[#1D1D1F] hover:bg-zinc-100 transition-colors cursor-pointer"
             >
-              Sign in
-            </span>
-          </p>
+              <ArrowLeft size={14} />
+              <span>Back to Sign In</span>
+            </button>
+          </div>
+
+          <div className="bg-white border border-black/[0.06] rounded-[28px] p-6 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.05)] space-y-6">
+            <div className="text-center space-y-3">
+              <div className="w-16 h-16 rounded-2xl bg-[#F5F5F7] border border-zinc-200/80 mx-auto p-2.5 flex items-center justify-center">
+                <SafeImage
+                  srcs={logoSources}
+                  alt="Gamura"
+                  className="w-full h-full object-contain mix-blend-multiply"
+                  fallbackIcon={Sparkles}
+                />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-2xl font-bold tracking-tight text-[#1D1D1F]">
+                  Create Gamura ID
+                </h2>
+                <p className="text-xs text-[#6E6E73]">
+                  One account for Gamura Universe, Store, and Free URLs
+                </p>
+              </div>
+            </div>
+
+            <form
+              className="space-y-3.5"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const cleanUsername = username.trim();
+                if (cleanUsername.length < 6) {
+                  setAuthError("Username must be at least 6 characters long.");
+                  return;
+                }
+                if (!/^[a-zA-Z0-9_-]+$/.test(cleanUsername)) {
+                  setAuthError("Username can only contain letters, numbers, underscores, and hyphens.");
+                  return;
+                }
+                if (password.length < 8) {
+                  setAuthError("Password must be at least 8 characters long.");
+                  return;
+                }
+                setAuthError(null);
+                setIsAuthLoading(true);
+
+                try {
+                  const usernameLower = cleanUsername.toLowerCase();
+                  const usernameDoc = await getDocWithTimeout(
+                    doc(db, "usernames", usernameLower),
+                    2500,
+                  ).catch(() => null);
+                  if (usernameDoc && usernameDoc.exists()) {
+                    setAuthError("This Gamura ID is already taken. Please choose another.");
+                    setIsAuthLoading(false);
+                    return;
+                  }
+
+                  const finalEmail = email.trim() || `${usernameLower}@gamura.app`;
+                  (window as any).isRegisteringUser = true;
+
+                  let user;
+                  try {
+                    const userCredential = await createUserWithEmailAndPassword(
+                      auth,
+                      finalEmail,
+                      password,
+                    );
+                    user = userCredential.user;
+                  } catch (regErr: any) {
+                    if (
+                      regErr.code === "auth/email-already-in-use" ||
+                      (regErr.message &&
+                        regErr.message.toLowerCase().includes("email-already-in-use"))
+                    ) {
+                      try {
+                        const userCredential = await signInWithEmailAndPassword(
+                          auth,
+                          finalEmail,
+                          password,
+                        );
+                        user = userCredential.user;
+                      } catch {
+                        throw regErr;
+                      }
+                    } else {
+                      throw regErr;
+                    }
+                  }
+
+                  try {
+                    Promise.all([
+                      (async () => {
+                        try {
+                          const statsRef = doc(db, "system", "stats");
+                          const statsDoc = await getDocWithTimeout(statsRef, 2500).catch(() => null);
+                          if (statsDoc && !statsDoc.exists()) {
+                            await setDoc(statsRef, { loginCount: 1, totalUsers: 1 }, { merge: true });
+                          } else {
+                            await updateDoc(statsRef, {
+                              totalUsers: increment(1),
+                              loginCount: increment(1),
+                            });
+                          }
+                        } catch {
+                          // ignore stats error
+                        }
+                      })(),
+                      setDoc(doc(db, "usernames", usernameLower), { uid: user.uid }).catch(() => null),
+                      setDoc(doc(db, "users", user.uid), {
+                        uid: user.uid,
+                        email: finalEmail,
+                        username: cleanUsername,
+                        nickname: nickname.trim() || cleanUsername,
+                        createdAt: Date.now(),
+                        gpgTimestamps: [],
+                        lastLogin: Date.now(),
+                      }).catch(() => null),
+                      setDoc(doc(db, "gamura_developers", usernameLower), {
+                        uid: user.uid,
+                        username: usernameLower,
+                        displayName: nickname.trim() || cleanUsername,
+                        email: finalEmail,
+                        blocks: [],
+                        published: false,
+                        plan: "Starter",
+                        clicks: 0,
+                        views: 1,
+                        visitors: 1,
+                        engagements: 1,
+                        updatedAt: serverTimestamp(),
+                      }).catch(() => null),
+                    ]);
+
+                    const userInfoObj = {
+                      username: cleanUsername,
+                      nickname: nickname.trim() || cleanUsername,
+                      gpgTimestamps: [],
+                    };
+                    setCurrentUserInfo(userInfoObj);
+
+                    try {
+                      localStorage.setItem(
+                        `gamura_user_info_${user.uid}`,
+                        JSON.stringify(userInfoObj),
+                      );
+                      localStorage.setItem(`gamura_id_email_${usernameLower}`, finalEmail);
+                    } catch {
+                      // ignore storage error
+                    }
+
+                    setDoc(doc(collection(db, "activities")), {
+                      title: `${cleanUsername} created a Gamura ID`,
+                      ic: "✨",
+                      timestamp: serverTimestamp(),
+                      user: cleanUsername,
+                      userId: user.uid,
+                    }).catch(() => null);
+
+                    setCreatedGamuraIdInfo({
+                      username: cleanUsername,
+                      nickname: nickname.trim() || cleanUsername,
+                      uid: user.uid,
+                    });
+
+                    setUsername("");
+                    setPassword("");
+                    setEmail("");
+                    setNickname("");
+                  } catch (dbError) {
+                    console.error("Silent db fallback activated for login registration", dbError);
+                  } finally {
+                    (window as any).isRegisteringUser = false;
+                  }
+                } catch (error: any) {
+                  (window as any).isRegisteringUser = false;
+                  if (error.code === "auth/email-already-in-use") {
+                    setAuthError("This Email or Gamura ID already exists.");
+                  } else if (error.code === "auth/operation-not-allowed") {
+                    setAuthError("Email/Password authentication is not enabled in Firebase Console.");
+                  } else {
+                    setAuthError(error.message || "Could not create account. Please try again.");
+                  }
+                } finally {
+                  setIsAuthLoading(false);
+                }
+              }}
+            >
+              {authError && (
+                <div className="bg-red-50 text-red-700 text-xs font-medium p-3 rounded-xl border border-red-200">
+                  {authError}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#1D1D1F] block">
+                  Display Name
+                </label>
+                <div className="relative">
+                  <Sparkles className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6E6E73]" size={16} />
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    placeholder="What should we call you?"
+                    className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl py-3 pl-10 pr-4 focus:bg-white focus:border-[#0071E3] focus:outline-none transition-all text-sm text-[#1D1D1F]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#1D1D1F] block">
+                  Email <span className="text-[#6E6E73] font-normal">(Optional)</span>
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6E6E73]" size={16} />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl py-3 pl-10 pr-4 focus:bg-white focus:border-[#0071E3] focus:outline-none transition-all text-sm text-[#1D1D1F]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#1D1D1F] block">
+                  Username
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6E6E73]" size={16} />
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="At least 6 characters"
+                    className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl py-3 pl-10 pr-4 focus:bg-white focus:border-[#0071E3] focus:outline-none transition-all text-sm text-[#1D1D1F]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#1D1D1F] block">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6E6E73]" size={16} />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="At least 8 characters"
+                    className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl py-3 pl-10 pr-4 focus:bg-white focus:border-[#0071E3] focus:outline-none transition-all text-sm text-[#1D1D1F]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isAuthLoading}
+                className="w-full bg-[#0071E3] hover:bg-[#0077ED] text-white rounded-xl py-3.5 font-semibold text-sm transition-all shadow-sm active:scale-[0.99] mt-2 flex items-center justify-center gap-2 cursor-pointer min-h-[46px]"
+              >
+                {isAuthLoading ? (
+                  <>
+                    <Loader2 size={17} className="animate-spin" />
+                    <span>Creating ID...</span>
+                  </>
+                ) : (
+                  "Create Account"
+                )}
+              </button>
+
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-zinc-200/80" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-white px-3 text-[#6E6E73]">Or continue with</span>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isAuthLoading}
+                  className="w-full bg-white border border-zinc-200 rounded-xl py-3 text-sm font-semibold text-[#1D1D1F] flex items-center justify-center gap-2.5 hover:bg-zinc-50 transition-all active:scale-[0.99] cursor-pointer min-h-[46px]"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                  </svg>
+                  <span>Continue with Google</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleAppleSignIn}
+                  disabled={isAuthLoading}
+                  className="w-full bg-[#1D1D1F] hover:bg-black text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2.5 transition-all active:scale-[0.99] cursor-pointer min-h-[46px]"
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 170 170">
+                    <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.37.13-9.13-1.9-14.29-6.07-3.57-2.9-7.51-7.7-11.83-14.42-7.51-11.61-13-25.01-16.48-40.17-3.48-15.17-3.17-29.17.9-42 4.07-12.9 10.9-22.75 20.48-29.58 9.58-6.82 19.9-10.28 30.93-10.39 5.71 0 11.66 1.41 17.84 4.19 6.18 2.78 10.36 4.17 12.54 4.17 2.01 0 6.03-1.34 12.06-4.01 6.03-2.68 11.47-3.96 16.32-3.85 11.52.45 21.01 4.54 28.48 12.27 7.47 7.72 11.75 16.93 12.83 27.65-11.61 5.37-19.16 12.8-22.65 22.28-3.48 9.48-2.6 19.24 2.65 29.27 3.35 6.43 8.01 11.63 13.98 15.61 5.96 3.97 12.18 6.17 18.63 6.6-1.56 4.58-3.57 9.52-6.03 14.83zm-27.14-101.46c0-7.72 2.73-14.75 8.19-21.08 5.46-6.33 11.96-10.03 19.51-11.1 0.45 7.82-2.3 14.93-8.25 21.34-5.95 6.41-12.43 10.27-19.45 10.84 0 0 .0-.10 0-1z" />
+                  </svg>
+                  <span>Continue with Apple</span>
+                </button>
+              </div>
+            </form>
+
+            <p className="text-center text-xs text-[#6E6E73]">
+              Already have an account?{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthError(null);
+                  setCurrentPage("login");
+                }}
+                className="text-[#0071E3] font-semibold cursor-pointer hover:underline"
+              >
+                Sign in
+              </button>
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -11435,22 +11343,31 @@ ${targetContext}`;
   if (currentPage === "login") {
     if (forgotPassword) {
       return (
-        <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-6">
-          <div className="w-full max-w-sm space-y-8">
-            <div className="text-center space-y-4">
-              <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800/50 mx-auto bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
+        <div
+          className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] relative flex flex-col items-center justify-center p-4 sm:p-6"
+          style={{
+            fontFamily:
+              '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", sans-serif',
+          }}
+        >
+          <div className="w-full max-w-md bg-white border border-black/[0.06] rounded-[28px] p-6 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.05)] space-y-6">
+            <div className="text-center space-y-3">
+              <div className="w-16 h-16 rounded-2xl bg-[#F5F5F7] border border-zinc-200/80 mx-auto p-2.5 flex items-center justify-center">
                 <SafeImage
-                  srcs={secondaryLogoSources}
-                  alt="GPG"
-                  className="w-full h-full object-cover"
+                  srcs={logoSources}
+                  alt="Gamura"
+                  className="w-full h-full object-contain mix-blend-multiply"
+                  fallbackIcon={Sparkles}
                 />
               </div>
-              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase tracking-widest">
-                RESET PASSWORD
-              </h2>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                Enter Gamura ID or Email to recover
-              </p>
+              <div className="space-y-1">
+                <h2 className="text-2xl font-bold tracking-tight text-[#1D1D1F]">
+                  Reset Password
+                </h2>
+                <p className="text-xs text-[#6E6E73]">
+                  Enter your Gamura ID or Email to receive a reset link
+                </p>
+              </div>
             </div>
 
             <form
@@ -11467,22 +11384,17 @@ ${targetContext}`;
                     return;
                   }
 
-                  // If it looks like a username, attempt to resolve it to their real email from Firestore
                   if (!resetTarget.includes("@")) {
-                    const uNameDoc = await getDoc(
+                    const uNameDoc = await getDocWithTimeout(
                       doc(db, "usernames", resetTarget.toLowerCase()),
-                    );
-                    if (uNameDoc.exists()) {
+                      2500,
+                    ).catch(() => null);
+                    if (uNameDoc && uNameDoc.exists()) {
                       const uid = uNameDoc.data()?.uid;
                       if (uid) {
-                        const uDoc = await getDoc(doc(db, "users", uid));
-                        if (uDoc.exists()) {
-                          const matchedEmail = uDoc.data()?.email;
-                          if (matchedEmail) {
-                            resetTarget = matchedEmail;
-                          } else {
-                            resetTarget = `${resetTarget.toLowerCase()}@gamura.app`;
-                          }
+                        const uDoc = await getDocWithTimeout(doc(db, "users", uid), 2500).catch(() => null);
+                        if (uDoc && uDoc.exists() && uDoc.data()?.email) {
+                          resetTarget = uDoc.data()?.email;
                         } else {
                           resetTarget = `${resetTarget.toLowerCase()}@gamura.app`;
                         }
@@ -11498,50 +11410,43 @@ ${targetContext}`;
                   setResetEmailSent(true);
                 } catch (err: any) {
                   if (err.code === "auth/user-not-found") {
-                    setAuthError(
-                      "No account found with this Gamura ID or Email.",
-                    );
+                    setAuthError("No account found with this Gamura ID or Email.");
                   } else if (err.code === "auth/invalid-email") {
                     setAuthError("The email address format is invalid.");
                   } else {
-                    setAuthError(
-                      err.message ||
-                        "Could not send reset email. Check your ID/Email.",
-                    );
+                    setAuthError(err.message || "Could not send reset email. Check your ID or Email.");
                   }
                 } finally {
                   setIsAuthLoading(false);
                 }
               }}
             >
-              <>
-                {authError && (
-                  <div className="text-red-500 text-[10px] font-bold text-center">
-                    {authError}
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Gamura ID or Email"
-                    className="w-full bg-zinc-100 dark:bg-zinc-900 border-none rounded-xl py-3 px-4 focus:ring-2 focus:ring-black outline-none text-sm"
-                    required
-                  />
+              {authError && (
+                <div className="bg-red-50 text-red-700 text-xs font-medium p-3 rounded-xl border border-red-200 text-center">
+                  {authError}
                 </div>
-                <button
-                  type="submit"
-                  disabled={isAuthLoading}
-                  className="w-full bg-black text-white dark:bg-white dark:text-black rounded-xl py-3 font-bold text-xs uppercase tracking-widest mt-2 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                >
-                  {isAuthLoading ? (
-                    <Loader2 size={16} className="animate-spin mx-auto" />
-                  ) : (
-                    "Send Reset Link"
-                  )}
-                </button>
-              </>
+              )}
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Gamura ID or Email"
+                  className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl py-3 px-4 focus:bg-white focus:border-[#0071E3] outline-none text-sm text-[#1D1D1F]"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isAuthLoading}
+                className="w-full bg-[#0071E3] hover:bg-[#0077ED] text-white rounded-xl py-3.5 font-semibold text-sm transition-all cursor-pointer min-h-[46px]"
+              >
+                {isAuthLoading ? (
+                  <Loader2 size={17} className="animate-spin mx-auto" />
+                ) : (
+                  "Send Reset Link"
+                )}
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -11549,15 +11454,13 @@ ${targetContext}`;
                   setResetEmailSent(false);
                   setAuthError(null);
                 }}
-                className="w-full text-[10px] font-black text-zinc-500 uppercase tracking-widest hover:text-black transition-colors"
-                style={{ marginTop: 16 }}
+                className="w-full text-xs font-semibold text-[#6E6E73] hover:text-[#1D1D1F] transition-colors py-2 cursor-pointer"
               >
-                Back to Login
+                Back to Sign In
               </button>
             </form>
           </div>
 
-          {/* Slide-up Notification Panel */}
           <AnimatePresence>
             {resetEmailSent && (
               <>
@@ -11565,7 +11468,7 @@ ${targetContext}`;
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+                  className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
                   onClick={() => {
                     setForgotPassword(false);
                     setResetEmailSent(false);
@@ -11576,34 +11479,30 @@ ${targetContext}`;
                   initial={{ y: "100%" }}
                   animate={{ y: 0 }}
                   exit={{ y: "100%" }}
-                  transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                  className="fixed bottom-0 left-0 right-0 h-[50vh] bg-white dark:bg-zinc-950 rounded-t-[2.5rem] z-50 p-8 shadow-[0_-15px_40px_rgba(0,0,0,0.1)] flex flex-col items-center justify-center text-center border-t border-zinc-100 dark:border-zinc-800"
+                  transition={{ type: "spring", damping: 28, stiffness: 260 }}
+                  className="fixed bottom-0 left-0 right-0 max-w-xl mx-auto bg-white rounded-t-[2rem] z-50 p-8 shadow-2xl flex flex-col items-center justify-center text-center border-t border-zinc-200"
                 >
-                  <div className="w-16 h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full absolute top-4 left-1/2 -translate-x-1/2" />
-
-                  <div className="w-20 h-20 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center mb-6">
-                    <Mail className="w-10 h-10 text-green-500" />
+                  <div className="w-12 h-1 bg-zinc-300 rounded-full mb-5" />
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-[#059669] flex items-center justify-center mb-4">
+                    <Mail className="w-7 h-7" />
                   </div>
-
-                  <div className="space-y-3 px-4">
-                    <h3 className="text-2xl font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-50">
-                      Link Sent Successfully
+                  <div className="space-y-2">
+                    <h3 className="text-xl font-bold text-[#1D1D1F]">
+                      Reset Link Sent
                     </h3>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-[300px] mx-auto leading-relaxed">
-                      We've sent password reset instructions to your associated
-                      email. Please check your inbox and spam folder.
+                    <p className="text-sm text-[#6E6E73] max-w-xs mx-auto">
+                      Check your inbox and spam folder for password reset instructions.
                     </p>
                   </div>
-
                   <button
                     onClick={() => {
                       setForgotPassword(false);
                       setResetEmailSent(false);
                       setAuthError(null);
                     }}
-                    className="w-full max-w-[280px] py-4 bg-black text-white dark:bg-white dark:text-black rounded-xl font-bold uppercase tracking-widest text-[10px] hover:scale-105 active:scale-[0.98] transition-all shadow-[0_4px_20px_rgba(0,0,0,0.15)] mt-8"
+                    className="w-full max-w-xs py-3.5 bg-[#0071E3] hover:bg-[#0077ED] text-white rounded-xl font-semibold text-sm transition-all mt-6 cursor-pointer"
                   >
-                    Back to Login
+                    Back to Sign In
                   </button>
                 </motion.div>
               </>
@@ -11615,119 +11514,102 @@ ${targetContext}`;
 
     if (isLoggedIn && currentUserInfo) {
       return (
-        <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 relative flex flex-col items-center justify-center p-4">
+        <div
+          className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] relative flex flex-col items-center justify-center p-4"
+          style={{
+            fontFamily:
+              '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", sans-serif',
+          }}
+        >
           <div className="w-full max-w-sm space-y-6">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/80 rounded-[2rem] p-6 md:p-8 shadow-2xl relative overflow-hidden"
+              className="bg-white border border-black/[0.06] rounded-[28px] p-6 sm:p-7 shadow-[0_8px_32px_rgba(0,0,0,0.06)] relative overflow-hidden"
             >
-              {/* Subtle top background gradient decoration */}
-              <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-sky-400/10 to-transparent pointer-events-none" />
-
               {!showDeleteConfirm ? (
-                <div className="text-center relative z-10 space-y-6">
-                  {/* Avatar displaying custom image if present, else initials with styled gradient */}
-                  <div className="relative inline-block group">
+                <div className="text-center space-y-5">
+                  <div className="relative inline-block">
                     {currentUserInfo.avatarUrl ? (
                       <img
                         src={currentUserInfo.avatarUrl}
                         alt={currentUserInfo.nickname}
                         referrerPolicy="no-referrer"
-                        className="w-24 h-24 rounded-full object-cover mx-auto ring-4 ring-sky-400/20 shadow-md group-hover:scale-105 transition-transform duration-300"
+                        className="w-20 h-20 rounded-full object-cover mx-auto border border-zinc-200 shadow-xs"
                       />
                     ) : (
-                      <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 text-white flex items-center justify-center font-black text-2xl mx-auto shadow-md ring-4 ring-sky-400/20 group-hover:scale-105 transition-transform duration-300">
+                      <div className="w-20 h-20 rounded-full bg-[#0071E3] text-white flex items-center justify-center font-bold text-2xl mx-auto shadow-xs">
                         {(currentUserInfo.nickname ||
                           currentUserInfo.username ||
-                          "@")[0].toUpperCase()}
+                          "G")[0].toUpperCase()}
                       </div>
                     )}
-                    {/* Realtime dynamic status marker */}
-                    <span className="absolute bottom-1 right-1 h-3.5 w-3.5 rounded-full bg-green-500 border-2 border-white dark:border-zinc-900" />
                   </div>
 
-                  {/* Nickname, ID badge and description bio */}
                   <div className="space-y-1">
-                    <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 font-sans uppercase">
+                    <h2 className="text-xl font-bold tracking-tight text-[#1D1D1F]">
                       {currentUserInfo.nickname}
                     </h2>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 dark:bg-sky-950/30 text-sky-500 text-xs font-bold font-mono uppercase tracking-wider">
+                    <p className="text-xs font-mono font-semibold text-[#0071E3]">
                       @{currentUserInfo.username}
-                    </div>
+                    </p>
                     {currentUserInfo.bio && (
-                      <p className="text-zinc-500 dark:text-zinc-400 text-xs py-1.5 px-3 bg-zinc-50 dark:bg-zinc-800/40 rounded-xl leading-relaxed mt-2 text-center max-w-xs mx-auto">
+                      <p className="text-[#6E6E73] text-xs py-1.5 px-3 bg-[#F5F5F7] rounded-xl leading-relaxed mt-2 max-w-xs mx-auto">
                         {currentUserInfo.bio}
                       </p>
                     )}
                   </div>
 
-                  {/* Navigation Quick Pathways/Buttons */}
-                  <div className="space-y-2 pt-2 text-left">
+                  <div className="space-y-2.5 pt-1 text-left">
                     <button
                       type="button"
                       onClick={() => {
                         window.history.pushState({}, "", "/claim");
                         setCurrentPage("claim");
                       }}
-                      className="w-full flex items-center justify-between gap-3 bg-[#0EA5E9] hover:bg-[#0284c7] text-white rounded-xl py-3 px-4.5 font-bold text-[10px] uppercase tracking-widest hover:shadow-lg transition-all active:scale-[0.98] group cursor-pointer"
+                      className="w-full flex items-center justify-between gap-3 bg-[#0071E3] hover:bg-[#0077ED] text-white rounded-xl py-3 px-4 font-semibold text-xs transition-all active:scale-[0.99] cursor-pointer min-h-[44px]"
                     >
-                      <span className="flex items-center gap-2">
-                        <span>🎨</span> CLAIM GAMURA FREE URL
-                      </span>
-                      <ArrowRight
-                        size={13}
-                        className="group-hover:translate-x-1 transition-transform"
-                      />
+                      <span>Claim Gamura Free URL</span>
+                      <ArrowRight size={14} />
                     </button>
 
                     <button
                       type="button"
                       onClick={() => {
-                        setShowUniverseLoader(true);
-                        setTimeout(
-                          () => setCurrentPage("universe-active"),
-                          100,
-                        );
+                        setCurrentPage("universe-active");
                       }}
-                      className="w-full flex items-center justify-between gap-3 bg-zinc-950 hover:bg-zinc-900 text-white dark:bg-white dark:text-black dark:hover:bg-zinc-100 rounded-xl py-3 px-4.5 font-bold text-[10px] uppercase tracking-widest hover:shadow-lg transition-all active:scale-[0.98] group cursor-pointer"
+                      className="w-full flex items-center justify-between gap-3 bg-[#1D1D1F] hover:bg-black text-white rounded-xl py-3 px-4 font-semibold text-xs transition-all active:scale-[0.99] cursor-pointer min-h-[44px]"
                     >
-                      <span className="flex items-center gap-2">
-                        <span>🌐</span> ENTER UNIVERSE DASHBOARD
-                      </span>
-                      <ArrowRight
-                        size={13}
-                        className="group-hover:translate-x-1 transition-transform"
-                      />
+                      <span>Open Universe Dashboard</span>
+                      <ArrowRight size={14} />
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setCurrentPage("home")}
-                      className="w-full bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 rounded-xl py-3 font-bold text-[10px] uppercase tracking-widest transition-all active:scale-[0.98] cursor-pointer text-center"
+                      className="w-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] rounded-xl py-3 font-semibold text-xs transition-all cursor-pointer text-center min-h-[44px]"
                     >
-                      Return/Cancel
+                      Back to Home
                     </button>
                   </div>
 
-                  {/* Account Actions / Log Out */}
-                  <div className="pt-5 border-t border-zinc-100 dark:border-zinc-800/40 flex flex-col gap-3 relative z-10">
+                  <div className="pt-4 border-t border-zinc-100 flex flex-col gap-2">
                     <button
                       type="button"
                       onClick={() => setShowSignOutConfirm(true)}
-                      className="w-full h-11 flex items-center justify-center gap-2 bg-gradient-to-r from-red-50 to-rose-50 hover:from-red-100 hover:to-rose-100 dark:from-zinc-900/50 dark:to-zinc-900/50 dark:hover:from-red-950/20 dark:hover:to-red-950/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/30 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all active:scale-[0.98] cursor-pointer shadow-sm hover:shadow-md"
+                      className="w-full h-11 flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-semibold text-xs transition-all cursor-pointer"
                     >
-                      <LogOut size={12} className="stroke-[2.5]" />
-                      Sign Out Session
+                      <LogOut size={14} />
+                      Sign Out
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setShowDeleteConfirm(true)}
-                      className="w-full h-11 flex items-center justify-center gap-2 bg-zinc-50 hover:bg-red-50/50 dark:bg-zinc-900/10 dark:hover:bg-red-950/10 text-zinc-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 border border-zinc-200/50 dark:border-zinc-800/60 hover:border-red-100 dark:hover:border-red-900/30 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all active:scale-[0.98] cursor-pointer"
+                      className="w-full h-10 flex items-center justify-center gap-2 text-[#6E6E73] hover:text-red-600 rounded-xl font-medium text-xs transition-all cursor-pointer"
                     >
-                      <Trash2 size={12} />
-                      Permanently Delete Account
+                      <Trash2 size={13} />
+                      Delete Account
                     </button>
                   </div>
                 </div>
@@ -12371,293 +12253,257 @@ ${targetContext}`;
     }
 
     return (
-      <div className="min-h-screen bg-white dark:bg-zinc-950 relative flex flex-col items-center justify-center p-6">
-        <div className="absolute top-4 left-4">
-          <button
-            onClick={() => setCurrentPage("home")}
-            className="p-2 text-zinc-400 hover:text-black dark:hover:text-white transition-colors text-xs font-bold uppercase tracking-widest"
-          >
-            ← Back to Home
-          </button>
-        </div>
-
-        <div className="w-full max-w-sm space-y-8">
-          <div className="text-center space-y-4">
-            <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800/50 mx-auto bg-zinc-50 dark:bg-zinc-900/50 flex items-center justify-center">
-              <SafeImage
-                srcs={secondaryLogoSources}
-                alt="GPG Logo"
-                className="w-full h-full object-cover"
-                fallbackIcon={Sparkles}
-              />
-            </div>
-            <div className="space-y-1">
-              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 uppercase tracking-widest">
-                GAMURA ID LOGIN
-              </h2>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                ACTIVATE YOUR GAMURA ID SESSION
-              </p>
-            </div>
-          </div>
-
-          <form
-            className="space-y-4"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setAuthError(null);
-              setIsAuthLoading(true);
-
-              try {
-                let loginEmail = username.trim();
-                const uLower = loginEmail.toLowerCase();
-                if (!loginEmail.includes("@")) {
-                  const cachedEmail = localStorage.getItem(
-                    `gamura_id_email_${uLower}`,
-                  );
-                  loginEmail = cachedEmail || `${uLower}@gamura.app`;
-                }
-
-                let userCred;
-                try {
-                  userCred = await signInWithEmailAndPassword(
-                    auth,
-                    loginEmail,
-                    password,
-                  );
-                } catch (initialErr: any) {
-                  if (
-                    !username.trim().includes("@") &&
-                    !localStorage.getItem(`gamura_id_email_${uLower}`) &&
-                    (initialErr.code === "auth/user-not-found" ||
-                      initialErr.code === "auth/invalid-credential")
-                  ) {
-                    const uDoc = await getDoc(
-                      doc(db, "usernames", uLower),
-                    ).catch(() => null);
-                    if (uDoc && uDoc.exists()) {
-                      const uid = uDoc.data()?.uid;
-                      if (uid) {
-                        const uProfile = await getDoc(
-                          doc(db, "users", uid),
-                        ).catch(() => null);
-                        if (
-                          uProfile &&
-                          uProfile.exists() &&
-                          uProfile.data()?.email
-                        ) {
-                          loginEmail = uProfile.data()?.email;
-                          userCred = await signInWithEmailAndPassword(
-                            auth,
-                            loginEmail,
-                            password,
-                          );
-                        } else throw initialErr;
-                      } else throw initialErr;
-                    } else throw initialErr;
-                  } else {
-                    throw initialErr;
-                  }
-                }
-
-                if (userCred && userCred.user) {
-                  if (!username.trim().includes("@")) {
-                    localStorage.setItem(
-                      `gamura_id_email_${uLower}`,
-                      loginEmail,
-                    );
-                  }
-                  setCurrentPage("universe-active");
-                } else {
-                  setCurrentPage("universe-active");
-                }
-              } catch (error: any) {
-                if (error.code === "auth/operation-not-allowed") {
-                  setAuthError(
-                    <div className="space-y-2">
-                      <p className="font-bold">Auth Not Enabled</p>
-                      <p className="text-[10px] lowercase leading-relaxed opacity-80">
-                        Enable Email/Password in Firebase Console &gt; Auth &gt;
-                        Sign-in method.
-                      </p>
-                    </div>,
-                  );
-                } else {
-                  setAuthError("Invalid Gamura ID or password.");
-                }
-              } finally {
-                setIsAuthLoading(false);
-              }
-            }}
-          >
-            {authError && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={
-                  typeof authError === "string"
-                    ? "bg-red-50 text-red-600 text-[10px] font-bold uppercase tracking-wider p-3 rounded-xl border border-red-100 text-center"
-                    : "bg-amber-50/50 dark:bg-amber-950/20 text-zinc-800 dark:text-zinc-200 p-4 rounded-xl border border-amber-200/50 dark:border-amber-900/30 text-center"
-                }
-              >
-                {authError}
-              </motion.div>
-            )}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1">
-                Gamura ID
-              </label>
-              <div className="relative">
-                <User
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                  size={18}
-                />
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your Gamura ID"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between items-center ml-1">
-                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                  Password
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setForgotPassword(true)}
-                  className="text-[9px] font-black text-cyan-500 hover:text-cyan-600 uppercase tracking-widest"
-                >
-                  Forgot Password?
-                </button>
-              </div>
-              <div className="relative">
-                <Lock
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                  size={18}
-                />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-4 focus:ring-black/5 focus:border-black dark:border-white transition-all text-sm"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isAuthLoading}
-              className="w-full bg-black text-white dark:bg-white dark:text-black rounded-xl py-3.5 font-semibold text-sm hover:bg-zinc-800 transition-all shadow-lg active:scale-[0.98] mt-4 flex items-center justify-center gap-2"
-            >
-              {isAuthLoading ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                "Sign In"
-              )}
-            </button>
-
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-zinc-100 dark:border-zinc-800/50"></div>
-              </div>
-              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-widest">
-                <span className="bg-white dark:bg-zinc-950 px-2 text-zinc-400">
-                  Or continue with
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={isAuthLoading}
-                className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 transition-all active:scale-[0.98] shadow-sm"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24">
-                  <path
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    fill="#EA4335"
-                  />
-                </svg>
-                <span>Continue with Google</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleAppleSignIn}
-                disabled={isAuthLoading}
-                className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl py-3 text-sm font-bold uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 transition-all active:scale-[0.98] shadow-sm"
-              >
-                <svg
-                  className="w-4 h-4 text-black dark:text-white"
-                  fill="currentColor"
-                  viewBox="0 0 170 170"
-                >
-                  <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.37.13-9.13-1.9-14.29-6.07-3.57-2.9-7.51-7.7-11.83-14.42-7.51-11.61-13-25.01-16.48-40.17-3.48-15.17-3.17-29.17.9-42 4.07-12.9 10.9-22.75 20.48-29.58 9.58-6.82 19.9-10.28 30.93-10.39 5.71 0 11.66 1.41 17.84 4.19 6.18 2.78 10.36 4.17 12.54 4.17 2.01 0 6.03-1.34 12.06-4.01 6.03-2.68 11.47-3.96 16.32-3.85 11.52.45 21.01 4.54 28.48 12.27 7.47 7.72 11.75 16.93 12.83 27.65-11.61 5.37-19.16 12.8-22.65 22.28-3.48 9.48-2.6 19.24 2.65 29.27 3.35 6.43 8.01 11.63 13.98 15.61 5.96 3.97 12.18 6.17 18.63 6.6-1.56 4.58-3.57 9.52-6.03 14.83zm-27.14-101.46c0-7.72 2.73-14.75 8.19-21.08 5.46-6.33 11.96-10.03 19.51-11.1 0.45 7.82-2.3 14.93-8.25 21.34-5.95 6.41-12.43 10.27-19.45 10.84 0 0 .0-.10 0-1z" />
-                </svg>
-                <span>Continue with Apple</span>
-              </button>
-            </div>
-          </form>
-
-          <p className="text-center text-xs text-zinc-400">
-            Don't have an account?{" "}
-            <span
-              onClick={() => {
-                setAuthError(null);
-                setCurrentPage("signup");
-              }}
-              className="text-black dark:text-white font-medium cursor-pointer hover:underline"
-            >
-              Sign up
-            </span>
-          </p>
-
-          <div className="pt-2">
+      <div
+        className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] relative flex flex-col items-center justify-center p-4 sm:p-6"
+        style={{
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", sans-serif',
+        }}
+      >
+        <div className="w-full max-w-md">
+          <div className="mb-4">
             <button
               type="button"
-              onClick={() => {
-                setAuthError(null);
-                setCurrentUserInfo({
-                  username: "Explorer",
-                  nickname: "Guest Explorer",
-                  gpgTimestamps: [],
-                  avatarUrl: "",
-                  bio: "Guest Explorer Session",
-                  email: "explorer@gamura.app",
-                  themeColor: "",
-                });
-                setCurrentUser({
-                  uid: "guest_explorer_uid",
-                  displayName: "Guest Explorer",
-                  email: "explorer@gamura.app",
-                });
-                setCurrentPage("universe-active");
-              }}
-              className="w-full py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 border border-zinc-200/50 dark:border-zinc-800 cursor-pointer"
+              onClick={() => setCurrentPage("home")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-zinc-200/80 text-xs font-semibold text-[#1D1D1F] hover:bg-zinc-100 transition-colors cursor-pointer"
             >
-              <Sparkles size={14} className="text-cyan-500" />
-              <span>Instant Explorer Mode (1-Click Demo)</span>
+              <ArrowLeft size={14} />
+              <span>Home</span>
             </button>
+          </div>
+
+          <div className="bg-white border border-black/[0.06] rounded-[28px] p-6 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.05)] space-y-6">
+            <div className="text-center space-y-3">
+              <div className="w-16 h-16 rounded-2xl bg-[#F5F5F7] border border-zinc-200/80 mx-auto p-2.5 flex items-center justify-center">
+                <SafeImage
+                  srcs={logoSources}
+                  alt="Gamura"
+                  className="w-full h-full object-contain mix-blend-multiply"
+                  fallbackIcon={Sparkles}
+                />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-2xl font-bold tracking-tight text-[#1D1D1F]">
+                  Sign in to Gamura
+                </h2>
+                <p className="text-xs text-[#6E6E73]">
+                  Access your Gamura Universe, Store, and Claimed URLs
+                </p>
+              </div>
+            </div>
+
+            <form
+              className="space-y-3.5"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setAuthError(null);
+                setIsAuthLoading(true);
+
+                try {
+                  let loginEmail = username.trim();
+                  const uLower = loginEmail.toLowerCase();
+                  if (!loginEmail.includes("@")) {
+                    const cachedEmail = localStorage.getItem(`gamura_id_email_${uLower}`);
+                    loginEmail = cachedEmail || `${uLower}@gamura.app`;
+                  }
+
+                  let userCred;
+                  try {
+                    userCred = await signInWithEmailAndPassword(auth, loginEmail, password);
+                  } catch (initialErr: any) {
+                    if (
+                      !username.trim().includes("@") &&
+                      !localStorage.getItem(`gamura_id_email_${uLower}`) &&
+                      (initialErr.code === "auth/user-not-found" ||
+                        initialErr.code === "auth/invalid-credential")
+                    ) {
+                      const uDoc = await getDocWithTimeout(
+                        doc(db, "usernames", uLower),
+                        2500,
+                      ).catch(() => null);
+                      if (uDoc && uDoc.exists()) {
+                        const uid = uDoc.data()?.uid;
+                        if (uid) {
+                          const uProfile = await getDocWithTimeout(
+                            doc(db, "users", uid),
+                            2500,
+                          ).catch(() => null);
+                          if (uProfile && uProfile.exists() && uProfile.data()?.email) {
+                            loginEmail = uProfile.data()?.email;
+                            userCred = await signInWithEmailAndPassword(auth, loginEmail, password);
+                          } else {
+                            throw initialErr;
+                          }
+                        } else {
+                          throw initialErr;
+                        }
+                      } else {
+                        throw initialErr;
+                      }
+                    } else {
+                      throw initialErr;
+                    }
+                  }
+
+                  if (userCred && userCred.user && !username.trim().includes("@")) {
+                    localStorage.setItem(`gamura_id_email_${uLower}`, loginEmail);
+                  }
+                  setCurrentPage("universe-active");
+                } catch (error: any) {
+                  if (error.code === "auth/operation-not-allowed") {
+                    setAuthError("Email/Password authentication is not enabled in Firebase Console.");
+                  } else {
+                    setAuthError("Invalid Gamura ID or password.");
+                  }
+                } finally {
+                  setIsAuthLoading(false);
+                }
+              }}
+            >
+              {authError && (
+                <div className="bg-red-50 text-red-700 text-xs font-medium p-3 rounded-xl border border-red-200">
+                  {authError}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#1D1D1F] block">
+                  Gamura ID or Email
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6E6E73]" size={16} />
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter username or email"
+                    className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl py-3 pl-10 pr-4 focus:bg-white focus:border-[#0071E3] focus:outline-none transition-all text-sm text-[#1D1D1F]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-[#1D1D1F]">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setForgotPassword(true)}
+                    className="text-xs font-medium text-[#0071E3] hover:underline cursor-pointer"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6E6E73]" size={16} />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl py-3 pl-10 pr-4 focus:bg-white focus:border-[#0071E3] focus:outline-none transition-all text-sm text-[#1D1D1F]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isAuthLoading}
+                className="w-full bg-[#0071E3] hover:bg-[#0077ED] text-white rounded-xl py-3.5 font-semibold text-sm transition-all shadow-sm active:scale-[0.99] mt-2 flex items-center justify-center gap-2 cursor-pointer min-h-[46px]"
+              >
+                {isAuthLoading ? (
+                  <>
+                    <Loader2 size={17} className="animate-spin" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  "Sign In"
+                )}
+              </button>
+
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-zinc-200/80" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-white px-3 text-[#6E6E73]">Or continue with</span>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isAuthLoading}
+                  className="w-full bg-white border border-zinc-200 rounded-xl py-3 text-sm font-semibold text-[#1D1D1F] flex items-center justify-center gap-2.5 hover:bg-zinc-50 transition-all active:scale-[0.99] cursor-pointer min-h-[46px]"
+                >
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                  </svg>
+                  <span>Continue with Google</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleAppleSignIn}
+                  disabled={isAuthLoading}
+                  className="w-full bg-[#1D1D1F] hover:bg-black text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2.5 transition-all active:scale-[0.99] cursor-pointer min-h-[46px]"
+                >
+                  <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 170 170">
+                    <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.37.13-9.13-1.9-14.29-6.07-3.57-2.9-7.51-7.7-11.83-14.42-7.51-11.61-13-25.01-16.48-40.17-3.48-15.17-3.17-29.17.9-42 4.07-12.9 10.9-22.75 20.48-29.58 9.58-6.82 19.9-10.28 30.93-10.39 5.71 0 11.66 1.41 17.84 4.19 6.18 2.78 10.36 4.17 12.54 4.17 2.01 0 6.03-1.34 12.06-4.01 6.03-2.68 11.47-3.96 16.32-3.85 11.52.45 21.01 4.54 28.48 12.27 7.47 7.72 11.75 16.93 12.83 27.65-11.61 5.37-19.16 12.8-22.65 22.28-3.48 9.48-2.6 19.24 2.65 29.27 3.35 6.43 8.01 11.63 13.98 15.61 5.96 3.97 12.18 6.17 18.63 6.6-1.56 4.58-3.57 9.52-6.03 14.83zm-27.14-101.46c0-7.72 2.73-14.75 8.19-21.08 5.46-6.33 11.96-10.03 19.51-11.1 0.45 7.82-2.3 14.93-8.25 21.34-5.95 6.41-12.43 10.27-19.45 10.84 0 0 .0-.10 0-1z" />
+                  </svg>
+                  <span>Continue with Apple</span>
+                </button>
+              </div>
+            </form>
+
+            <div className="space-y-3 pt-1">
+              <p className="text-center text-xs text-[#6E6E73]">
+                Don&apos;t have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthError(null);
+                    setCurrentPage("signup");
+                  }}
+                  className="text-[#0071E3] font-semibold cursor-pointer hover:underline"
+                >
+                  Sign up
+                </button>
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthError(null);
+                  setCurrentUserInfo({
+                    username: "Explorer",
+                    nickname: "Guest Explorer",
+                    gpgTimestamps: [],
+                    avatarUrl: "",
+                    bio: "Guest Explorer Session",
+                    email: "explorer@gamura.app",
+                    themeColor: "",
+                  });
+                  setCurrentUser({
+                    uid: "guest_explorer_uid",
+                    displayName: "Guest Explorer",
+                    email: "explorer@gamura.app",
+                  });
+                  setCurrentPage("universe-active");
+                }}
+                className="w-full py-2.5 px-4 bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 border border-zinc-200/70 cursor-pointer min-h-[42px]"
+              >
+                <Sparkles size={14} className="text-[#0071E3]" />
+                <span>Explore as Guest</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -12776,281 +12622,32 @@ ${targetContext}`;
   }
 
   if (currentPage === "blank") {
-    if (!isLoggedIn) {
-      showToast(
-        "⚠️",
-        "Connection Denied",
-        "You must first ACTIVATE YOUR GAMURA ID to access the Universe service. Please sign in.",
-        "warning",
-      );
-      setCurrentPage("login");
-      return null;
-    }
-    setCurrentPage("universe-active");
-    return null;
-
     return (
-      <div className="min-h-screen bg-white text-zinc-900 relative flex flex-col items-center select-none w-full">
-        {/* Top bar */}
-        <div className="w-full max-w-7xl px-4 md:px-8 py-12 md:py-20 flex items-center border-b border-zinc-100 relative bg-white">
-          {/* Back button on the left */}
-          <button
-            onClick={() => setCurrentPage("home")}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-800 transition-all font-sans text-xs font-bold uppercase tracking-wider cursor-pointer shadow-sm border border-zinc-200 z-20"
-          >
-            ← Back
-          </button>
-
-          {/* Centered Image in the middle */}
-          <div className="absolute left-1/2 transform -translate-x-1/2 h-52 w-52 md:h-80 md:w-80 flex items-center justify-center z-10">
-            <SafeImage
-              srcs={[
-                "https://lh3.googleusercontent.com/d/11bcWKdgGYngtK96ERJHGf43jAX-06Cjr",
-              ]}
-              alt="Gamura Universe Logo"
-              className="max-h-full max-w-full object-contain mix-blend-multiply"
-              fallbackIcon={Sparkles}
-            />
-          </div>
-
-          {/* Sliding bar toggle button on the right */}
-          <button
-            onClick={() => setIsSlideOpen(!isSlideOpen)}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-950 hover:bg-zinc-800 text-white transition-all font-sans text-[10px] font-bold uppercase tracking-widest cursor-pointer shadow-md border border-zinc-900 z-20 group"
-          >
-            <span>Menu</span>
-            <motion.div
-              animate={{ rotate: isSlideOpen ? 180 : 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ChevronDown
-                size={12}
-                className="group-hover:translate-y-0.5 transition-transform"
-              />
-            </motion.div>
-          </button>
-        </div>
-
-        {/* Up-to-Down sliding bar/drawer panel */}
-        <AnimatePresence>
-          {isSlideOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full bg-zinc-50 border-b border-zinc-100 overflow-hidden relative z-10 shadow-inner"
-            >
-              <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 md:py-14 flex flex-col md:flex-row gap-6 justify-center items-start text-left">
-                {isLoggedIn ? (
-                  <>
-                    {/* Connected State: Displays only the GAMURA USER ID with no cosmic gravity components */}
-                    <div className="w-full max-w-md p-6 rounded-3xl bg-white border border-zinc-100 shadow-sm hover:shadow-md transition-shadow duration-300 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-mono tracking-wider text-emerald-500 uppercase font-bold">
-                            GAMURA USER ID
-                          </span>
-                          <span className="text-[9px] font-mono font-bold text-zinc-400">
-                            STATUS: ACTIVE
-                          </span>
-                        </div>
-                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                      </div>
-
-                      <div className="space-y-3 pt-1">
-                        <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100 space-y-2.5">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-zinc-400 font-mono text-[10px] uppercase">
-                              username
-                            </span>
-                            <span className="font-extrabold text-zinc-950">
-                              @{currentUserInfo?.username || "N/A"}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-zinc-400 font-mono text-[10px] uppercase font-bold">
-                              nickname
-                            </span>
-                            <span className="font-semibold text-zinc-700">
-                              {currentUserInfo?.nickname || "N/A"}
-                            </span>
-                          </div>
-                          {currentUser?.email && (
-                            <div className="flex justify-between items-center text-xs border-t border-zinc-200/50 pt-2 pb-0.5">
-                              <span className="text-zinc-400 font-mono text-[10px] uppercase">
-                                email
-                              </span>
-                              <span className="text-zinc-600 truncate max-w-[190px] font-mono text-[10px]">
-                                {currentUser.email}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={() => setShowTelemetry(!showTelemetry)}
-                          className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
-                            showTelemetry
-                              ? "bg-emerald-500 border-emerald-500 text-white"
-                              : "text-zinc-700 bg-zinc-50 hover:bg-zinc-100 border-zinc-200"
-                          }`}
-                        >
-                          {showTelemetry ? "HIDE TELEMETRY" : "VIEW TELEMETRY"}
-                        </button>
-                        <button
-                          onClick={() => setCurrentPage("login")}
-                          className="flex-1 py-2 text-[10px] font-bold uppercase tracking-wider text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition-all cursor-pointer"
-                        >
-                          MANAGE PROFILE
-                        </button>
-                      </div>
-                    </div>
-
-                    {showTelemetry && (
-                      <motion.div
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 20 }}
-                        transition={{ duration: 0.3 }}
-                        className="w-full max-w-md p-6 rounded-3xl bg-white border border-zinc-100 shadow-sm hover:shadow-md transition-shadow duration-300 space-y-4"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex flex-col">
-                            <span className="text-[10px] font-mono tracking-wider text-violet-500 uppercase font-bold">
-                              G-UNIVERSE TELEMETRY
-                            </span>
-                            <span className="text-[9px] font-mono font-bold text-zinc-400">
-                              DATA STREAM // FEED // RESIDUAL RESONANCE
-                            </span>
-                          </div>
-                          <span className="h-2 w-2 rounded-full bg-violet-500 animate-ping" />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-center">
-                          <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
-                            <div className="text-xs font-mono font-bold text-zinc-800">
-                              432 Hz
-                            </div>
-                            <div className="text-[9px] text-zinc-400 uppercase tracking-widest font-sans font-bold">
-                              Resonance Freq
-                            </div>
-                          </div>
-                          <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
-                            <div className="text-xs font-mono font-bold text-emerald-600">
-                              99.8%
-                            </div>
-                            <div className="text-[9px] text-zinc-400 uppercase tracking-widest font-sans font-bold">
-                              Sync Quality
-                            </div>
-                          </div>
-                          <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
-                            <div className="text-xs font-mono font-bold text-violet-600">
-                              12 ms
-                            </div>
-                            <div className="text-[9px] text-zinc-400 uppercase tracking-widest font-sans font-bold">
-                              Beacon Latency
-                            </div>
-                          </div>
-                          <div className="p-3 bg-zinc-50 rounded-2xl border border-zinc-100">
-                            <div className="text-xs font-mono font-bold text-zinc-800">
-                              0.00 G
-                            </div>
-                            <div className="text-[9px] text-zinc-400 uppercase tracking-widest font-sans font-bold">
-                              Gravity Drift
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Interactive sparkline graph */}
-                        <div className="p-3 bg-zinc-950 rounded-2xl border border-zinc-900 space-y-2">
-                          <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500">
-                            <span>COSMIC WAVE OSCILLATION</span>
-                            <span className="text-emerald-400 animate-pulse">
-                              ● STREAMING
-                            </span>
-                          </div>
-                          <div className="h-10 flex items-end gap-1 px-1">
-                            {[
-                              40, 60, 45, 80, 55, 75, 50, 90, 65, 85, 70, 95,
-                              100,
-                            ].map((h, i) => (
-                              <motion.div
-                                key={i}
-                                initial={{ height: 0 }}
-                                animate={{ height: `${h}%` }}
-                                transition={{
-                                  repeat: Infinity,
-                                  duration: 1.5,
-                                  repeatType: "reverse",
-                                  delay: i * 0.08,
-                                }}
-                                className="flex-1 bg-gradient-to-t from-violet-500 to-emerald-500 rounded-t-sm"
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </>
-                ) : null}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Content area: centered glassmorphism dashboard */}
-        <div className="flex-1 bg-white w-full flex items-center justify-center relative overflow-hidden">
-          {/* Subtle background decoration */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-50/50 rounded-full blur-[120px] pointer-events-none" />
-
-          <style>{`
-            @keyframes premium-shimmer {
-              0% { transform: translateX(-150%) skewX(-25deg); opacity: 0; }
-              20% { opacity: 0.5; }
-              50% { opacity: 0.8; }
-              80% { opacity: 0.5; }
-              100% { transform: translateX(150%) skewX(-25deg); opacity: 0; }
-            }
-            .luxury-shine {
-              position: absolute;
-              top: 0;
-              left: 0;
-              width: 60%;
-              height: 100%;
-              background: linear-gradient(
-                90deg,
-                transparent,
-                rgba(255, 255, 255, 0.8),
-                transparent
-              );
-              animation: premium-shimmer 3s infinite;
-            }
-          `}</style>
-
-          <motion.button
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            whileHover={{ scale: 1.05, y: -2 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => {
-              setShowUniverseLoader(true);
-              setTimeout(() => setCurrentPage("universe-active"), 100);
-            }}
-            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-            className="z-10 px-8 py-3.5 rounded-full bg-white/70 backdrop-blur-3xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.06)] flex items-center justify-center group hover:bg-white/95 transition-all duration-500 cursor-pointer overflow-hidden relative"
-          >
-            {/* Shimmer effect */}
-            <div className="luxury-shine" />
-
-            <span className="text-[10px] font-black text-zinc-950 tracking-[0.5em] uppercase transition-all duration-700 group-hover:tracking-[0.7em] leading-none relative z-10 pl-[0.5em]">
-              Dashboard
-            </span>
-          </motion.button>
-        </div>
-      </div>
+      <UniverseDashboard
+        onBack={() => {
+          setCurrentPage("home");
+        }}
+        isLoggedIn={isLoggedIn}
+        user={currentUser}
+        userInfo={currentUserInfo}
+        setCurrentUserInfo={setCurrentUserInfo}
+        setCurrentPage={setCurrentPage}
+        isDark={isDark}
+        setIsDark={setIsDark}
+        loaderImgSources={loaderImgSources}
+        gamuraAccounts={gamuraAccounts}
+        setEmail={setEmail}
+        setUsername={setUsername}
+        setShowDeleteConfirm={setShowDeleteConfirm}
+        setShowSignOutConfirm={setShowSignOutConfirm}
+        onConnect={() => {
+          if (!isLoggedIn) {
+            setCurrentPage("login");
+          } else {
+            setCurrentPage("home");
+          }
+        }}
+      />
     );
   }
 

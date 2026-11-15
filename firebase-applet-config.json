@@ -3,8 +3,10 @@
   "appId": "1:29680529479:web:a1986699a756e6f8870162",
   "apiKey": "AIzaSyDjJJPGtJ8sUlC19yJnP8bhjAbOr5P9zLU",
   "authDomain": "gamurauniverse.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
+  "firestoreDatabaseId": "ai-studio-ecbbff33-acda-4436-aa0f-46af15b42b03",
   "storageBucket": "gamurauniverse.firebasestorage.app",
   "messagingSenderId": "29680529479",
-  "measurementId": "G-BZY2H66EZ0"
+  "measurementId": "G-BZY2H66EZ0",
+  "oAuthClientId": "29680529479-475ubadvp8niebu242inj4mdi66img8e.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

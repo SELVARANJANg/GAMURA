@@ -740,12 +740,13 @@ export default function GamuraAuraHub({
       () => {},
     );
 
-    const connRef = rtdbRef(rtdb, ".info/connected");
-    const uRtdb = onValue(
-      connRef,
-      (snap) => setRtdbConnected(snap.val() === true),
-      () => setRtdbConnected(false),
-    );
+    const uRtdb = rtdb
+      ? onValue(
+          rtdbRef(rtdb, ".info/connected"),
+          (snap) => setRtdbConnected(snap.val() === true),
+          () => setRtdbConnected(false),
+        )
+      : () => {};
 
     return () => {
       uDevs();
