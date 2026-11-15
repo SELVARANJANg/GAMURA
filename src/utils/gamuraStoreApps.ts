@@ -16,6 +16,8 @@ export interface StoreAppItem {
   c1: string;
   c2: string;
   iconKind?: StoreIconKind;
+  logoUrl?: string;
+  logoFallbackUrl?: string;
   rating: number;
   age?: string;
   chart?: string;
@@ -29,6 +31,10 @@ export const MOBILE_APPS_KEY = "gamura_mobile_apps_v1";
 export const CUSTOM_STORE_APPS_KEY = "gs_custom";
 export const LEGACY_INSTALLED_KEY = "gs_inst";
 export const UNIVERSE_APPS_EVENT = "gamura-universe-apps-updated";
+export const GAMURA_VEO_LOGO_URL =
+  "https://lh3.googleusercontent.com/d/1FqBAdXuyDDSSuYtd3iZzf9x5PM8orKrd";
+export const GAMURA_VEO_LOGO_FALLBACK =
+  "/assets/aistudio/1794679627931_b0492bbb.png";
 
 export const BUILTIN_STORE_APPS: StoreAppItem[] = [
   {
@@ -116,6 +122,24 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     size: "Web · 2 MB",
     isBuiltin: true,
   },
+  {
+    id: "veo",
+    name: "Gamura Veo",
+    cat: "Creative",
+    tag: "Gamura Veo Studio & Workspace",
+    desc: "Open Gamura Veo in its own dedicated URL page to preview, manage, and run your uploaded files. Install directly into Universe Apps or download for your mobile device.",
+    url: "/veo",
+    c1: "#34d399",
+    c2: "#0284c7",
+    logoUrl: GAMURA_VEO_LOGO_URL,
+    logoFallbackUrl: GAMURA_VEO_LOGO_FALLBACK,
+    rating: 4.9,
+    age: "3+",
+    chart: "No. 6",
+    dl: "New",
+    size: "Web · 2 MB",
+    isBuiltin: true,
+  },
 ];
 
 export function readStoreJson<T>(key: string, fallback: T): T {
@@ -189,6 +213,9 @@ export function downloadStandaloneAppPackage(app: StoreAppItem) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+  const logoMarkup = app.logoUrl
+    ? `<div class="ic" style="background:#fff;border:1px solid rgba(0,0,0,.08);padding:8px;box-sizing:border-box"><img src="${app.logoUrl}" alt="${app.name}" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:contain" /></div>`
+    : `<div class="ic">${app.name.trim().charAt(0).toUpperCase()}</div>`;
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -206,7 +233,7 @@ export function downloadStandaloneAppPackage(app: StoreAppItem) {
 </head>
 <body>
   <div class="card">
-    <div class="ic">${app.name.trim().charAt(0).toUpperCase()}</div>
+    ${logoMarkup}
     <h1>${app.name}</h1>
     <p>${app.tag}</p>
     <a href="${resolvedUrl}" rel="noopener noreferrer">Launch ${app.name}</a>

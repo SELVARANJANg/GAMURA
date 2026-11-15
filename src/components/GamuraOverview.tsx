@@ -543,13 +543,14 @@ export const GamuraOverview: React.FC<GamuraProps> = ({ activeTab }) => {
                   Harnessing quantum prediction weights to resolve layout anomalies, compile aerospace typography states, and sync spatial modules.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => window.open('https://bububai.vercel.app/', '_blank')}
+              <a
+                href="https://bububai.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-[0_0_15px_rgba(139,92,246,0.35)] hover:shadow-[0_0_25px_rgba(139,92,246,0.55)] transform hover:-translate-y-0.5 cursor-pointer"
               >
                 🚀 LAUNCH BUBUBAI PLATFORM
-              </button>
+              </a>
             </div>
 
             {/* Simulated Live Telemetry Wave */}

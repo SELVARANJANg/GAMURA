@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Globe, Code2, FileText } from "lucide-react";
 import type { StoreAppItem } from "../utils/gamuraStoreApps";
 
@@ -11,6 +11,30 @@ export default function StoreAppGlyph({
   sizeClass?: string;
   iconPx?: number;
 }) {
+  const [imgFallback, setImgFallback] = useState(false);
+
+  if (app.logoUrl) {
+    const src =
+      imgFallback && app.logoFallbackUrl ? app.logoFallbackUrl : app.logoUrl;
+    return (
+      <div
+        className={`${sizeClass} rounded-[22%] bg-white border border-zinc-200/80 p-1.5 flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.08)] shrink-0 select-none overflow-hidden`}
+      >
+        <img
+          src={src}
+          alt={app.name}
+          referrerPolicy="no-referrer"
+          onError={() => {
+            if (!imgFallback && app.logoFallbackUrl) {
+              setImgFallback(true);
+            }
+          }}
+          className="w-full h-full object-contain"
+        />
+      </div>
+    );
+  }
+
   const renderMark = () => {
     switch (app.iconKind) {
       case "g-outline":

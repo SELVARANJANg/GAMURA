@@ -340,7 +340,7 @@ export default function GamuraStoreLaunch({
         ) : isInstalled ? (
           <a
             href={app.url}
-            target={app.url.startsWith("/") ? "_self" : "_blank"}
+            target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             className="px-5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide shrink-0 whitespace-nowrap transition-colors"
@@ -518,7 +518,7 @@ export default function GamuraStoreLaunch({
               <div className="space-y-6">
                 {/* Featured Carousel */}
                 <div className="flex gap-3.5 overflow-x-auto no-scrollbar pb-1 snap-x snap-mandatory">
-                  {allApps.slice(0, 5).map((app) => (
+                  {allApps.slice(0, 6).map((app) => (
                     <button
                       key={app.id}
                       type="button"
@@ -682,7 +682,7 @@ export default function GamuraStoreLaunch({
                       <div className="flex items-center gap-2 shrink-0">
                         <a
                           href={app.url}
-                          target={app.url.startsWith("/") ? "_self" : "_blank"}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold transition-colors"
                         >
@@ -943,11 +943,7 @@ export default function GamuraStoreLaunch({
                         <>
                           <a
                             href={selectedApp.url}
-                            target={
-                              selectedApp.url.startsWith("/")
-                                ? "_self"
-                                : "_blank"
-                            }
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="px-5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide transition-colors inline-flex items-center gap-1"
                           >
@@ -963,13 +959,24 @@ export default function GamuraStoreLaunch({
                           </button>
                         </>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => setPromptApp(selectedApp)}
-                          className="px-6 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide cursor-pointer transition-colors"
-                        >
-                          GET
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setPromptApp(selectedApp)}
+                            className="px-6 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide cursor-pointer transition-colors"
+                          >
+                            GET
+                          </button>
+                          <a
+                            href={selectedApp.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] text-xs font-semibold tracking-tight transition-colors inline-flex items-center gap-1"
+                          >
+                            <span>Open</span>
+                            <ExternalLink size={12} />
+                          </a>
+                        </>
                       )}
                     </div>
 
