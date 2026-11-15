@@ -8770,6 +8770,7 @@ export default function App() {
     | "claim"
     | "gpdf"
     | "launch"
+    | "gamura-veo"
     | "privacy"
     | "terms"
     | "delete-account";
@@ -8781,6 +8782,7 @@ export default function App() {
     "gpdf",
     "g-pdf",
     "launch",
+    "gamura-veo",
     "store",
     "claim",
     "universe",
@@ -8840,6 +8842,7 @@ export default function App() {
     if (lower === "gpg") return { page: "gpg", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "gpdf" || lower === "g-pdf") return { page: "gpdf", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "launch" || lower === "store") return { page: "launch", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "gamura-veo") return { page: "gamura-veo", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "terms") return { page: "terms", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13521,6 +13524,15 @@ ${targetContext}`;
             setCurrentPage("home");
           }
         }}
+      />
+    );
+  }
+
+  if (currentPage === "gamura-veo") {
+    return (
+      <div
+        className="fixed inset-0 w-screen h-screen bg-white"
+        aria-label="GAMURA veo"
       />
     );
   }

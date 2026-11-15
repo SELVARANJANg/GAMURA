@@ -24,6 +24,8 @@ import {
   LEGACY_INSTALLED_KEY,
   UNIVERSE_APPS_KEY,
   MOBILE_APPS_KEY,
+  APP_RATINGS_KEY,
+  APP_RATINGS_EVENT,
   readStoreJson,
   writeStoreJson,
   addAppToUniverse,
@@ -31,6 +33,8 @@ import {
   addMobileInstalledId,
   removeMobileInstalledId,
   downloadStandaloneAppPackage,
+  getAppRatingStats,
+  rateStoreApp,
 } from "../utils/gamuraStoreApps";
 
 export const LAUNCH_LOGO_SRC = "/assets/aistudio/1794679627931_b0492bbb.png";
@@ -71,6 +75,8 @@ export default function GamuraStoreLaunch({
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [installPct, setInstallPct] = useState(0);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [ratingsTick, setRatingsTick] = useState(0);
+  const [hoverStar, setHoverStar] = useState<number>(0);
 
   // Developer publish form state
   const [fName, setFName] = useState("");
@@ -89,15 +95,21 @@ export default function GamuraStoreLaunch({
     };
   }, []);
 
-  // Keep synced with storage changes across tabs (e.g. uninstall from Universe tab)
+  // Keep synced with storage changes across tabs (e.g. uninstall or rate from Universe tab)
   useEffect(() => {
     const syncState = () => {
       setUniverseApps(readStoreJson<StoreAppItem[]>(UNIVERSE_APPS_KEY, []));
       setMobileIds(readStoreJson<string[]>(MOBILE_APPS_KEY, []));
       setCustomApps(readStoreJson<StoreAppItem[]>(CUSTOM_STORE_APPS_KEY, []));
+      setRatingsTick((t) => t + 1);
     };
+    const syncRatings = () => setRatingsTick((t) => t + 1);
     window.addEventListener("storage", syncState);
-    return () => window.removeEventListener("storage", syncState);
+    window.addEventListener(APP_RATINGS_EVENT, syncRatings);
+    return () => {
+      window.removeEventListener("storage", syncState);
+      window.removeEventListener(APP_RATINGS_EVENT, syncRatings);
+    };
   }, []);
 
   const showToast = (msg: string) => {
@@ -290,12 +302,19 @@ export default function GamuraStoreLaunch({
     showToast("App removed from Store");
   };
 
+  const handleRateApp = (app: StoreAppItem, stars: number) => {
+    rateStoreApp(app, stars);
+    setRatingsTick((t) => t + 1);
+    showToast(`Rated ${app.name} ${stars} ★ ✓`);
+  };
+
   const renderAppRow = (app: StoreAppItem, rank?: number) => {
     const isInstalled = installedIdSet.has(app.id);
     const isInstalling = installingId === app.id;
+    const stats = getAppRatingStats(app);
     return (
       <div
-        key={app.id}
+        key={`${app.id}-${ratingsTick}`}
         onClick={() => setSelectedApp(app)}
         role="button"
         tabIndex={0}
@@ -320,10 +339,16 @@ export default function GamuraStoreLaunch({
           <div className="text-xs sm:text-[13px] text-[#6E6E73] truncate">
             {app.tag}
           </div>
-          <div className="text-[11px] text-[#6E6E73] mt-0.5 tabular-nums flex items-center gap-1.5">
+          <div className="text-[11px] text-[#6E6E73] mt-0.5 tabular-nums flex items-center gap-1.5 flex-wrap">
             <span>{app.cat}</span>
             <span aria-hidden="true">·</span>
-            <span>{app.rating} ★</span>
+            <span className="inline-flex items-center gap-0.5 font-semibold text-[#1D1D1F]">
+              <span>{stats.average.toFixed(1)}</span>
+              <Star size={10} className="text-amber-500 fill-amber-500" />
+            </span>
+            <span className="text-[10px] text-[#6E6E73]">
+              ({stats.totalVotes})
+            </span>
             {isInUniverse(app.id) && (
               <>
                 <span aria-hidden="true">·</span>
@@ -340,7 +365,7 @@ export default function GamuraStoreLaunch({
         ) : isInstalled ? (
           <a
             href={app.url}
-            target={app.url.startsWith("/") ? "_self" : "_blank"}
+            target={app.openInNewTab || !app.url.startsWith("/") ? "_blank" : "_self"}
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             className="px-5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide shrink-0 whitespace-nowrap transition-colors"
@@ -360,32 +385,42 @@ export default function GamuraStoreLaunch({
     );
   };
 
-  const renderAppTile = (app: StoreAppItem) => (
-    <button
-      key={app.id}
-      type="button"
-      onClick={() => setSelectedApp(app)}
-      className="w-[116px] sm:w-[126px] shrink-0 text-left group cursor-pointer space-y-2"
-    >
-      <div className="group-hover:scale-[1.03] transition-transform">
-        <StoreAppGlyph
-          app={app}
-          sizeClass="w-[116px] h-[116px] sm:w-[126px] sm:h-[126px] text-4xl"
-          iconPx={46}
-        />
-      </div>
-      <div>
-        <div className="text-xs font-semibold text-[#1D1D1F] truncate">
-          {app.name}
+  const renderAppTile = (app: StoreAppItem) => {
+    const stats = getAppRatingStats(app);
+    return (
+      <button
+        key={`${app.id}-${ratingsTick}`}
+        type="button"
+        onClick={() => setSelectedApp(app)}
+        className="w-[116px] sm:w-[126px] shrink-0 text-left group cursor-pointer space-y-2"
+      >
+        <div className="group-hover:scale-[1.03] transition-transform">
+          <StoreAppGlyph
+            app={app}
+            sizeClass="w-[116px] h-[116px] sm:w-[126px] sm:h-[126px] text-4xl"
+            iconPx={46}
+          />
         </div>
-        <div className="text-[11px] text-[#6E6E73] tabular-nums">
-          {app.rating} ★ · {app.dl}
+        <div>
+          <div className="text-xs font-semibold text-[#1D1D1F] truncate">
+            {app.name}
+          </div>
+          <div className="text-[11px] text-[#6E6E73] tabular-nums inline-flex items-center gap-1">
+            <span className="font-semibold text-[#1D1D1F]">
+              {stats.average.toFixed(1)}
+            </span>
+            <Star size={10} className="text-amber-500 fill-amber-500" />
+            <span>· {app.dl}</span>
+          </div>
         </div>
-      </div>
-    </button>
-  );
+      </button>
+    );
+  };
 
-  const ratingBars = [72, 18, 6, 3, 1];
+  const selectedRatingStats = useMemo(
+    () => (selectedApp ? getAppRatingStats(selectedApp) : null),
+    [selectedApp, ratingsTick],
+  );
 
   return (
     <div
@@ -518,7 +553,7 @@ export default function GamuraStoreLaunch({
               <div className="space-y-6">
                 {/* Featured Carousel */}
                 <div className="flex gap-3.5 overflow-x-auto no-scrollbar pb-1 snap-x snap-mandatory">
-                  {allApps.slice(0, 5).map((app) => (
+                  {allApps.slice(0, 6).map((app) => (
                     <button
                       key={app.id}
                       type="button"
@@ -526,20 +561,31 @@ export default function GamuraStoreLaunch({
                       style={{
                         background: `linear-gradient(135deg, ${app.c1}, ${app.c2})`,
                       }}
-                      className="min-w-[270px] sm:min-w-[320px] flex-1 snap-center rounded-[22px] p-5 min-h-[168px] text-white text-left relative overflow-hidden flex flex-col justify-end shadow-sm hover:scale-[1.01] transition-transform cursor-pointer"
+                      className="min-w-[270px] sm:min-w-[320px] flex-1 snap-center rounded-[22px] p-5 min-h-[168px] text-white text-left relative overflow-hidden flex items-end justify-between gap-3 shadow-sm hover:scale-[1.01] transition-transform cursor-pointer"
                     >
                       <span className="absolute -right-2 -top-4 text-[120px] font-black opacity-15 pointer-events-none select-none leading-none">
                         {app.name.charAt(0)}
                       </span>
-                      <span className="text-[10px] font-bold tracking-wider uppercase opacity-90">
-                        Featured
-                      </span>
-                      <div className="text-xl sm:text-2xl font-bold tracking-tight mt-0.5">
-                        {app.name}
+                      <div className="relative z-10 min-w-0 flex-1">
+                        <span className="text-[10px] font-bold tracking-wider uppercase opacity-90">
+                          Featured
+                        </span>
+                        <div className="text-xl sm:text-2xl font-bold tracking-tight mt-0.5 truncate">
+                          {app.name}
+                        </div>
+                        <div className="text-xs sm:text-sm opacity-90 line-clamp-1">
+                          {app.tag}
+                        </div>
                       </div>
-                      <div className="text-xs sm:text-sm opacity-90 line-clamp-1">
-                        {app.tag}
-                      </div>
+                      {app.iconUrl && (
+                        <div className="relative z-10 shrink-0">
+                          <StoreAppGlyph
+                            app={app}
+                            sizeClass="w-16 h-16"
+                            iconPx={32}
+                          />
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -578,7 +624,11 @@ export default function GamuraStoreLaunch({
                 </h2>
                 <div className="divide-y divide-zinc-100">
                   {[...allApps]
-                    .sort((a, b) => b.rating - a.rating)
+                    .sort(
+                      (a, b) =>
+                        getAppRatingStats(b).average -
+                        getAppRatingStats(a).average,
+                    )
                     .map((app, i) => renderAppRow(app, i + 1))}
                 </div>
               </div>
@@ -682,7 +732,7 @@ export default function GamuraStoreLaunch({
                       <div className="flex items-center gap-2 shrink-0">
                         <a
                           href={app.url}
-                          target={app.url.startsWith("/") ? "_self" : "_blank"}
+                          target={app.openInNewTab || !app.url.startsWith("/") ? "_blank" : "_self"}
                           rel="noopener noreferrer"
                           className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold transition-colors"
                         >
@@ -944,9 +994,10 @@ export default function GamuraStoreLaunch({
                           <a
                             href={selectedApp.url}
                             target={
-                              selectedApp.url.startsWith("/")
-                                ? "_self"
-                                : "_blank"
+                              selectedApp.openInNewTab ||
+                              !selectedApp.url.startsWith("/")
+                                ? "_blank"
+                                : "_self"
                             }
                             rel="noopener noreferrer"
                             className="px-5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide transition-colors inline-flex items-center gap-1"
@@ -992,10 +1043,23 @@ export default function GamuraStoreLaunch({
                     Rating
                   </div>
                   <div className="text-xl font-bold text-[#1D1D1F] tabular-nums mt-0.5">
-                    {selectedApp.rating}
+                    {(selectedRatingStats?.average ?? selectedApp.rating).toFixed(1)}
                   </div>
-                  <div className="text-[10px] text-[#6E6E73] tracking-tight">
-                    ★★★★★
+                  <div className="flex items-center justify-center gap-0.5 text-amber-500 mt-0.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        size={10}
+                        className={
+                          n <=
+                          Math.round(
+                            selectedRatingStats?.average ?? selectedApp.rating,
+                          )
+                            ? "text-amber-500 fill-amber-500"
+                            : "text-zinc-300"
+                        }
+                      />
+                    ))}
                   </div>
                 </div>
                 <div className="px-2">
@@ -1111,37 +1175,106 @@ export default function GamuraStoreLaunch({
                 </div>
               </div>
 
-              {/* Ratings */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-bold text-[#1D1D1F]">
-                  Ratings &amp; reviews
-                </h3>
+              {/* Interactive Star Ratings & Reviews */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-bold text-[#1D1D1F]">
+                    Ratings &amp; reviews
+                  </h3>
+                  <span className="text-xs text-[#6E6E73] tabular-nums">
+                    {selectedRatingStats?.totalVotes ?? 0} Ratings
+                  </span>
+                </div>
+
+                {/* Tap to Rate Interactive Bar */}
+                <div className="p-3.5 rounded-2xl bg-[#F5F5F7] border border-zinc-200/70 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold text-[#1D1D1F]">
+                      {selectedRatingStats?.userRating
+                        ? `Your rating: ${selectedRatingStats.userRating} / 5`
+                        : "Tap to Rate"}
+                    </div>
+                    <div className="text-[11px] text-[#6E6E73]">
+                      Share your rating across Launch Store &amp; Universe Apps
+                    </div>
+                  </div>
+                  <div
+                    className="flex items-center gap-1"
+                    onMouseLeave={() => setHoverStar(0)}
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => {
+                      const activeStars =
+                        hoverStar || selectedRatingStats?.userRating || 0;
+                      const filled = n <= activeStars;
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          onMouseEnter={() => setHoverStar(n)}
+                          onClick={() => handleRateApp(selectedApp, n)}
+                          aria-label={`Rate ${selectedApp.name} ${n} stars`}
+                          className="p-1.5 rounded-xl hover:bg-white transition-transform hover:scale-110 cursor-pointer"
+                        >
+                          <Star
+                            size={20}
+                            className={
+                              filled
+                                ? "text-amber-500 fill-amber-500"
+                                : "text-zinc-300"
+                            }
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-5">
                   <div className="text-center shrink-0">
                     <div className="text-4xl font-light text-[#1D1D1F] tabular-nums">
-                      {selectedApp.rating}
+                      {(selectedRatingStats?.average ?? selectedApp.rating).toFixed(1)}
                     </div>
-                    <div className="flex items-center justify-center gap-0.5 text-[#059669] mt-1">
+                    <div className="flex items-center justify-center gap-0.5 text-amber-500 mt-1">
                       {[1, 2, 3, 4, 5].map((n) => (
-                        <Star key={n} size={12} fill="currentColor" />
+                        <Star
+                          key={n}
+                          size={12}
+                          className={
+                            n <=
+                            Math.round(
+                              selectedRatingStats?.average ??
+                                selectedApp.rating,
+                            )
+                              ? "text-amber-500 fill-amber-500"
+                              : "text-zinc-300"
+                          }
+                        />
                       ))}
+                    </div>
+                    <div className="text-[10px] text-[#6E6E73] mt-0.5">
+                      out of 5
                     </div>
                   </div>
                   <div className="flex-1 space-y-1.5">
-                    {ratingBars.map((pct, i) => (
-                      <div
-                        key={5 - i}
-                        className="flex items-center gap-2 text-[11px] text-[#6E6E73]"
-                      >
-                        <span className="w-2.5 tabular-nums">{5 - i}</span>
-                        <div className="flex-1 h-2 bg-[#F5F5F7] rounded-full overflow-hidden">
-                          <div
-                            style={{ width: `${pct}%` }}
-                            className="h-full bg-[#059669] rounded-full"
-                          />
+                    {(selectedRatingStats?.percentages ?? [85, 10, 3, 1, 1]).map(
+                      (pct, i) => (
+                        <div
+                          key={5 - i}
+                          className="flex items-center gap-2 text-[11px] text-[#6E6E73]"
+                        >
+                          <span className="w-2.5 tabular-nums">{5 - i}</span>
+                          <div className="flex-1 h-2 bg-[#F5F5F7] rounded-full overflow-hidden">
+                            <div
+                              style={{ width: `${pct}%` }}
+                              className="h-full bg-[#059669] rounded-full transition-all duration-300"
+                            />
+                          </div>
+                          <span className="w-8 text-right text-[10px] tabular-nums">
+                            {pct}%
+                          </span>
                         </div>
-                      </div>
-                    ))}
+                      ),
+                    )}
                   </div>
                 </div>
               </div>
