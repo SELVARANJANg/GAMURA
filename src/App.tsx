@@ -669,12 +669,6 @@ const NeuralLinkView = ({
   const [activeTab, setActiveTab] = useState<"users" | "requests" | "active">(
     "users",
   );
-  const [pendingConfirm, setPendingConfirm] = useState<{
-    title: string;
-    message: string;
-    confirmLabel: string;
-    onConfirm: () => Promise<void>;
-  } | null>(null);
   const [refreshBit, setRefreshBit] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -1242,77 +1236,70 @@ const NeuralLinkView = ({
     }
   };
 
-  const deleteOrLeaveGroup = (chat: any) => {
-    const isCreator = chat.createdBy === user.uid;
-    setPendingConfirm({
-      title: isCreator ? "Dismantle Group" : "Leave Group",
-      message: isCreator
-        ? `Are you sure you want to dismantle "${chat.name}" for all members?`
-        : `Are you sure you want to leave the group "${chat.name}"?`,
-      confirmLabel: isCreator ? "Dismantle" : "Leave",
-      onConfirm: async () => {
-        try {
-          if (isCreator) {
-            await deleteDoc(doc(db, "neural_chats", chat.id));
-            showToast(
-              "🗑️",
-              "Group Dismantled",
-              `Group "${chat.name}" was dismantled successfully.`,
-            );
-            if (activeChat?.id === chat.id) setActiveChat(null);
-          } else {
-            const updatedMembers = chat.members.filter(
-              (uid: string) => uid !== user.uid,
-            );
-            const updatedNicknames = { ...chat.nicknames };
-            delete updatedNicknames[user.uid];
-            await updateDoc(doc(db, "neural_chats", chat.id), {
-              members: updatedMembers,
-              nicknames: updatedNicknames,
-            });
-            showToast("🚪", "Left Group", `You left the group "${chat.name}".`);
-            if (activeChat?.id === chat.id) setActiveChat(null);
-          }
-        } catch (e: any) {
-          showToast("❌", "Action Failed", e.message);
-        }
-      },
-    });
+  const deleteOrLeaveGroup = async (chat: any) => {
+    const actionName =
+      chat.createdBy === user.uid ? "dismantle this group" : "leave this group";
+    if (!window.confirm(`Are you sure you want to ${actionName}?`)) return;
+    try {
+      if (chat.createdBy === user.uid) {
+        await deleteDoc(doc(db, "neural_chats", chat.id));
+        showToast(
+          "🗑️",
+          "Group Dismantled",
+          `Group "${chat.name}" was dismantled successfully.`,
+        );
+        if (activeChat?.id === chat.id) setActiveChat(null);
+      } else {
+        const updatedMembers = chat.members.filter(
+          (uid: string) => uid !== user.uid,
+        );
+        const updatedNicknames = { ...chat.nicknames };
+        delete updatedNicknames[user.uid];
+        await updateDoc(doc(db, "neural_chats", chat.id), {
+          members: updatedMembers,
+          nicknames: updatedNicknames,
+        });
+        showToast("🚪", "Left Group", `You left the group "${chat.name}".`);
+        if (activeChat?.id === chat.id) setActiveChat(null);
+      }
+    } catch (e: any) {
+      showToast("❌", "Action Failed", e.message);
+    }
   };
 
-  const removeConnection = (
+  const removeConnection = async (
     targetUid: string,
     targetNickname: string,
   ) => {
-    setPendingConfirm({
-      title: "Sever Connection",
-      message: `Are you sure you want to disconnect and delete this chat session with @${targetNickname}?`,
-      confirmLabel: "Disconnect",
-      onConfirm: async () => {
-        try {
-          const connectionId = [targetUid, user.uid].sort().join("_");
-          await deleteDoc(doc(db, "neural_connections", connectionId));
+    if (
+      !window.confirm(
+        `Are you sure you want to sever your connection and delete this chat session with @${targetNickname}?`,
+      )
+    )
+      return;
+    try {
+      const connectionId = [targetUid, user.uid].sort().join("_");
+      await deleteDoc(doc(db, "neural_connections", connectionId));
 
-          const requestId = [targetUid, user.uid].sort().join("_");
-          await deleteDoc(doc(db, "neural_requests", requestId));
+      const requestId = [targetUid, user.uid].sort().join("_");
+      await deleteDoc(doc(db, "neural_requests", requestId));
 
-          const directChatId = [user.uid, targetUid].sort().join("_");
-          await deleteDoc(doc(db, "neural_chats", directChatId));
+      const directChatId = [user.uid, targetUid].sort().join("_");
+      await deleteDoc(doc(db, "neural_chats", directChatId));
 
-          showToast(
-            "🔌",
-            "Link Severed",
-            `Handshake connection with @${targetNickname} was dissolved.`,
-          );
-          addActivity(`Severed connection with @${targetNickname}`, "🔌");
-          if (activeChat?.id === directChatId) {
-            setActiveChat(null);
-          }
-        } catch (e: any) {
-          showToast("❌", "Sever failed", e.message);
-        }
-      },
-    });
+      showToast(
+        "🔌",
+        "Link Severed",
+        `Handshake connection with @${targetNickname} was dissolved.`,
+      );
+      addActivity(`Severed connection with @${targetNickname}`, "🔌");
+
+      if (activeChat?.id === directChatId) {
+        setActiveChat(null);
+      }
+    } catch (e: any) {
+      showToast("❌", "Sever failed", e.message);
+    }
   };
 
   const addMemberToGroup = async (targetUser: any) => {
@@ -2500,47 +2487,6 @@ const NeuralLinkView = ({
             )}
         </div>
       </div>
-
-      {pendingConfirm && (
-        <div
-          className="fixed inset-0 z-[500] bg-black/35 backdrop-blur-xs flex items-center justify-center p-4"
-          onClick={() => setPendingConfirm(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white rounded-3xl p-5 shadow-2xl border border-zinc-200/80 space-y-4"
-          >
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold text-zinc-900">
-                {pendingConfirm.title}
-              </h3>
-              <p className="text-xs text-zinc-500 leading-relaxed">
-                {pendingConfirm.message}
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPendingConfirm(null)}
-                className="px-4 py-2 rounded-full bg-zinc-100 hover:bg-zinc-200 text-xs font-semibold text-zinc-700 cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const fn = pendingConfirm.onConfirm;
-                  setPendingConfirm(null);
-                  await fn();
-                }}
-                className="px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-xs font-semibold text-white cursor-pointer transition-colors"
-              >
-                {pendingConfirm.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -7129,12 +7075,12 @@ const UniverseDashboard = ({
         {
           name: "Website",
           icon: <Globe size={16} />,
-          href: "/",
+          action: () => window.open(window.location.origin, "_blank"),
         },
         {
           name: "GCP",
           icon: <Cloud size={16} />,
-          href: "https://gamuracp.vercel.app/",
+          action: () => window.open("https://gamuracp.vercel.app/", "_blank"),
         },
         {
           name: "Gamura Elvaran",
@@ -7150,17 +7096,19 @@ const UniverseDashboard = ({
         {
           name: "Gamura Galaxy",
           icon: <Sparkles size={16} />,
-          href: "https://gamuragalaxy.vercel.app/",
+          action: () =>
+            window.open("https://gamuragalaxy.vercel.app/", "_blank"),
         },
         {
           name: "SR Portfolio",
           icon: <User size={16} />,
-          href: "https://selvaranjan.netlify.app/",
+          action: () =>
+            window.open("https://selvaranjan.netlify.app/", "_blank"),
         },
         {
           name: "BuBuBai",
           icon: <Bot size={16} />,
-          href: "https://bububai.vercel.app/",
+          action: () => window.open("https://bububai.vercel.app/", "_blank"),
         },
         {
           name: "Resume Builder",
@@ -7606,44 +7554,6 @@ const UniverseDashboard = ({
                     <div className="bg-white rounded-2xl border border-zinc-200/70 divide-y divide-zinc-100 overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
                       {group.items.map((item: any, iIdx) => {
                         const isActive = activeTab === item.name;
-                        const rowInner = (
-                          <>
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                                isActive ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600"
-                              }`}>
-                                {item.icon}
-                              </div>
-                              <span className="text-xs truncate">{item.name}</span>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              {item.badge && (
-                                <span className="px-1.5 py-0.5 rounded-md bg-zinc-100 border border-zinc-200/70 text-[9px] font-semibold text-zinc-600">
-                                  {item.badge}
-                                </span>
-                              )}
-                              {item.href ? (
-                                <ExternalLink size={13} className="text-zinc-400" />
-                              ) : (
-                                <ChevronRight size={14} className="text-zinc-400" />
-                              )}
-                            </div>
-                          </>
-                        );
-                        if (item.href) {
-                          return (
-                            <a
-                              key={iIdx}
-                              href={item.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={() => setMobileOpen(false)}
-                              className="w-full flex items-center justify-between px-3.5 py-2.5 text-left transition-colors hover:bg-zinc-50 active:bg-zinc-100 text-zinc-700"
-                            >
-                              {rowInner}
-                            </a>
-                          );
-                        }
                         return (
                           <button
                             key={iIdx}
@@ -7661,7 +7571,22 @@ const UniverseDashboard = ({
                                 : "hover:bg-zinc-50 active:bg-zinc-100 text-zinc-700"
                             }`}
                           >
-                            {rowInner}
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                isActive ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600"
+                              }`}>
+                                {item.icon}
+                              </div>
+                              <span className="text-xs truncate">{item.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {item.badge && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-zinc-100 border border-zinc-200/70 text-[9px] font-semibold text-zinc-600">
+                                  {item.badge}
+                                </span>
+                              )}
+                              <ChevronRight size={14} className="text-zinc-400" />
+                            </div>
                           </button>
                         );
                       })}
@@ -8845,7 +8770,6 @@ export default function App() {
     | "claim"
     | "gpdf"
     | "launch"
-    | "gamura-veo"
     | "privacy"
     | "terms"
     | "delete-account";
@@ -8857,7 +8781,6 @@ export default function App() {
     "gpdf",
     "g-pdf",
     "launch",
-    "gamura-veo",
     "store",
     "claim",
     "universe",
@@ -8917,7 +8840,6 @@ export default function App() {
     if (lower === "gpg") return { page: "gpg", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "gpdf" || lower === "g-pdf") return { page: "gpdf", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "launch" || lower === "store") return { page: "launch", claimed: null, shortSlug: null, prefillHandle: "" };
-    if (lower === "gamura-veo") return { page: "gamura-veo", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "terms") return { page: "terms", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13603,15 +13525,6 @@ ${targetContext}`;
     );
   }
 
-  if (currentPage === "gamura-veo") {
-    return (
-      <div
-        className="fixed inset-0 w-screen h-screen bg-white"
-        aria-label="GAMURA veo"
-      />
-    );
-  }
-
   if (currentPage === "gpdf") {
     return (
       <GamuraPdfStudio
@@ -13928,12 +13841,12 @@ ${targetContext}`;
                     </a>
 
                     {/* Join Galaxy */}
-                    <a
-                      href="https://gamuragalaxy.vercel.app/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="group w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors text-left"
+                    <button
+                      onClick={() => {
+                        window.open("https://gamuragalaxy.vercel.app/", "_blank");
+                        setIsMenuOpen(false);
+                      }}
+                      className="group w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors text-left cursor-pointer"
                     >
                       <div className="flex items-center gap-3.5 min-w-0">
                         <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-xs">
@@ -13949,14 +13862,13 @@ ${targetContext}`;
                         </div>
                       </div>
                       <ChevronRight size={16} className="text-zinc-400 group-hover:text-zinc-700 group-hover:translate-x-0.5 transition-all shrink-0" />
-                    </a>
+                    </button>
                   </div>
 
                   {/* Group 2: Account & Utilities */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                     <button
                       onClick={() => {
-                        window.history.pushState({}, "", "/login");
                         setCurrentPage("login");
                         setIsMenuOpen(false);
                       }}
@@ -13972,7 +13884,6 @@ ${targetContext}`;
 
                     <button
                       onClick={() => {
-                        window.history.pushState({}, "", "/history");
                         setCurrentPage("history");
                         setIsMenuOpen(false);
                       }}
@@ -13988,7 +13899,6 @@ ${targetContext}`;
 
                     <button
                       onClick={() => {
-                        window.history.pushState({}, "", "/gg");
                         setCurrentPage("gg");
                         setIsMenuOpen(false);
                       }}
@@ -14004,7 +13914,6 @@ ${targetContext}`;
 
                     <button
                       onClick={() => {
-                        window.history.pushState({}, "", "/about");
                         setCurrentPage("about");
                         setIsMenuOpen(false);
                       }}

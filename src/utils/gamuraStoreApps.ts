@@ -4,7 +4,6 @@ export type StoreIconKind =
   | "code"
   | "globe"
   | "pdf"
-  | "image"
   | "letter";
 
 export interface StoreAppItem {
@@ -14,9 +13,6 @@ export interface StoreAppItem {
   tag: string;
   desc: string;
   url: string;
-  openInNewTab?: boolean;
-  iconUrl?: string;
-  iconFallbackUrl?: string;
   c1: string;
   c2: string;
   iconKind?: StoreIconKind;
@@ -28,29 +24,11 @@ export interface StoreAppItem {
   isBuiltin?: boolean;
 }
 
-export interface AppRatingRecord {
-  userRating: number;
-  counts: [number, number, number, number, number];
-}
-
-export interface AppRatingStats {
-  average: number;
-  totalVotes: number;
-  userRating: number;
-  percentages: [number, number, number, number, number];
-}
-
-export const GAMURA_VEO_IMAGE_SRC = "/assets/aistudio/1794679627931_b0492bbb.png";
-export const GAMURA_VEO_IMAGE_FALLBACK =
-  "https://lh3.googleusercontent.com/d/1FqBAdXuyDDSSuYtd3iZzf9x5PM8orKrd";
-
 export const UNIVERSE_APPS_KEY = "gamura_universe_apps_v1";
 export const MOBILE_APPS_KEY = "gamura_mobile_apps_v1";
 export const CUSTOM_STORE_APPS_KEY = "gs_custom";
 export const LEGACY_INSTALLED_KEY = "gs_inst";
-export const APP_RATINGS_KEY = "gamura_app_ratings_v1";
 export const UNIVERSE_APPS_EVENT = "gamura-universe-apps-updated";
-export const APP_RATINGS_EVENT = "gamura-app-ratings-updated";
 
 export const BUILTIN_STORE_APPS: StoreAppItem[] = [
   {
@@ -60,7 +38,6 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     tag: "The home of everything Gamura",
     desc: "Gamura is the main hub of the ecosystem: gaming, tools and creator features in one cinematic, fast web experience. Create your profile, explore features and jump into every Gamura app from one place.",
     url: "https://gamura.vercel.app/",
-    openInNewTab: true,
     c1: "#34d399",
     c2: "#059669",
     iconKind: "g-outline",
@@ -72,39 +49,18 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     isBuiltin: true,
   },
   {
-    id: "gamura-veo",
-    name: "GAMURA veo",
-    cat: "Creative",
-    tag: "Launch pure white workspace canvas",
-    desc: "GAMURA veo is an ultra-clean Gamura creative tool built for instant focus. Download GAMURA veo into your Universe Apps library or mobile device and open it in a dedicated blank pure white page.",
-    url: "/gamura-veo",
-    openInNewTab: true,
-    iconUrl: GAMURA_VEO_IMAGE_SRC,
-    iconFallbackUrl: GAMURA_VEO_IMAGE_FALLBACK,
-    c1: "#10b981",
-    c2: "#0ea5e9",
-    iconKind: "image",
-    rating: 4.9,
-    age: "3+",
-    chart: "No. 2",
-    dl: "8K+",
-    size: "Web · 1 MB",
-    isBuiltin: true,
-  },
-  {
     id: "galaxy",
     name: "Gamura Galaxy",
     cat: "Games",
     tag: "Explore the Gamura universe",
     desc: "Gamura Galaxy is the gaming universe of Gamura. Discover games, challenges and community content inside a glowing galaxy-style interface.",
     url: "https://gamuragalaxy.vercel.app/",
-    openInNewTab: true,
     c1: "#60a5fa",
     c2: "#1d4ed8",
     iconKind: "orbit",
     rating: 4.8,
     age: "3+",
-    chart: "No. 3",
+    chart: "No. 2",
     dl: "5K+",
     size: "Web · 3 MB",
     isBuiltin: true,
@@ -116,13 +72,12 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     tag: "Write code. See it live.",
     desc: "Gamura Code Preview (GCP) lets you write HTML, CSS and JavaScript and instantly preview the result in your browser. Built for students and developers who ship fast.",
     url: "https://gamuracp.vercel.app/",
-    openInNewTab: true,
     c1: "#fbbf24",
     c2: "#d97706",
     iconKind: "code",
     rating: 4.7,
     age: "3+",
-    chart: "No. 4",
+    chart: "No. 3",
     dl: "3K+",
     size: "Web · 1 MB",
     isBuiltin: true,
@@ -134,13 +89,12 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     tag: "Every Gamura venture. One world.",
     desc: "Gamura World is the unified project hub that connects all Gamura ventures: apps, games, tools and news in one world.",
     url: "https://gamuraworld.vercel.app/",
-    openInNewTab: true,
     c1: "#f87171",
     c2: "#9f1239",
     iconKind: "globe",
     rating: 4.8,
     age: "3+",
-    chart: "No. 5",
+    chart: "No. 4",
     dl: "2K+",
     size: "Web · 2 MB",
     isBuiltin: true,
@@ -152,13 +106,12 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     tag: "Create, edit, merge & compress PDFs",
     desc: "Gamura PDF Studio gives you five fast browser-side PDF tools: PDF Creator, PDF Editor, Merge & Convert, Compress, and Ultra Modifier canvas studio.",
     url: "/gpdf",
-    openInNewTab: true,
     c1: "#10b981",
     c2: "#047857",
     iconKind: "pdf",
     rating: 4.9,
     age: "3+",
-    chart: "No. 6",
+    chart: "No. 5",
     dl: "4K+",
     size: "Web · 2 MB",
     isBuiltin: true,
@@ -182,83 +135,6 @@ export function writeStoreJson(key: string, val: unknown) {
   } catch {
     // ignore storage errors
   }
-}
-
-function getDefaultCountsForRating(baseRating: number): [number, number, number, number, number] {
-  if (baseRating >= 4.9) return [114, 10, 2, 1, 1];
-  if (baseRating >= 4.8) return [84, 16, 3, 1, 1];
-  if (baseRating >= 4.7) return [64, 18, 5, 2, 1];
-  return [42, 16, 6, 3, 2];
-}
-
-export function getAllRatingsMap(): Record<string, AppRatingRecord> {
-  return readStoreJson<Record<string, AppRatingRecord>>(APP_RATINGS_KEY, {});
-}
-
-export function getAppRatingStats(app: StoreAppItem): AppRatingStats {
-  const map = getAllRatingsMap();
-  const record = map[app.id];
-  const counts: [number, number, number, number, number] =
-    record?.counts && record.counts.length === 5
-      ? record.counts
-      : getDefaultCountsForRating(app.rating || 4.8);
-
-  const totalVotes = counts.reduce((sum, n) => sum + n, 0);
-  const weightedSum =
-    counts[0] * 5 +
-    counts[1] * 4 +
-    counts[2] * 3 +
-    counts[3] * 2 +
-    counts[4] * 1;
-  const average =
-    totalVotes > 0 ? Math.round((weightedSum / totalVotes) * 10) / 10 : app.rating;
-  const percentages: [number, number, number, number, number] =
-    totalVotes > 0
-      ? [
-          Math.round((counts[0] / totalVotes) * 100),
-          Math.round((counts[1] / totalVotes) * 100),
-          Math.round((counts[2] / totalVotes) * 100),
-          Math.round((counts[3] / totalVotes) * 100),
-          Math.round((counts[4] / totalVotes) * 100),
-        ]
-      : [85, 10, 3, 1, 1];
-
-  return {
-    average,
-    totalVotes,
-    userRating: record?.userRating || 0,
-    percentages,
-  };
-}
-
-export function rateStoreApp(app: StoreAppItem, stars: number): AppRatingStats {
-  const clamped = Math.max(1, Math.min(5, Math.round(stars)));
-  const map = getAllRatingsMap();
-  const existing = map[app.id];
-  const counts: [number, number, number, number, number] =
-    existing?.counts && existing.counts.length === 5
-      ? ([...existing.counts] as [number, number, number, number, number])
-      : getDefaultCountsForRating(app.rating || 4.8);
-
-  if (existing?.userRating && existing.userRating >= 1 && existing.userRating <= 5) {
-    const prevIdx = 5 - existing.userRating;
-    counts[prevIdx] = Math.max(0, counts[prevIdx] - 1);
-  }
-
-  const nextIdx = 5 - clamped;
-  counts[nextIdx] = counts[nextIdx] + 1;
-
-  map[app.id] = {
-    userRating: clamped,
-    counts,
-  };
-
-  writeStoreJson(APP_RATINGS_KEY, map);
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(APP_RATINGS_EVENT));
-  }
-
-  return getAppRatingStats(app);
 }
 
 export function getAllStoreApps(): StoreAppItem[] {
@@ -333,7 +209,7 @@ export function downloadStandaloneAppPackage(app: StoreAppItem) {
     <div class="ic">${app.name.trim().charAt(0).toUpperCase()}</div>
     <h1>${app.name}</h1>
     <p>${app.tag}</p>
-    <a href="${resolvedUrl}" target="_blank" rel="noopener noreferrer">Launch ${app.name}</a>
+    <a href="${resolvedUrl}" rel="noopener noreferrer">Launch ${app.name}</a>
   </div>
 </body>
 </html>`;

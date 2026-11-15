@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import {
   Home,
   MessageSquarePlus,
+  Link2,
   LayoutGrid,
   FileText,
   ExternalLink,
@@ -25,7 +26,6 @@ export interface AppleDockItem {
   icon?: LucideIcon;
   imageSrc?: string;
   imageFallbackSrc?: string;
-  imageBoxClass?: string;
   imageScaleClass?: string;
   onClick?: () => void;
   href?: string;
@@ -37,7 +37,7 @@ interface AppleBottomDockProps {
   activeId: string;
   onNavigateHome: () => void;
   onNavigateGpg: () => void;
-  onNavigateClaim?: () => void;
+  onNavigateClaim: () => void;
   onOpenMoreMenu: () => void;
   extraItems?: AppleDockItem[];
 }
@@ -45,6 +45,7 @@ interface AppleBottomDockProps {
 export const DEFAULT_DOCK_CONFIG = [
   { id: "home", label: "Home" },
   { id: "gpg", label: "GPG" },
+  { id: "claim", label: "Free URL" },
   { id: "gpdf", label: "G PDF" },
   { id: "glink", label: "Launch" },
 ] as const;
@@ -53,6 +54,7 @@ export default function AppleBottomDock({
   activeId,
   onNavigateHome,
   onNavigateGpg,
+  onNavigateClaim,
   onOpenMoreMenu,
   extraItems = [],
 }: AppleBottomDockProps) {
@@ -72,12 +74,17 @@ export default function AppleBottomDock({
       onClick: onNavigateGpg,
     },
     {
+      id: "claim",
+      label: "Free URL",
+      icon: Link2,
+      onClick: onNavigateClaim,
+    },
+    {
       id: "gpdf",
       label: "G PDF",
       icon: FileText,
       imageSrc: G_PDF_LOGO_LOCAL,
       imageFallbackSrc: G_PDF_LOGO_FALLBACK,
-      imageBoxClass: "w-9 h-8",
       imageScaleClass: "scale-[1.48]",
       href: G_PDF_ROUTE_URL,
       target: "_blank",
@@ -88,8 +95,7 @@ export default function AppleBottomDock({
       icon: ExternalLink,
       imageSrc: G_LINK_LOGO_LOCAL,
       imageFallbackSrc: G_LINK_LOGO_FALLBACK,
-      imageBoxClass: "w-11 h-8",
-      imageScaleClass: "scale-[1.36]",
+      imageScaleClass: "scale-[1.15] p-0.5",
       href: G_LINK_ROUTE_URL,
       target: "_blank",
     },
@@ -105,7 +111,7 @@ export default function AppleBottomDock({
       }}
       className="fixed bottom-3.5 sm:bottom-5 left-1/2 -translate-x-1/2 z-30 w-auto max-w-[calc(100vw-16px)] pb-[env(safe-area-inset-bottom)]"
     >
-      <div className="flex items-center px-2 py-1.5 gap-1 rounded-[30px] bg-white/95 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_18px_45px_-10px_rgba(0,0,0,0.14),0_2px_8px_rgba(0,0,0,0.05)]">
+      <div className="flex items-center px-2 py-1.5 gap-0.5 sm:gap-1 rounded-[30px] bg-white/92 backdrop-blur-2xl border border-zinc-200/80 shadow-[0_18px_45px_-10px_rgba(0,0,0,0.14),0_2px_8px_rgba(0,0,0,0.05)]">
         <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto no-scrollbar">
           {dockItems.map((item) => {
             const Icon = item.icon;
@@ -118,7 +124,7 @@ export default function AppleBottomDock({
                   ? item.imageFallbackSrc
                   : undefined;
 
-            const itemClasses = `relative min-h-[54px] min-w-[56px] sm:min-w-[68px] px-2.5 sm:px-3.5 py-1.5 rounded-[22px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer select-none whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
+            const itemClasses = `relative min-h-[52px] min-w-[50px] sm:min-w-[66px] px-2 sm:px-3.5 py-1.5 rounded-[22px] flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer select-none whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3] ${
               isActive
                 ? "text-[#0071E3]"
                 : "text-[#6E6E73] hover:text-[#1D1D1F]"
@@ -140,11 +146,7 @@ export default function AppleBottomDock({
 
                 <span className="relative z-10 h-8 flex items-center justify-center">
                   {resolvedSrc ? (
-                    <span
-                      className={`${
-                        item.imageBoxClass || "w-9 h-8"
-                      } rounded-[11px] bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.08)] overflow-hidden flex items-center justify-center`}
-                    >
+                    <span className="w-8 h-8 rounded-[10px] bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.08)] overflow-hidden flex items-center justify-center">
                       <img
                         src={resolvedSrc}
                         alt={item.label}
@@ -156,7 +158,7 @@ export default function AppleBottomDock({
                           }))
                         }
                         className={`w-full h-full object-contain mix-blend-multiply select-none pointer-events-none ${
-                          item.imageScaleClass || "scale-[1.25]"
+                          item.imageScaleClass || "scale-[1.2]"
                         }`}
                       />
                     </span>
@@ -225,7 +227,7 @@ export default function AppleBottomDock({
 
         {/* Hairline Separator + Extensible Menu Sheet Trigger */}
         <div
-          className="w-px h-7 bg-zinc-200/80 mx-0.5 shrink-0"
+          className="w-px h-7 bg-zinc-200/80 mx-0.5 sm:mx-1 shrink-0"
           aria-hidden="true"
         />
 
@@ -236,7 +238,7 @@ export default function AppleBottomDock({
           onClick={onOpenMoreMenu}
           title="More Apps & Settings"
           aria-label="Open More Apps Menu"
-          className="min-h-[54px] min-w-[54px] sm:min-w-[64px] px-2.5 sm:px-3 py-1.5 rounded-[22px] flex flex-col items-center justify-center gap-1 text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors cursor-pointer select-none whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]"
+          className="min-h-[52px] min-w-[48px] sm:min-w-[62px] px-2 sm:px-3 py-1.5 rounded-[22px] flex flex-col items-center justify-center gap-1 text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors cursor-pointer select-none whitespace-nowrap shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-[#0071E3]"
         >
           <span className="h-8 flex items-center justify-center">
             <LayoutGrid size={19} strokeWidth={2} />
