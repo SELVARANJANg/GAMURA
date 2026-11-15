@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GAMURA VEO</title>
+<style>
+:root{--bg:#050807;--card:rgba(255,255,255,.07);--tx:#f5f5f7;--mut:#8e8e93;--ac:#0a84ff;--ac2:#5e5ce6;--ln:rgba(255,255,255,.1);color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f2f2f7;--card:rgba(0,0,0,.05);--tx:#1c1c1e;--mut:#6c6c70;--ln:rgba(0,0,0,.1);color-scheme:light}}
+:root[data-theme="dark"]{--bg:#050807}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(120% 60% at 50% -10%,rgba(10,132,255,.18),transparent 60%),var(--bg);color:var(--tx);font:15px -apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Inter,sans-serif}
+#app{height:100%;max-width:760px;margin:auto;display:flex;flex-direction:column}
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px}
+.logo{font-weight:800;letter-spacing:.18em;font-size:15px}.logo i{color:var(--ac);font-style:normal}
+button{font:inherit;color:inherit;border:0;background:var(--card);border-radius:14px;padding:9px 14px;cursor:pointer}
+.go{background:var(--ac);color:#fff;font-weight:700;border-radius:20px}
+#stage{height:34vh;display:flex;justify-content:center;align-items:center;padding:0 14px}
+canvas{max-width:100%;max-height:100%;border-radius:20px;background:#000;box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 0 1px var(--ln)}
+#bar{display:flex;align-items:center;gap:10px;padding:10px 16px}
+#pl{width:44px;height:44px;border-radius:50%;background:var(--tx);color:var(--bg);font-size:16px;padding:0}
+#tm{font-variant-numeric:tabular-nums;color:var(--mut);font-size:12px;min-width:92px;text-align:right}
+input[type=range]{width:100%;accent-color:var(--ac)}
+#tl{display:flex;gap:6px;overflow-x:auto;padding:4px 16px 10px;min-height:58px}
+.chip{flex:none;height:46px;border-radius:12px;background:linear-gradient(135deg,rgba(10,132,255,.35),var(--card)) center/cover;border:2px solid transparent;display:flex;align-items:flex-end;padding:3px 6px;font-size:11px;cursor:pointer}
+.chip.on{border-color:var(--ac)}.chip span{background:rgba(0,0,0,.55);color:#fff;border-radius:6px;padding:1px 5px}
+#panel{flex:1;overflow-y:auto;padding:6px 16px 14px;border-top:1px solid var(--ln);background:var(--card);border-radius:24px 24px 0 0;backdrop-filter:blur(20px)}
+#tabs{display:flex;overflow-x:auto;gap:2px;padding:6px 8px;border-top:1px solid var(--ln)}
+#tabs button{flex:1 0 auto;background:none;font-size:11px;color:var(--mut);display:flex;flex-direction:column;align-items:center;gap:2px;min-width:54px}
+#tabs button i{font-style:normal;font-size:18px}#tabs button.on{color:var(--ac)}
+.row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;margin:12px 0}.row b{font-weight:600;color:var(--ac)}.row input{grid-column:1/3}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.chips button.on{background:var(--ac);color:#fff;font-weight:700}
+.big{width:100%;padding:16px;margin-top:12px;background:var(--ac);color:#fff;font-weight:700;border-radius:18px;font-size:16px}
+.red{color:#ff6b6b}.mut,.hint{color:var(--mut);font-size:13px}.hint{padding:30px 0;text-align:center}
+h4{margin:16px 0 0;font-size:12px;letter-spacing:.12em;color:var(--mut);text-transform:uppercase}
+input[type=text]{width:100%;padding:12px;border-radius:14px;border:1px solid var(--ln);background:var(--card);color:var(--tx);font:inherit}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:10px 16px;border-radius:20px;opacity:0;transition:.3s;pointer-events:none;font-size:13px}
+#toast.on{opacity:1}
+#xp{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:9;color:#fff;backdrop-filter:blur(10px)}
+#home,#man{position:fixed;inset:0;z-index:5;overflow-y:auto;background:radial-gradient(120% 50% at 50% -10%,rgba(10,132,255,.3),transparent 60%),var(--bg);padding:calc(env(safe-area-inset-top,0px) + 28px) 18px calc(env(safe-area-inset-bottom,0px) + 24px)}
+.hw{max-width:760px;margin:auto}
+.hw h1{font-size:40px;letter-spacing:.06em;margin:2px 0 6px;font-weight:800}.hw h1 i{font-style:normal;background:linear-gradient(90deg,#0a84ff,#64d2ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ey{color:var(--mut);font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:22px 0}
+.tile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:16px;border-radius:22px;border:1px solid var(--ln);backdrop-filter:blur(20px)}
+.tile b{font-size:16px;margin-top:8px}.tile small{color:var(--mut);font-size:12px;line-height:1.3}
+.ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:23px;color:#fff;box-shadow:0 8px 20px rgba(10,132,255,.35)}
+@media(min-width:620px){.grid{grid-template-columns:repeat(3,1fr)}}
+#man{display:none;z-index:6}header button{padding:8px 11px}
+.hl{width:64px;height:64px;border-radius:18px;overflow:hidden;display:grid;place-items:center;background:linear-gradient(135deg,#0a84ff,#5e5ce6);font-weight:800;font-size:30px;color:#fff;box-shadow:0 10px 30px rgba(10,132,255,.45);cursor:pointer}
+.hl img{width:100%;height:100%;object-fit:cover}.hl.sm{display:inline-grid;width:24px;height:24px;border-radius:7px;font-size:13px;vertical-align:middle;margin-right:4px;box-shadow:none}
+details{background:var(--card);border-radius:16px;padding:12px 14px;margin:10px 0;border:1px solid var(--ln)}summary{font-weight:600;cursor:pointer}details p{color:var(--mut);font-size:14px;line-height:1.5;margin:8px 0 0}
+.tip{background:rgba(10,132,255,.14);border-radius:14px;padding:10px 12px;margin:10px 0 0;font-size:13px;color:var(--tx)}
+</style></head><body>
+<div id="app">
+<header><button onclick="home()">‹ Tools</button><div class="logo"><span class="hl sm"></span> GAMURA <i>VEO</i></div><div><button onclick="openT('man','n')">?</button> <button class="go" onclick="go('out')">Export</button></div></header>
+<div id="stage"><canvas id="cv"></canvas></div>
+<div id="bar"><button id="pl" onclick="toggle()">▶</button><input type="range" id="sc" min="0" max="1000" value="0"><span id="tm">0:00.0 / 0:00.0</span></div>
+<div id="tl"></div>
+<div id="panel"></div>
+<nav id="tabs"></nav>
+</div>
+<input type="file" id="fi" accept="video/*,image/*" multiple hidden>
+<input type="file" id="mi" accept="audio/*" hidden>
+<input type="file" id="lf" accept="image/*" hidden><input type="file" id="pf" accept="image/*" hidden>
+<div id="home"><div class="hw"><div class="hl" onclick="$('#pf').click()" title="Tap to set your logo">G</div><div class="ey" style="margin-top:14px">Welcome to</div><h1>GAMURA <i>VEO</i></h1><p class="mut">Create, edit and export videos. Pick a tool to begin.</p><div class="grid" id="grid"></div><button class="big" onclick="openT('clips','a')">Start a new video</button></div></div><div id="man"><div class="hw"><button onclick="$('#man').style.display='none'">‹ Back</button><h1 style="font-size:30px;margin-top:14px">Manual</h1><p class="mut">Everything you need to make a video in GAMURA VEO.</p>
+<details open><summary>1 · Quick start</summary><p>Tap a tool on the home screen, or Start a new video. Add videos or images, tap a clip on the timeline to select it, edit it with the tabs at the bottom, then open Export and tap Render &amp; download.</p></details>
+<details><summary>2 · Clips &amp; merge</summary><p>Clips play in timeline order, so adding several videos merges them. Use Move to reorder, Split to cut at the playhead, Duplicate to repeat, Delete to remove and Undo to step back.</p></details>
+<details><summary>3 · Trim, crop, rotate</summary><p>Edit tab: Trim start and end cut the clip, Speed changes pace, Crop zoom with Pan X/Y crops the frame, Rotate turns it, and Fit + blur keeps the whole video on a blurred background.</p></details>
+<details><summary>4 · Photo to video &amp; motion</summary><p>Images become videos automatically. Set Duration in Edit and pick a move in Motion: zoom, pan, drift, shake or Beat pulse (set the BPM of your song). Fade or Flash sets the transition in.</p></details>
+<details><summary>5 · Looks, text &amp; stickers</summary><p>Looks: pick an Aura look, then adjust brightness, contrast, saturation, blur and vignette. Text: type a caption, choose position, size and colour, and add an emoji sticker.</p></details>
+<details><summary>6 · Logo &amp; app logo</summary><p>Logo tab: upload a watermark, set size, opacity and corner. Tap the G badge on the home screen (or Set app logo) to use your own GAMURA VEO logo, and Use app logo as watermark to stamp it on videos.</p></details>
+<details><summary>7 · Song &amp; voiceover</summary><p>Audio tab: add a song, set its volume, start point and fade-out. Move the playhead where you want to speak, press Record, talk, then press Stop. Use headphones to avoid echo.</p></details>
+<details><summary>8 · Magic tools</summary><p>Auto-edit adds motion, fades and a cinematic look in one tap. Title card makes a gradient intro. Save snapshot downloads the current frame. Mute all removes original audio.</p></details>
+<details><summary>9 · Export</summary><p>Choose 16:9, 9:16 or 1:1, then HD or Full HD. Rendering runs in real time, so keep the tab open until it finishes. The file saves as MP4 or WebM.</p></details>
+<details><summary>10 · Shortcuts &amp; fixes</summary><p>Desktop: Space play/pause, ←/→ jump 1 s, S split, Delete remove clip. If the mic fails, allow microphone access. For best results use Chrome or Edge.</p></details></div></div><div id="toast"></div>
+<div id="xp"><div style="font-size:18px;font-weight:700">Rendering your video…</div><div id="xpp" class="mut">0%</div><button onclick="cancelX()">Cancel</button></div>
+<script>
+const $=s=>document.querySelector(s),cv=$('#cv'),cx=cv.getContext('2d');
+const AR={'16:9':[1280,720],'9:16':[720,1280],'1:1':[900,900]};
+const S={clips:[],sel:-1,t:0,playing:false,ar:'16:9',q:1,bars:0,vig:0,card:'My Video',cg:0,mute:0,bpm:120,mv:.7,vv:1,mOff:0,fade:1,music:null,voice:null,vS:0,wm:{img:null,on:1,x:.88,y:.12,size:.16,op:.85}};
+let AC,DEST,tab='clips',last=0,vrec=null,rec=null,recChunks=[],drag=0,cancelled=0;
+const C=()=>S.clips[S.sel],fmt=t=>{t=Math.max(0,t);return Math.floor(t/60)+':'+(t%60).toFixed(1).padStart(4,'0')};
+const len=c=>(c.end-c.start)/c.speed,total=()=>S.clips.reduce((a,c)=>a+len(c),0);
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2200)}
+function ac(){if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();DEST=AC.createMediaStreamDestination()}if(AC.state=='suspended')AC.resume()}
+function conn(el){if(!AC||el._s)return;try{el._s=AC.createMediaElementSource(el);el._s.connect(AC.destination);el._s.connect(DEST)}catch(e){}}
+function locate(t){let a=0;for(let i=0;i<S.clips.length;i++){const c=S.clips[i],l=len(c);if(t<a+l||i==S.clips.length-1)return{i,c,lt:Math.min(Math.max(t-a,0),l),l};a+=l}return null}
+function startOf(i){let a=0;for(let k=0;k<i;k++)a+=len(S.clips[k]);return a}
+/* ---------- media ---------- */
+function addFiles(fl){ac();[...fl].forEach(f=>{const url=URL.createObjectURL(f);
+if(f.type.startsWith('image')){const im=new Image();im.onload=()=>push({k:'i',el:im,url,name:f.name,max:30,start:0,end:4});im.src=url}
+else if(f.type.startsWith('video')){const v=document.createElement('video');v.src=url;v.playsInline=true;v.preload='auto';v.onloadedmetadata=()=>{push({k:'v',el:v,url,name:f.name,max:v.duration,start:0,end:v.duration});conn(v)}}})}
+function push(o){Object.assign(o,{speed:1,zoom:1,px:0,py:0,motion:o.k=='i'?'zoomin':'none',look:'none',br:100,ct:100,sa:100,bl:0,text:'',tp:'bottom',ts:.06,trans:'fade',vol:1,flip:0,rot:0,fit:0,tc:'#ffffff',stk:'none',sx:.5,sy:.35,ss:.14});S.clips.push(o);S.sel=S.clips.length-1;refresh()}
+$('#fi').onchange=e=>{addFiles(e.target.files);e.target.value='';e.target.accept='video/*,image/*'};
+$('#mi').onchange=e=>{const f=e.target.files[0];if(f)setAud('music',URL.createObjectURL(f),f.name);e.target.value=''};
+$('#lf').onchange=e=>{const f=e.target.files[0];if(f){const im=new Image();im.onload=()=>{S.wm.img=im;S.wm.on=1;renderPanel()};im.src=URL.createObjectURL(f)}e.target.value=''};
+function setAud(k,url,name){ac();const a=new Audio(url);a.loop=k=='music';a.preload='auto';conn(a);const o={el:a,name,done:0};a.onended=()=>o.done=1;S[k]=o;renderPanel()}
+/* ---------- render ---------- */
+const LOOK={none:'',cinema:'contrast(120%) saturate(85%) sepia(.2)',vivid:'saturate(155%) contrast(110%)',noir:'grayscale(1) contrast(130%)',warm:'sepia(.35) saturate(120%)',cool:'hue-rotate(-20deg) saturate(110%)',dream:'blur(.6px) brightness(110%) saturate(120%)',retro:'sepia(.6) contrast(90%) hue-rotate(-10deg)',ocean:'hue-rotate(-30deg) saturate(130%) brightness(105%)',fade:'contrast(85%) brightness(110%) saturate(80%)',pop:'contrast(115%) saturate(140%) brightness(105%)'};
+function mot(c,p,t){switch(c.motion){case'zoomin':return[1+.25*p,0,0];case'zoomout':return[1.25-.25*p,0,0];case'panl':return[1.2,(.5-p)*.12,0];case'panr':return[1.2,(p-.5)*.12,0];case'drift':return[1.15,Math.sin(t*.8)*.04,Math.cos(t*.6)*.03];case'pulse':return[1+.07*Math.pow(.5+.5*Math.cos(t*Math.PI*2*S.bpm/60),6),0,0];case'shake':return[1.06,(Math.random()-.5)*.015,(Math.random()-.5)*.015]}return[1,0,0]}
+function draw(){const[b,h]=AR[S.ar],W=b*S.q|0,H=h*S.q|0;if(cv.width!=W||cv.height!=H){cv.width=W;cv.height=H}
+cx.filter='none';cx.globalAlpha=1;cx.fillStyle='#000';cx.fillRect(0,0,W,H);const L=locate(S.t);
+if(!L){const g=cx.createLinearGradient(0,0,W,H);g.addColorStop(0,'#040b1c');g.addColorStop(1,'#0a2a6b');cx.fillStyle=g;cx.fillRect(0,0,W,H);cx.fillStyle='#0a84ff';cx.textAlign='center';cx.font='800 '+H*.07+'px -apple-system,sans-serif';cx.fillText('GAMURA VEO',W/2,H*.48);cx.fillStyle='#8e8e93';cx.font='500 '+H*.035+'px -apple-system,sans-serif';cx.fillText('Add videos or images to begin',W/2,H*.56);return}
+const c=L.c,el=c.el,sw=c.k=='v'?el.videoWidth:(el.naturalWidth||el.width),sh=c.k=='v'?el.videoHeight:(el.naturalHeight||el.height);
+if(sw&&(c.k=='i'||el.readyState>=2)){const m=mot(c,L.lt/L.l,S.t),rs=c.rot%180,s=(c.fit?Math.min:Math.max)(W/(rs?sh:sw),H/(rs?sw:sh))*c.zoom*m[0];if(c.fit){const bs=Math.max(W/sw,H/sh);cx.save();cx.filter='blur(28px) brightness(70%)';cx.translate(W/2,H/2);cx.scale(bs*1.15,bs*1.15);cx.drawImage(el,-sw/2,-sh/2);cx.restore()}
+cx.filter=(LOOK[c.look]+` brightness(${c.br}%) contrast(${c.ct}%) saturate(${c.sa}%) blur(${c.bl}px)`).trim();
+cx.save();cx.translate(W/2+(c.px+m[1])*W,H/2+(c.py+m[2])*H);cx.rotate(c.rot*Math.PI/180);cx.scale(c.flip?-s:s,s);cx.drawImage(el,-sw/2,-sh/2);cx.restore();cx.filter='none'}
+if(c.text){cx.save();cx.font='800 '+H*c.ts+'px -apple-system,"SF Pro Display",sans-serif';cx.textAlign='center';cx.fillStyle=c.tc;cx.shadowColor='rgba(0,0,0,.65)';cx.shadowBlur=H*.02;cx.globalAlpha=Math.min(1,L.lt/.4);cx.fillText(c.text,W/2,c.tp=='top'?H*.12:c.tp=='mid'?H*.52:H*.9,W*.9);cx.restore()}
+if(c.stk&&c.stk!='none'){cx.font=H*c.ss+'px serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(c.stk,W*c.sx,H*c.sy);cx.textBaseline='alphabetic'}const w=S.wm;if(w.on&&w.img){cx.save();cx.globalAlpha=w.op;const ww=W*w.size,hh=ww*w.img.naturalHeight/w.img.naturalWidth;cx.drawImage(w.img,W*w.x-ww/2,H*w.y-hh/2,ww,hh);cx.restore()}
+if(S.vig){const g=cx.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,Math.max(W,H)*.75);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.6)');cx.fillStyle=g;cx.fillRect(0,0,W,H)}if(S.bars){cx.fillStyle='#000';cx.fillRect(0,0,W,H*.11);cx.fillRect(0,H*.89,W,H*.11)}
+if(c.trans=='fade'){const a=Math.min(1,L.lt/.5,(L.l-L.lt)/.5);cx.fillStyle='rgba(0,0,0,'+(1-a)+')';cx.fillRect(0,0,W,H)}
+if(c.trans=='flash'&&L.lt<.3){cx.fillStyle='rgba(255,255,255,'+(1-L.lt/.3)+')';cx.fillRect(0,0,W,H)}}
+/* ---------- playback ---------- */
+function vSync(){const L=locate(S.t);S.clips.forEach(c=>{if(c.k!='v')return;const e=c.el;if(!L||L.c!==c){if(!e.paused&&!(L&&L.c.el===e))e.pause();return}
+const want=c.start+L.lt*c.speed;e.playbackRate=c.speed;e.volume=S.mute?0:c.vol;
+if(S.playing){if(e.paused){e.currentTime=want;e.play().catch(()=>{})}else if(Math.abs(e.currentTime-want)>.35)e.currentTime=want}
+else{if(!e.paused)e.pause();if(Math.abs(e.currentTime-want)>.04)e.currentTime=want}})}
+function aSync(){const T=total(),m=S.music,v=S.voice;
+if(m){if(S.playing){m.el.volume=Math.max(0,Math.min(1,S.mv*(S.fade?(T-S.t)/2:1)));if(m.el.paused){m.el.currentTime=S.t+S.mOff;m.el.play().catch(()=>{})}}else if(!m.el.paused)m.el.pause()}
+if(v){if(S.playing&&S.t>=S.vS){v.el.volume=Math.min(1,S.vv);if(v.el.paused&&!v.done){v.el.currentTime=S.t-S.vS;v.el.play().catch(()=>{})}}else if(!v.el.paused)v.el.pause()}}
+function resync(){[S.music,S.voice].forEach(a=>{if(a){a.el.pause();a.done=0}})}
+function play(){if(!total())return toast('Add a clip first');ac();if(S.t>=total()-.05)S.t=0;resync();S.playing=true;last=performance.now()}
+function stop(){S.playing=false;if(vrec&&vrec.state=='recording')vrec.stop()}
+function toggle(){S.playing?stop():play()}
+function tick(ts){if(S.playing){S.t+=(ts-last)/1000;const T=total();if(S.t>=T){S.t=T;stop();if(rec&&rec.state=='recording')rec.stop()}}if(S.t>total())S.t=total();last=ts;vSync();aSync();draw();
+$('#pl').textContent=S.playing?'❚❚':'▶';$('#tm').textContent=fmt(S.t)+' / '+fmt(total());if(!drag&&total())$('#sc').value=S.t/total()*1000;
+if(rec&&rec.state=='recording'){const p=Math.min(100,S.t/total()*100|0);$('#xpp').textContent=p+'%'}requestAnimationFrame(tick)}
+$('#sc').oninput=e=>{drag=1;S.t=e.target.value/1000*total();resync()};$('#sc').onchange=()=>drag=0;
+$('#sc').onpointerup=()=>drag=0;
+/* ---------- timeline ops ---------- */
+let hist=[];function snap(){hist.push(S.clips.map(c=>({...c})));if(hist.length>30)hist.shift()}
+function undo(){if(!hist.length)return toast('Nothing to undo');S.clips=hist.pop();S.sel=Math.min(S.sel,S.clips.length-1);refresh()}
+function refresh(){renderTL();renderPanel()}
+function renderTL(){$('#tl').innerHTML=S.clips.map((c,i)=>`<div class="chip ${i==S.sel?'on':''}" style="width:${Math.max(64,len(c)*22)}px;${c.k=='i'&&c.url?`background-image:url(${c.url})`:''}" onclick="selClip(${i})"><span>${c.k=='v'?'🎬':'🖼'} ${fmt(len(c))}</span></div>`).join('')}
+function selClip(i){S.sel=i;S.t=startOf(i);resync();refresh()}
+function mv(d){snap();const i=S.sel,j=i+d;if(j<0||j>=S.clips.length)return;[S.clips[i],S.clips[j]]=[S.clips[j],S.clips[i]];S.sel=j;refresh()}
+function dup(){snap();const c=C();if(!c)return;S.clips.splice(S.sel+1,0,{...c});S.sel++;refresh()}
+function del(){snap();if(!C())return;S.clips.splice(S.sel,1);S.sel=Math.min(S.sel,S.clips.length-1);refresh()}
+function split(){snap();const L=locate(S.t);if(!L||L.l<.6)return toast('Move the playhead inside a clip');const c=L.c,at=c.start+L.lt*c.speed,n={...c};c.end=at;n.start=at;S.clips.splice(L.i+1,0,n);S.sel=L.i;refresh();toast('Clip split')}
+function applyAll(keys){snap();const c=C();S.clips.forEach(o=>keys.forEach(k=>o[k]=c[k]));refresh();toast('Applied to all clips')}
+/* ---------- panels ---------- */
+const TABS=[['clips','Clips','▦'],['edit','Edit','✂'],['motion','Motion','✦'],['look','Look','◐'],['text','Text','T'],['logo','Logo','◎'],['audio','Audio','♪'],['magic','Magic','⚡'],['out','Export','⬆']];
+function renderTabs(){$('#tabs').innerHTML=TABS.map(([id,n,i])=>`<button class="${id==tab?'on':''}" onclick="go('${id}')"><i>${i}</i>${n}</button>`).join('')}
+function go(t){tab=t;renderTabs();renderPanel()}
+const O=o=>o=='S'?S:o=='W'?S.wm:C();
+const sl=(o,l,k,mn,mx,st,u='')=>{const v=O(o)[k];return `<div class="row"><span>${l}</span><b>${(+v).toFixed(st<1?2:0)}${u}</b><input type="range" min="${mn}" max="${mx}" step="${st}" value="${v}" oninput="setC('${o}','${k}',+this.value,this,'${u}')"></div>`};
+function setC(o,k,v,el,u){const t=O(o);t[k]=v;if(o=='c'&&(k=='start'||k=='end')){t.start=Math.min(t.start,t.end-.2);t.end=Math.max(t.end,t.start+.2);if(t.start<0)t.start=0;renderTL()}el.parentNode.querySelector('b').textContent=v.toFixed(+el.step<1?2:0)+u}
+const ch=(k,arr,cur,g)=>'<div class="chips">'+arr.map(([v,l])=>`<button class="${cur==v?'on':''}" onclick="${g?'setG':'setP'}('${k}','${v}')">${l}</button>`).join('')+'</div>';
+const num=v=>isNaN(v)?v:+v;
+function setP(k,v){C()[k]=num(v);renderPanel();if(k=='trans'||k=='look'||k=='motion')renderTL()}
+function setG(k,v){S[k]=num(v);renderPanel()}
+function renderPanel(){const p=$('#panel'),c=C();let h='';
+if(['edit','motion','look','text'].includes(tab)&&!c){p.innerHTML='<div class="hint">Add a clip, then select it on the timeline.</div>';return}
+if(tab=='clips'){h=`<button class="big" onclick="$('#fi').click()">＋ Add videos &amp; images</button>`;
+if(c)h+=`<div class="chips"><button onclick="mv(-1)">◀ Move</button><button onclick="mv(1)">Move ▶</button><button onclick="split()">✂ Split</button><button onclick="dup()">⧉ Duplicate</button><button onclick="undo()">↶ Undo</button><button class="red" onclick="del()">Delete</button></div>`;
+h+=`<p class="mut">${S.clips.length} clip${S.clips.length==1?'':'s'} · ${fmt(total())}. Clips merge in timeline order. Images turn into motion videos automatically.</p>`}
+if(tab=='edit'){h=c.k=='v'?sl('c','Trim start','start',0,c.max,.1,'s')+sl('c','Trim end','end',0,c.max,.1,'s')+sl('c','Speed','speed',.25,4,.05,'×')+sl('c','Volume','vol',0,1,.05):sl('c','Duration','end',.5,30,.1,'s');
+h+='<h4>Crop &amp; frame</h4>'+sl('c','Crop zoom','zoom',1,4,.05,'×')+sl('c','Pan X','px',-.5,.5,.01)+sl('c','Pan Y','py',-.5,.5,.01)+ch('flip',[[0,'Normal'],[1,'Mirror']],c.flip)+'<h4>Rotate</h4>'+ch('rot',[[0,'0°'],[90,'90°'],[180,'180°'],[270,'270°']],c.rot)+'<h4>Frame</h4>'+ch('fit',[[0,'Fill'],[1,'Fit + blur']],c.fit)}
+if(tab=='motion'){h='<h4>Magic motion</h4>'+ch('motion',[['none','None'],['zoomin','Zoom in'],['zoomout','Zoom out'],['panl','Pan ←'],['panr','Pan →'],['drift','Drift'],['pulse','Beat pulse'],['shake','Shake']],c.motion);
+if(c.motion=='pulse')h+=sl('S','Beat tempo (BPM)','bpm',60,200,1);
+h+='<h4>Transition in</h4>'+ch('trans',[['none','Cut'],['fade','Fade'],['flash','Flash']],c.trans)+`<button onclick="applyAll(['motion','trans'])">Apply to all clips</button>`}
+if(tab=='look'){h='<h4>Aura looks</h4>'+ch('look',Object.keys(LOOK).map(k=>[k,k[0].toUpperCase()+k.slice(1)]),c.look)+sl('c','Brightness','br',50,150,1,'%')+sl('c','Contrast','ct',50,150,1,'%')+sl('c','Saturation','sa',0,200,1,'%')+sl('c','Blur','bl',0,10,.5,'px')+'<h4>Film vignette</h4>'+ch('vig',[[0,'Off'],[1,'On']],S.vig,1)+`<button onclick="applyAll(['look','br','ct','sa','bl'])">Apply look to all</button>`}
+if(tab=='text'){h=`<h4>Caption on this clip</h4><input type="text" id="tt" placeholder="Type your caption…" value="${c.text.replace(/"/g,'&quot;')}" oninput="C().text=this.value">`+ch('tp',[['top','Top'],['mid','Middle'],['bottom','Bottom']],c.tp)+sl('c','Size','ts',.03,.14,.005)+'<h4>Text colour</h4>'+ch('tc',[['#ffffff','White'],['#ffd60a','Yellow'],['#64d2ff','Sky'],['#ff375f','Pink'],['#000000','Black']],c.tc)+'<h4>Stickers</h4>'+ch('stk',[['none','None']].concat(['😀','🔥','❤️','⭐','🎉','🚀','👑','😎','✨'].map(x=>[x,x])),c.stk)+sl('c','Sticker size','ss',.05,.4,.01)+sl('c','Sticker X','sx',.05,.95,.01)+sl('c','Sticker Y','sy',.05,.95,.01)}
+if(tab=='logo'){h=`<button class="big" onclick="$('#lf').click()">${S.wm.img?'Change logo':'＋ Upload logo / watermark'}</button><div class="chips"><button onclick="$('#pf').click()">Set app logo</button><button onclick="logoWM()">Use app logo as watermark</button></div>`;
+if(S.wm.img)h+=ch('on',[[1,'Show'],[0,'Hide']],S.wm.on).replace(/setP/g,'setW')+sl('W','Size','size',.05,.5,.01)+sl('W','Opacity','op',.1,1,.05)+'<h4>Position</h4><div class="chips">'+[['↖',.12,.12],['↗',.88,.12],['⊙',.5,.5],['↙',.12,.88],['↘',.88,.88]].map(a=>`<button onclick="corner(${a[1]},${a[2]})">${a[0]}</button>`).join('')+'</div>'}
+if(tab=='audio'){h='<h4>Song</h4>'+(S.music?`<p>🎵 ${S.music.name}</p>`+sl('S','Music volume','mv',0,1,.05)+sl('S','Start song at','mOff',0,180,1,'s')+ch('fade',[[1,'Fade out end'],[0,'No fade']],S.fade,1)+`<button class="red" onclick="S.music.el.pause();S.music=null;renderPanel()">Remove song</button>`:`<button class="big" onclick="$('#mi').click()">＋ Add a song</button>`);
+h+='<h4>Voiceover</h4>'+`<button class="big" style="background:${vrec?'#ff453a':'var(--ac)'}" onclick="recVoice()">${vrec?'■ Stop recording':'● Record voice from playhead'}</button>`;
+if(S.voice)h+=`<p>🎙 Voiceover ready (starts at ${fmt(S.vS)})</p>`+sl('S','Voice volume','vv',0,1,.05)+`<button class="red" onclick="S.voice.el.pause();S.voice=null;renderPanel()">Remove voiceover</button>`}
+if(tab=='magic'){h=`<h4>Auto-edit</h4><button class="big" onclick="magic()">⚡ Auto-edit my clips</button><p class="mut">Adds alternating motion, fades and a cinematic look to every clip.</p><h4>Title card</h4><input type="text" placeholder="Title text…" value="${S.card.replace(/"/g,'&quot;')}" oninput="S.card=this.value">`+ch('cg',[[0,'Ocean'],[1,'Indigo'],[2,'Midnight'],[3,'Sunrise']],S.cg,1)+`<button class="big" onclick="addCard()">＋ Add title card</button><h4>Tools</h4><div class="chips"><button onclick="snapPNG()">📷 Save snapshot</button><button onclick="goStart()">⏮ Playhead to start</button></div><h4>Original audio</h4>`+ch('mute',[[0,'Keep'],[1,'Mute all']],S.mute,1)}
+if(tab=='out'){h='<h4>Canvas</h4>'+ch('ar',[['16:9','16:9 Wide'],['9:16','9:16 Reels'],['1:1','1:1 Square']],S.ar,1)+'<h4>Quality</h4>'+ch('q',[[1,'HD 720p'],[1.5,'Full HD 1080p']],S.q,1)+'<h4>Cinema bars</h4>'+ch('bars',[[0,'Off'],[1,'On']],S.bars,1)+`<p class="mut">${S.clips.length} clips · ${fmt(total())} · ${S.ar} · music ${S.music?'on':'off'} · voice ${S.voice?'on':'off'}</p><button class="big" onclick="exportVid()">Render &amp; download</button><p class="mut">Rendering runs in real time in your browser, so a 30 s video takes about 30 s. Keep this tab open.</p>`}
+p.innerHTML=(TIP[tab]?`<div class="tip">💡 ${TIP[tab]}</div>`:'')+h}
+function setW(k,v){S.wm[k]=num(v);renderPanel()}
+function corner(x,y){S.wm.x=x;S.wm.y=y}
+/* ---------- voice ---------- */
+async function recVoice(){if(vrec){vrec.state=='recording'&&vrec.stop();return}
+if(!total())return toast('Add a clip first');
+try{const st=await navigator.mediaDevices.getUserMedia({audio:true}),ch=[],r=new MediaRecorder(st);vrec=r;S.vS=S.t;
+r.ondataavailable=e=>ch.push(e.data);
+r.onstop=()=>{st.getTracks().forEach(t=>t.stop());const b=new Blob(ch,{type:r.mimeType});vrec=null;setAud('voice',URL.createObjectURL(b),'Voiceover');stop();toast('Voiceover added')};
+r.start();play();renderPanel()}catch(e){toast('Microphone permission needed')}}
+/* ---------- export ---------- */
+function exportVid(){if(!total())return toast('Add a clip first');if(!window.MediaRecorder)return toast('Export is not supported in this browser');
+ac();stop();S.t=0;resync();cancelled=0;
+const cs=cv.captureStream(30);DEST.stream.getAudioTracks().forEach(t=>cs.addTrack(t));
+const mt=['video/mp4;codecs=avc1,mp4a.40.2','video/webm;codecs=vp9,opus','video/webm'].find(m=>MediaRecorder.isTypeSupported(m))||'';
+recChunks=[];rec=new MediaRecorder(cs,mt?{mimeType:mt,videoBitsPerSecond:8e6}:{});
+rec.ondataavailable=e=>e.data.size&&recChunks.push(e.data);
+rec.onstop=()=>{$('#xp').style.display='none';stop();if(cancelled){rec=null;return}const ext=(rec.mimeType||mt).includes('mp4')?'mp4':'webm',b=new Blob(recChunks,{type:rec.mimeType||mt}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='gamura-veo.'+ext;a.click();rec=null;toast('Saved gamura-veo.'+ext)};
+$('#xp').style.display='flex';rec.start(250);play()}
+function cancelX(){cancelled=1;if(rec&&rec.state=='recording')rec.stop()}
+const TOOLS=[['🎬','Video Editor','Timeline, trim, split','clips','a','linear-gradient(135deg,#0a84ff,#64d2ff)'],['🔗','Merge Videos','Join clips into one','clips','v','linear-gradient(135deg,#5e5ce6,#0a84ff)'],['🖼','Photo to Video','Images with motion','motion','i','linear-gradient(135deg,#32ade6,#5e5ce6)'],['✂','Trim & Crop','Cut, zoom, rotate','edit','n','linear-gradient(135deg,#0a84ff,#5e5ce6)'],['✦','Motion FX','Zoom, pan, beat pulse','motion','n','linear-gradient(135deg,#64d2ff,#0a84ff)'],['🎨','Looks','Aura filters, vignette','look','n','linear-gradient(135deg,#5e5ce6,#bf5af2)'],['🅣','Text & Stickers','Captions and emoji','text','n','linear-gradient(135deg,#0a84ff,#30b0ff)'],['◎','Logo Watermark','Brand every video','logo','n','linear-gradient(135deg,#32ade6,#0a84ff)'],['♪','Song & Voice','Music and voiceover','audio','n','linear-gradient(135deg,#5e5ce6,#64d2ff)'],['⚡','Magic Tools','Auto-edit, title cards','magic','n','linear-gradient(135deg,#bf5af2,#0a84ff)'],['📖','Manual','Step-by-step guide','man','n','linear-gradient(135deg,#32ade6,#5e5ce6)'],['⬆','Export','720p, 1080p, Reels','out','n','linear-gradient(135deg,#0a84ff,#5e5ce6)']];
+$('#grid').innerHTML=TOOLS.map(t=>`<button class="tile" onclick="openT('${t[3]}','${t[4]}')"><span class="ic" style="background:${t[5]}">${t[0]}</span><b>${t[1]}</b><small>${t[2]}</small></button>`).join('');
+function openT(t,p){if(t=='man'){$('#man').style.display='block';return}$('#home').style.display='none';go(t);if(!S.clips.length&&['edit','motion','look','text'].includes(t)&&p=='n')p='a';if(p&&p!='n'){const f=$('#fi');f.accept=p=='v'?'video/*':p=='i'?'image/*':'video/*,image/*';f.click()}}
+function home(){stop();$('#home').style.display='block'}
+const TIP={clips:'Tap ＋ to add files. Tap a clip on the timeline to select it, then use the tabs below.',edit:'Trim start/end cuts the clip. Zoom + Pan crops. Fit + blur keeps the whole video.',motion:'Photos get Ken Burns motion by default. Beat pulse zooms to your BPM.',look:'Pick an Aura look, then fine-tune. Apply to all keeps every clip consistent.',text:'Type a caption, pick position and colour, or add an emoji sticker.',logo:'Upload a logo once, place it in a corner and set opacity.',audio:'Add a song and set where it starts. Record speaks over the video from the playhead.',magic:'One-tap helpers: Auto-edit, title cards and snapshots.',out:'Choose size and quality, then render. Keep this tab open until it finishes.'};
+const CG=[['#0a84ff','#5e5ce6'],['#5e5ce6','#bf5af2'],['#050a1f','#0a2a6b'],['#ff9f0a','#ff375f']];
+function addCard(){snap();const W=1280,H=720,k=document.createElement('canvas');k.width=W;k.height=H;const g=k.getContext('2d'),gr=g.createLinearGradient(0,0,W,H);gr.addColorStop(0,CG[S.cg][0]);gr.addColorStop(1,CG[S.cg][1]);g.fillStyle=gr;g.fillRect(0,0,W,H);g.fillStyle='#fff';g.textAlign='center';g.textBaseline='middle';g.font='800 96px -apple-system,sans-serif';g.fillText(S.card||'GAMURA VEO',W/2,H/2,W*.85);push({k:'i',el:k,url:'',name:'Title',max:30,start:0,end:3});toast('Title card added at the end')}
+function magic(){if(!S.clips.length)return toast('Add clips first');snap();const M=['zoomin','panl','zoomout','panr','drift'];S.clips.forEach((c,i)=>{if(c.k=='i')c.motion=M[i%M.length];c.trans='fade';c.look='cinema'});S.vig=1;refresh();toast('Auto-edit applied')}
+function snapPNG(){cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='gamura-veo-frame.png';a.click()})}
+function goStart(){S.t=0;resync()}
+function showLogo(u){document.querySelectorAll('.hl').forEach(e=>{e.innerHTML=u?'<img alt="" src="'+u+'">':(e.classList.contains('sm')?'G':'G')})}
+function logoWM(){let u;try{u=localStorage.getItem('veoLogo')}catch(e){}if(!u)return toast('Set the app logo first');const im=new Image();im.onload=()=>{S.wm.img=im;S.wm.on=1;renderPanel()};im.src=u}
+$('#pf').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const rd=new FileReader();rd.onload=()=>{try{localStorage.setItem('veoLogo',rd.result)}catch(x){}showLogo(rd.result);toast('App logo set')};rd.readAsDataURL(f)};
+try{showLogo(localStorage.getItem('veoLogo'))}catch(e){}
+document.addEventListener('keydown',e=>{if(/INPUT|TEXTAREA/.test(e.target.tagName))return;if(e.code=='Space'){e.preventDefault();toggle()}else if(e.key=='ArrowRight'){S.t=Math.min(total(),S.t+1);resync()}else if(e.key=='ArrowLeft'){S.t=Math.max(0,S.t-1);resync()}else if(e.key=='s'||e.key=='S')split();else if(e.key=='Delete')del()});
+renderTabs();renderPanel();requestAnimationFrame(tick);
+</script></body></html>

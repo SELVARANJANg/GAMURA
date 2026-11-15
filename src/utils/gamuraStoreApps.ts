@@ -31,10 +31,12 @@ export const MOBILE_APPS_KEY = "gamura_mobile_apps_v1";
 export const CUSTOM_STORE_APPS_KEY = "gs_custom";
 export const LEGACY_INSTALLED_KEY = "gs_inst";
 export const UNIVERSE_APPS_EVENT = "gamura-universe-apps-updated";
+export const APP_RATINGS_KEY = "gamura_store_app_ratings_v1";
+export const APP_RATINGS_EVENT = "gamura-store-ratings-updated";
 export const GAMURA_VEO_LOGO_URL =
-  "https://lh3.googleusercontent.com/d/1FqBAdXuyDDSSuYtd3iZzf9x5PM8orKrd";
+  "/assets/aistudio/IMG_20261115_083802_9866b1da.png";
 export const GAMURA_VEO_LOGO_FALLBACK =
-  "/assets/aistudio/1794679627931_b0492bbb.png";
+  "https://lh3.googleusercontent.com/d/1FqBAdXuyDDSSuYtd3iZzf9x5PM8orKrd";
 
 export const BUILTIN_STORE_APPS: StoreAppItem[] = [
   {
@@ -126,8 +128,8 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     id: "veo",
     name: "Gamura Veo",
     cat: "Creative",
-    tag: "Gamura Veo Studio & Workspace",
-    desc: "Open Gamura Veo in its own dedicated URL page to preview, manage, and run your uploaded files. Install directly into Universe Apps or download for your mobile device.",
+    tag: "Create, edit & export videos with Motion FX",
+    desc: "Gamura Veo is the full browser video studio inside Gamura. Merge clips, convert photos to motion videos, apply Aura looks, add captions, music, voiceover, and logo watermarks, and export in HD or Full HD MP4/WebM.",
     url: "/veo",
     c1: "#34d399",
     c2: "#0284c7",
@@ -135,8 +137,8 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     logoFallbackUrl: GAMURA_VEO_LOGO_FALLBACK,
     rating: 4.9,
     age: "3+",
-    chart: "No. 6",
-    dl: "New",
+    chart: "No. 1",
+    dl: "Featured",
     size: "Web · 2 MB",
     isBuiltin: true,
   },
@@ -250,4 +252,44 @@ export function downloadStandaloneAppPackage(app: StoreAppItem) {
   a.click();
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+interface StoredRatingMap {
+  [appId: string]: number;
+}
+
+export function getAppRatingStats(app: StoreAppItem): {
+  average: number;
+  totalVotes: number;
+  userRating: number;
+} {
+  const ratings = readStoreJson<StoredRatingMap>(APP_RATINGS_KEY, {});
+  const userRating = Number(ratings[app.id] || 0);
+  const baseVotes = app.isBuiltin ? 120 : 12;
+  if (userRating > 0) {
+    const weighted = Number(
+      (((app.rating || 4.8) * baseVotes + userRating) / (baseVotes + 1)).toFixed(1),
+    );
+    return {
+      average: weighted,
+      totalVotes: baseVotes + 1,
+      userRating,
+    };
+  }
+  return {
+    average: Number((app.rating || 4.8).toFixed(1)),
+    totalVotes: baseVotes,
+    userRating: 0,
+  };
+}
+
+export function rateStoreApp(app: StoreAppItem, stars: number) {
+  const clamped = Math.max(1, Math.min(5, Math.round(stars)));
+  const current = readStoreJson<StoredRatingMap>(APP_RATINGS_KEY, {});
+  const next = { ...current, [app.id]: clamped };
+  writeStoreJson(APP_RATINGS_KEY, next);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(APP_RATINGS_EVENT));
+  }
+  return getAppRatingStats(app);
 }

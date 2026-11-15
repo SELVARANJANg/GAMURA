@@ -516,6 +516,84 @@ export default function GamuraStoreLaunch({
           <>
             {tab === "foryou" && (
               <div className="space-y-6">
+                {/* Gamura Veo Spotlight Card */}
+                {(() => {
+                  const veoApp = allApps.find((a) => a.id === "veo");
+                  if (!veoApp) return null;
+                  const veoInstalled = installedIdSet.has(veoApp.id);
+                  const veoInstalling = installingId === veoApp.id;
+                  return (
+                    <div
+                      onClick={() => setSelectedApp(veoApp)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedApp(veoApp);
+                        }
+                      }}
+                      className="bg-white border border-zinc-200/80 rounded-3xl p-4 sm:p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <StoreAppGlyph
+                          app={veoApp}
+                          sizeClass="w-16 h-16 sm:w-18 sm:h-18"
+                          iconPx={32}
+                        />
+                        <div className="min-w-0">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#059669]">
+                            Spotlight · Video Studio
+                          </span>
+                          <h2 className="text-lg font-bold text-[#1D1D1F] tracking-tight truncate">
+                            {veoApp.name}
+                          </h2>
+                          <p className="text-xs text-[#6E6E73] truncate">
+                            {veoApp.tag}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {veoInstalling ? (
+                          <span className="px-5 py-2 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums">
+                            {installPct}%
+                          </span>
+                        ) : veoInstalled ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleUninstallAll(veoApp);
+                            }}
+                            className="px-4 py-2 rounded-full bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-xs font-semibold text-[#6E6E73] cursor-pointer transition-colors"
+                          >
+                            Uninstall
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => handleGetClick(veoApp, e)}
+                            className="px-5 py-2 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide cursor-pointer transition-colors"
+                          >
+                            GET
+                          </button>
+                        )}
+                        <a
+                          href={veoApp.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="px-5 py-2 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                        >
+                          <span>OPEN</span>
+                          <ExternalLink size={12} />
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Featured Carousel */}
                 <div className="flex gap-3.5 overflow-x-auto no-scrollbar pb-1 snap-x snap-mandatory">
                   {allApps.slice(0, 6).map((app) => (
