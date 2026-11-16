@@ -86,51 +86,53 @@ const APPLE_FONT_STYLE: React.CSSProperties = {
     '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", system-ui, sans-serif',
 };
 
-const STUDIO_TOOLS: {
+interface StudioToolDef {
   id: string;
   title: string;
   sub: string;
   tab: EditorTab | "manual";
   pick: "a" | "v" | "i" | "n";
   grad: string;
-  emoji: string;
-}[] = [
-  { id: "ve", title: "Video Editor", sub: "Timeline, trim, split", tab: "clips", pick: "a", grad: "from-sky-500 to-cyan-400", emoji: "🎬" },
-  { id: "mv", title: "Merge Videos", sub: "Join clips into one", tab: "clips", pick: "v", grad: "from-indigo-500 to-blue-500", emoji: "🔗" },
-  { id: "ptv", title: "Photo to Video", sub: "Images with motion", tab: "motion", pick: "i", grad: "from-cyan-500 to-indigo-500", emoji: "🖼" },
-  { id: "tc", title: "Trim & Crop", sub: "Cut, zoom, rotate", tab: "edit", pick: "n", grad: "from-blue-600 to-violet-500", emoji: "✂" },
-  { id: "fx", title: "Motion FX", sub: "Zoom, pan, beat pulse", tab: "motion", pick: "n", grad: "from-sky-400 to-blue-600", emoji: "✦" },
-  { id: "lk", title: "Looks", sub: "Aura filters, vignette", tab: "look", pick: "n", grad: "from-violet-500 to-fuchsia-500", emoji: "◐" },
-  { id: "tx", title: "Text & Stickers", sub: "Captions and emoji", tab: "text", pick: "n", grad: "from-blue-500 to-sky-400", emoji: "T" },
-  { id: "lg", title: "Logo Watermark", sub: "Brand every video", tab: "logo", pick: "n", grad: "from-emerald-500 to-teal-500", emoji: "◎" },
-  { id: "au", title: "Song & Voice", sub: "Music and voiceover", tab: "audio", pick: "n", grad: "from-indigo-500 to-sky-500", emoji: "♪" },
-  { id: "mg", title: "Magic Tools", sub: "Auto-edit, title cards", tab: "magic", pick: "n", grad: "from-purple-500 to-blue-500", emoji: "⚡" },
-  { id: "mn", title: "Manual", sub: "Step-by-step guide", tab: "manual", pick: "n", grad: "from-zinc-700 to-zinc-900", emoji: "📖" },
-  { id: "ex", title: "Export", sub: "720p, 1080p, Reels", tab: "export", pick: "n", grad: "from-emerald-600 to-emerald-500", emoji: "⬆" },
+  icon: React.ReactNode;
+}
+
+const STUDIO_TOOLS: StudioToolDef[] = [
+  { id: "ve", title: "Video Editor", sub: "Timeline, trim, split", tab: "clips", pick: "a", grad: "from-sky-500 to-cyan-400", icon: <Film size={20} /> },
+  { id: "mv", title: "Merge Videos", sub: "Join clips into one", tab: "clips", pick: "v", grad: "from-indigo-500 to-blue-500", icon: <Layers size={20} /> },
+  { id: "ptv", title: "Photo to Video", sub: "Images with motion", tab: "motion", pick: "i", grad: "from-cyan-500 to-indigo-500", icon: <ImageIcon size={20} /> },
+  { id: "tc", title: "Trim & Crop", sub: "Cut, zoom, rotate", tab: "edit", pick: "n", grad: "from-blue-600 to-violet-500", icon: <Scissors size={20} /> },
+  { id: "fx", title: "Motion FX", sub: "Zoom, pan, beat pulse", tab: "motion", pick: "n", grad: "from-sky-400 to-blue-600", icon: <Sparkles size={20} /> },
+  { id: "lk", title: "Looks", sub: "Aura filters, vignette", tab: "look", pick: "n", grad: "from-violet-500 to-fuchsia-500", icon: <Sliders size={20} /> },
+  { id: "tx", title: "Text & Stickers", sub: "Captions and emoji", tab: "text", pick: "n", grad: "from-blue-500 to-sky-400", icon: <TypeIcon size={20} /> },
+  { id: "lg", title: "Logo Watermark", sub: "Brand every video", tab: "logo", pick: "n", grad: "from-emerald-500 to-teal-500", icon: <Globe size={20} /> },
+  { id: "au", title: "Song & Voice", sub: "Music and voiceover", tab: "audio", pick: "n", grad: "from-indigo-500 to-sky-500", icon: <Music size={20} /> },
+  { id: "mg", title: "Magic Tools", sub: "Auto-edit, title cards", tab: "magic", pick: "n", grad: "from-purple-500 to-blue-500", icon: <Wand2 size={20} /> },
+  { id: "mn", title: "Manual", sub: "Step-by-step guide", tab: "manual", pick: "n", grad: "from-zinc-700 to-zinc-900", icon: <BookOpen size={20} /> },
+  { id: "ex", title: "Export", sub: "MP4, WebM, GIF, WAV", tab: "export", pick: "n", grad: "from-emerald-600 to-emerald-500", icon: <Download size={20} /> },
 ];
 
 const EDITOR_TABS: { id: EditorTab; label: string; icon: React.ReactNode }[] = [
-  { id: "clips", label: "Clips", icon: <Layers size={15} /> },
-  { id: "edit", label: "Edit", icon: <Scissors size={15} /> },
-  { id: "motion", label: "Motion", icon: <Sparkles size={15} /> },
-  { id: "look", label: "Look", icon: <Sliders size={15} /> },
-  { id: "text", label: "Text", icon: <TypeIcon size={15} /> },
-  { id: "logo", label: "Logo", icon: <ImageIcon size={15} /> },
-  { id: "audio", label: "Audio", icon: <Music size={15} /> },
-  { id: "magic", label: "Magic", icon: <Wand2 size={15} /> },
-  { id: "export", label: "Export", icon: <Download size={15} /> },
+  { id: "clips", label: "Clips", icon: <Layers size={14} /> },
+  { id: "edit", label: "Edit", icon: <Scissors size={14} /> },
+  { id: "motion", label: "Motion", icon: <Sparkles size={14} /> },
+  { id: "look", label: "Look", icon: <Sliders size={14} /> },
+  { id: "text", label: "Text", icon: <TypeIcon size={14} /> },
+  { id: "logo", label: "Logo", icon: <ImageIcon size={14} /> },
+  { id: "audio", label: "Audio", icon: <Music size={14} /> },
+  { id: "magic", label: "Magic", icon: <Wand2 size={14} /> },
+  { id: "export", label: "Export", icon: <Download size={14} /> },
 ];
 
 const TAB_TIPS: Record<EditorTab, string> = {
-  clips: "Tap + Add Video / Photo to import clips. Tap any timeline chip to select and edit.",
-  edit: "Drag the Trim bar handles or tap Set In / Out at Playhead to trim cleanly. Speed & Crop are below.",
-  motion: "Photos get smooth Ken Burns motion automatically. Beat pulse syncs zoom to your BPM.",
-  look: "Pick an Aura look, then fine-tune brightness, contrast, saturation, or vignette.",
-  text: "Type a caption, pick position and colour, or stamp an emoji sticker.",
-  logo: "Your GAMURA VEO logo is pre-loaded. Tap Use app logo as watermark or upload any PNG.",
-  audio: "Add a background song and record voiceover directly from the playhead.",
-  magic: "One-tap Auto-edit, gradient Title Card generator, and instant PNG frame snapshot.",
-  export: "Choose any format (MP4, WebM, MOV, MKV, GIF, WAV, PNG, JPEG), aspect ratio & FPS, then download.",
+  clips: "Add videos or photos and tap any timeline clip to arrange, split, or duplicate.",
+  edit: "Adjust In/Out trim points, speed, crop zoom, rotation, or fit with blur backdrop.",
+  motion: "Apply Ken Burns zoom/pan motion, transitions, or BPM-synced Beat Pulse.",
+  look: "Choose an Aura look and fine-tune brightness, contrast, saturation, or vignette.",
+  text: "Add crisp captions and custom positioned stickers onto the selected clip.",
+  logo: "Overlay your GAMURA VEO emblem or upload any custom PNG watermark.",
+  audio: "Mix a background soundtrack and record voiceover directly from the playhead.",
+  magic: "Run one-tap Auto-edit, generate title cards, or save high-res PNG frames.",
+  export: "Choose container format, aspect ratio, resolution, and frame rate, then download.",
 };
 
 export default function GamuraVeoPage({
@@ -181,6 +183,7 @@ export default function GamuraVeoPage({
 
   // Mutable high-frequency engine state
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mediaPoolRef = useRef<HTMLDivElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const songInputRef = useRef<HTMLInputElement>(null);
   const watermarkInputRef = useRef<HTMLInputElement>(null);
@@ -344,7 +347,6 @@ export default function GamuraVeoPage({
           .webkitAudioContext;
       const ctx = new AudioCtx();
       const dest = ctx.createMediaStreamDestination();
-      // Keep-alive silent tone ensures MediaRecorder gets a valid audio track even on silent clips
       const osc = ctx.createOscillator();
       const silentGain = ctx.createGain();
       silentGain.gain.value = 0;
@@ -441,13 +443,17 @@ export default function GamuraVeoPage({
         if (!el.paused) el.pause();
         return;
       }
-      const targetTime = c.start + loc.lt * c.speed;
+      const targetTime = Math.min(c.max, Math.max(0, c.start + loc.lt * c.speed));
       el.playbackRate = c.speed;
+      el.muted = Boolean(eng.mute || c.vol === 0);
       el.volume = eng.mute ? 0 : c.vol;
       if (eng.playing) {
         if (el.paused) {
           el.currentTime = targetTime;
-          el.play().catch(() => {});
+          el.play().catch(() => {
+            el.muted = true;
+            el.play().catch(() => {});
+          });
         } else if (Math.abs(el.currentTime - targetTime) > 0.35) {
           el.currentTime = targetTime;
         }
@@ -651,9 +657,20 @@ export default function GamuraVeoPage({
       if (eng.t >= tot) {
         eng.t = tot;
         setPlayheadUi(tot);
+        drawCanvasFrame();
+        const activeRec = eng.rec;
         stopPlayback();
-        if (eng.rec && eng.rec.state === "recording") {
-          eng.rec.stop();
+        if (activeRec && activeRec.state === "recording") {
+          try {
+            activeRec.requestData();
+          } catch {
+            // ignore browsers that do not support requestData mid-stop
+          }
+          window.setTimeout(() => {
+            if (activeRec.state === "recording") {
+              activeRec.stop();
+            }
+          }, 120);
         }
         return;
       }
@@ -664,7 +681,7 @@ export default function GamuraVeoPage({
       setPlayheadUi(eng.t);
 
       if (eng.rec && eng.rec.state === "recording" && tot > 0) {
-        setExportProgress(Math.min(100, Math.round((eng.t / tot) * 100)));
+        setExportProgress(Math.min(99, Math.round((eng.t / tot) * 100)));
       }
 
       eng.rafId = requestAnimationFrame(runLoop);
@@ -680,13 +697,18 @@ export default function GamuraVeoPage({
       return;
     }
     ensureAudioContext();
+    eng.clips.forEach((c) => {
+      if (c.k === "v" && c.el instanceof HTMLVideoElement) {
+        connectMediaElement(c.el);
+      }
+    });
     if (eng.t >= tot - 0.05) eng.t = 0;
     resyncMedia();
     eng.playing = true;
     eng.lastTs = performance.now();
     setIsPlaying(true);
     eng.rafId = requestAnimationFrame(runLoop);
-  }, [ensureAudioContext, resyncMedia, runLoop, showToast]);
+  }, [connectMediaElement, ensureAudioContext, resyncMedia, runLoop, showToast]);
 
   const togglePlayback = useCallback(() => {
     if (engineRef.current.playing) {
@@ -696,7 +718,6 @@ export default function GamuraVeoPage({
     }
   }, [startPlayback, stopPlayback]);
 
-  // Draw initial canvas when entering editor or changing screen
   useEffect(() => {
     if (screen === "editor") {
       drawCanvasFrame();
@@ -707,6 +728,17 @@ export default function GamuraVeoPage({
     const eng = engineRef.current;
     eng.history.push(eng.clips.map((c) => ({ ...c })));
     if (eng.history.length > 30) eng.history.shift();
+  }, []);
+
+  const attachVideoToDomPool = useCallback((v: HTMLVideoElement) => {
+    v.playsInline = true;
+    v.setAttribute("playsinline", "true");
+    v.setAttribute("webkit-playsinline", "true");
+    v.preload = "auto";
+    v.muted = true;
+    if (mediaPoolRef.current && !mediaPoolRef.current.contains(v)) {
+      mediaPoolRef.current.appendChild(v);
+    }
   }, []);
 
   const handleMediaFiles = useCallback(
@@ -750,15 +782,13 @@ export default function GamuraVeoPage({
           addedCount++;
         } else if (isVideo) {
           const v = document.createElement("video");
+          attachVideoToDomPool(v);
           v.src = url;
-          v.playsInline = true;
-          v.preload = "auto";
           let registered = false;
 
           const registerClip = () => {
             if (registered) return;
             registered = true;
-            connectMediaElement(v);
             const dur =
               Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 5;
             const clip = createDefaultClipProps({
@@ -776,8 +806,10 @@ export default function GamuraVeoPage({
             eng.t = startTimeOfClip(eng.sel);
             setPlayheadUi(eng.t);
             try {
-              v.currentTime = Math.min(0.01, dur * 0.1);
-            } catch {}
+              v.currentTime = Math.min(0.05, dur * 0.1);
+            } catch {
+              // ignore seek error prior to frame decode
+            }
             drawCanvasFrame();
             forceSyncUi();
             showToast(`Added ${file.name}`);
@@ -790,6 +822,7 @@ export default function GamuraVeoPage({
           };
           v.onseeked = () => drawCanvasFrame();
           v.onerror = () => showToast(`Could not read ${file.name}`);
+          v.load();
           addedCount++;
         }
       });
@@ -799,7 +832,7 @@ export default function GamuraVeoPage({
       }
     },
     [
-      connectMediaElement,
+      attachVideoToDomPool,
       drawCanvasFrame,
       ensureAudioContext,
       forceSyncUi,
@@ -844,10 +877,9 @@ export default function GamuraVeoPage({
     let elClone = c.el;
     if (c.k === "v" && c.url) {
       const v = document.createElement("video");
+      attachVideoToDomPool(v);
       v.src = c.url;
-      v.playsInline = true;
-      v.preload = "auto";
-      v.onloadedmetadata = () => connectMediaElement(v);
+      v.load();
       elClone = v;
     }
     const copy: VeoClip = {
@@ -869,6 +901,7 @@ export default function GamuraVeoPage({
     const [removed] = eng.clips.splice(eng.sel, 1);
     if (removed.k === "v" && removed.el instanceof HTMLVideoElement) {
       removed.el.pause();
+      removed.el.remove();
     }
     eng.sel = Math.min(eng.sel, eng.clips.length - 1);
     eng.t = Math.min(eng.t, totalDuration(eng.clips));
@@ -890,10 +923,14 @@ export default function GamuraVeoPage({
     let cloneEl = c.el;
     if (c.k === "v" && c.url) {
       const v = document.createElement("video");
+      attachVideoToDomPool(v);
       v.src = c.url;
-      v.playsInline = true;
-      v.preload = "auto";
-      v.onloadedmetadata = () => connectMediaElement(v);
+      try {
+        v.currentTime = splitPoint;
+      } catch {
+        // ignore pre-decode seek
+      }
+      v.load();
       cloneEl = v;
     }
     const rightHalf: VeoClip = {
@@ -908,7 +945,7 @@ export default function GamuraVeoPage({
     drawCanvasFrame();
     forceSyncUi();
     showToast("Clip split");
-  }, [connectMediaElement, drawCanvasFrame, forceSyncUi, locateAtTime, showToast, snapshotHistory]);
+  }, [attachVideoToDomPool, drawCanvasFrame, forceSyncUi, locateAtTime, showToast, snapshotHistory]);
 
   const undoClips = () => {
     const eng = engineRef.current;
@@ -1296,9 +1333,42 @@ export default function GamuraVeoPage({
     }
 
     ensureAudioContext();
+    if (eng.ac && eng.ac.state === "suspended") {
+      try {
+        await eng.ac.resume();
+      } catch {
+        // continue
+      }
+    }
+    eng.clips.forEach((c) => {
+      if (c.k === "v" && c.el instanceof HTMLVideoElement) {
+        connectMediaElement(c.el);
+      }
+    });
+
     eng.t = 0;
     eng.recCancelled = false;
     resyncMedia();
+
+    // Ensure first video frame is decoded & painted onto canvas before captureStream starts
+    const firstClip = eng.clips[0];
+    if (firstClip?.k === "v" && firstClip.el instanceof HTMLVideoElement) {
+      const vid = firstClip.el;
+      if (vid.readyState < 2) {
+        await new Promise<void>((resolve) => {
+          const timer = window.setTimeout(resolve, 400);
+          vid.addEventListener(
+            "seeked",
+            () => {
+              window.clearTimeout(timer);
+              resolve();
+            },
+            { once: true },
+          );
+        });
+      }
+    }
+    drawCanvasFrame();
 
     const stream = cv.captureStream(eng.fps);
     if (eng.dest) {
@@ -1311,7 +1381,7 @@ export default function GamuraVeoPage({
     try {
       mr = new MediaRecorder(
         stream,
-        mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined,
+        mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined,
       );
     } catch {
       mr = new MediaRecorder(stream);
@@ -1319,7 +1389,7 @@ export default function GamuraVeoPage({
 
     eng.rec = mr;
     mr.ondataavailable = (ev) => {
-      if (ev.data.size > 0) chunks.push(ev.data);
+      if (ev.data && ev.data.size > 0) chunks.push(ev.data);
     };
     mr.onerror = () => {
       setExportProgress(null);
@@ -1336,15 +1406,24 @@ export default function GamuraVeoPage({
       }
       const actualMime = mr.mimeType || mime || "video/webm";
       const blob = new Blob(chunks, { type: actualMime });
-      const filename = `gamura-veo.${format}`;
-      triggerBlobDownload(blob, filename);
       eng.rec = null;
-      showToast(`Downloaded ${filename} ✓`);
+      if (blob.size === 0) {
+        showToast("Recorded video was empty — try WebM format");
+        return;
+      }
+      const ext =
+        actualMime.includes("mp4") || format === "mp4" || format === "mov" || format === "mkv"
+          ? format
+          : "webm";
+      const filename = `gamura-veo.${ext}`;
+      triggerBlobDownload(blob, filename);
+      showToast(`Downloaded ${filename} (${Math.max(1, Math.round(blob.size / 1024))} KB) ✓`);
     };
 
     setExportStatusLabel(`Rendering ${format.toUpperCase()} (${eng.fps} fps)…`);
     setExportProgress(0);
-    mr.start(250);
+    mr.start(100);
+    drawCanvasFrame();
     startPlayback();
   };
 
@@ -1483,6 +1562,13 @@ export default function GamuraVeoPage({
       style={APPLE_FONT_STYLE}
       className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] flex flex-col"
     >
+      {/* In-DOM Offscreen Media Pool so Android Chrome & iOS Safari decode video frames reliably */}
+      <div
+        ref={mediaPoolRef}
+        aria-hidden="true"
+        className="fixed -left-[9999px] top-0 w-px h-px opacity-0 pointer-events-none overflow-hidden"
+      />
+
       {/* Hidden File Inputs */}
       <input
         ref={mediaInputRef}
@@ -1760,12 +1846,12 @@ export default function GamuraVeoPage({
                 key={tool.id}
                 type="button"
                 onClick={() => openToolFromHome(tool)}
-                className="bg-white hover:bg-zinc-50 border border-zinc-200/80 rounded-[22px] p-4 sm:p-5 text-left flex flex-col items-start gap-2.5 shadow-xs hover:shadow-md transition-all cursor-pointer"
+                className="bg-white hover:bg-zinc-50 border border-black/[0.06] rounded-[22px] p-4 sm:p-5 text-left flex flex-col items-start gap-2.5 shadow-2xs hover:shadow-md transition-all cursor-pointer"
               >
                 <span
-                  className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${tool.grad} text-white flex items-center justify-center text-xl shadow-sm`}
+                  className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${tool.grad} text-white flex items-center justify-center shadow-sm`}
                 >
-                  {tool.emoji}
+                  {tool.icon}
                 </span>
                 <div>
                   <div className="text-sm sm:text-base font-bold text-[#1D1D1F] tracking-tight">
@@ -1784,24 +1870,27 @@ export default function GamuraVeoPage({
       {/* SCREEN 2: LIVE VIDEO EDITOR WORKSPACE */}
       {screen === "editor" && (
         <main className="flex-1 w-full max-w-4xl mx-auto px-3 sm:px-5 py-4 flex flex-col gap-3 pb-12">
-          {/* Canvas Stage with Drag-and-Drop Support */}
+          {/* Unified Apple Cinema Stage + Transport + Timeline (Zero Triple-Nested Card Clutter) */}
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
               handleMediaFiles(e.dataTransfer.files);
             }}
-            className="bg-white border border-black/[0.06] rounded-[24px] p-3 sm:p-4 shadow-xs flex flex-col items-center"
+            className="bg-white border border-black/[0.06] rounded-[24px] overflow-hidden shadow-xs flex flex-col"
           >
-            <div className="w-full h-[230px] sm:h-[320px] flex items-center justify-center bg-[#F5F5F7] rounded-2xl overflow-hidden border border-black/[0.06]">
+            {/* Flush Dark Cinema Viewport */}
+            <div className="w-full h-[225px] sm:h-[330px] flex items-center justify-center bg-[#0B0B0D] p-2">
               <canvas
                 ref={canvasRef}
-                className="max-w-full max-h-full rounded-xl shadow-md bg-black"
+                className="max-w-full max-h-full rounded-lg bg-black"
               />
             </div>
 
+            <div className="p-3 sm:p-4 space-y-3">
+
             {/* Playback & Scrubber Bar */}
-            <div className="w-full flex items-center gap-3 pt-3 px-1">
+            <div className="w-full flex items-center gap-3">
               <button
                 type="button"
                 onClick={togglePlayback}
@@ -1834,7 +1923,7 @@ export default function GamuraVeoPage({
             </div>
 
             {/* Inline Quick Action Toolbar (+ Add Video, Trim, Split) */}
-            <div className="w-full flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-zinc-100 mt-3">
+            <div className="w-full flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-black/[0.05]">
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
@@ -1875,20 +1964,20 @@ export default function GamuraVeoPage({
                   className="px-3.5 py-2 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#0071E3] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
                 >
                   <Download size={12} />
-                  <span>Any Format Export</span>
+                  <span>Export Video</span>
                 </button>
               )}
             </div>
 
             {/* Timeline Strip */}
-            <div className="w-full flex items-center gap-2 overflow-x-auto pt-3 pb-1 min-h-[60px]">
+            <div className="w-full flex items-center gap-2 overflow-x-auto pt-1 min-h-[54px]">
               {engineRef.current.clips.length === 0 ? (
                 <button
                   type="button"
                   onClick={() => mediaInputRef.current?.click()}
-                  className="w-full py-3 rounded-xl border border-dashed border-zinc-300 text-xs font-semibold text-[#6E6E73] hover:text-[#1D1D1F] hover:border-[#0071E3] transition-colors cursor-pointer"
+                  className="w-full py-2.5 rounded-xl border border-dashed border-zinc-300 text-xs font-semibold text-[#6E6E73] hover:text-[#1D1D1F] hover:border-[#0071E3] transition-colors cursor-pointer"
                 >
-                  + Timeline empty — tap or drop videos/photos here
+                  Timeline empty — tap or drop videos/photos here
                 </button>
               ) : (
                 engineRef.current.clips.map((clip, idx) => {
@@ -1918,39 +2007,40 @@ export default function GamuraVeoPage({
                       }`}
                     >
                       <span className="px-1.5 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-semibold tabular-nums whitespace-nowrap">
-                        {clip.k === "v" ? "🎬" : "🖼"} {formatVeoTime(dur)}
+                        {clip.k === "v" ? "Video" : "Photo"} · {formatVeoTime(dur)}
                       </span>
                     </button>
                   );
                 })
               )}
             </div>
+            </div>
           </div>
 
           {/* Active Tool Tab Controls Card */}
           <div className="bg-white border border-black/[0.06] rounded-[24px] p-4 sm:p-5 shadow-xs space-y-4">
-            {/* Responsive Wrap Grid Tab Selector — Zero Clipping on Mobile */}
-            <div className="grid grid-cols-5 sm:flex sm:flex-wrap items-center gap-1.5 pb-3 border-b border-zinc-100">
+            {/* Single-Row Scrollable Apple Segmented Bar (Zero Blank 5th Slot) */}
+            <div className="flex items-center gap-1 overflow-x-auto pb-2.5 border-b border-black/[0.06]">
               {EDITOR_TABS.map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => setActiveTab(t.id)}
-                  className={`px-2 sm:px-3 py-2 rounded-xl text-[11px] sm:text-xs font-semibold flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 transition-colors cursor-pointer ${
+                  className={`min-h-[38px] px-3 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
                     activeTab === t.id
                       ? "bg-[#E8F2FF] text-[#0071E3]"
                       : "text-[#6E6E73] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
                   }`}
                 >
                   {t.icon}
-                  <span className="truncate max-w-full">{t.label}</span>
+                  <span>{t.label}</span>
                 </button>
               ))}
             </div>
 
-            <div className="px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] text-xs text-[#6E6E73]">
-              💡 {TAB_TIPS[activeTab]}
-            </div>
+            <p className="text-xs text-[#6E6E73] leading-relaxed">
+              {TAB_TIPS[activeTab]}
+            </p>
 
             {/* Tab Bodies */}
             {["edit", "motion", "look", "text"].includes(activeTab) && !selectedClip ? (
@@ -3168,6 +3258,27 @@ export default function GamuraVeoPage({
                   </div>
                 </div>
 
+                {engineRef.current.clips.length === 0 && (
+                  <div className="p-4 rounded-2xl bg-[#F5F5F7] border border-black/[0.05] flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold text-[#1D1D1F]">
+                        No clips on timeline yet
+                      </div>
+                      <div className="text-[11px] text-[#6E6E73]">
+                        Import a video or photo first to render video/GIF/WAV, or download a still PNG/JPEG frame right away.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => mediaInputRef.current?.click()}
+                      className="min-h-[38px] px-4 rounded-full bg-[#0071E3] hover:bg-[#0077ED] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <Plus size={13} />
+                      <span>Add Video / Photo</span>
+                    </button>
+                  </div>
+                )}
+
                 <div className="text-xs text-[#6E6E73] tabular-nums">
                   {engineRef.current.clips.length} clips ·{" "}
                   {formatVeoTime(totalSec)} · {engineRef.current.ar} ·{" "}
@@ -3179,12 +3290,27 @@ export default function GamuraVeoPage({
                 <div className="flex flex-col sm:flex-row gap-2.5">
                   <button
                     type="button"
-                    onClick={() => handleExportAnyFormat()}
+                    onClick={() => {
+                      if (
+                        engineRef.current.clips.length === 0 &&
+                        exportFormat !== "png" &&
+                        exportFormat !== "jpg"
+                      ) {
+                        showToast("Select a video or photo clip first");
+                        mediaInputRef.current?.click();
+                        return;
+                      }
+                      void handleExportAnyFormat();
+                    }}
                     className="flex-1 min-h-[48px] px-5 rounded-2xl bg-[#0071E3] hover:bg-[#0077ED] text-white text-sm font-bold inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
                   >
                     <Download size={16} />
                     <span>
-                      Download as .{exportFormat.toUpperCase()}
+                      {engineRef.current.clips.length === 0 &&
+                      exportFormat !== "png" &&
+                      exportFormat !== "jpg"
+                        ? "Add Clips to Export"
+                        : `Download as .${exportFormat.toUpperCase()}`}
                     </span>
                   </button>
 

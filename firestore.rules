@@ -267,5 +267,48 @@ service cloud.firestore {
       allow read, list: if true;
       allow write: if isSignedIn();
     }
+
+    // Gamura Clip (6-character capability room sync with strict schema & size guards; room listing disallowed)
+    function isValidClipRoomCode(code) {
+      return code is string && code.size() == 6 && code.matches('^[A-Z0-9]{6}$');
+    }
+
+    function isValidClipItem(data) {
+      return data.keys().hasAll(['t', 'v', 'ts', 'exp', 'pin', 'from'])
+        && data.keys().hasOnly(['t', 'v', 'iv', 'n', 's', 'ts', 'exp', 'pin', 'from'])
+        && data.t in ['text', 'link', 'image', 'file', 'enc']
+        && data.v is string && data.v.size() <= 920000
+        && data.from is string && data.from.size() > 0 && data.from.size() <= 32
+        && data.ts is number && data.exp is number && data.pin is bool
+        && (!('iv' in data) || (data.iv is string && data.iv.size() <= 64))
+        && (!('n' in data) || (data.n is string && data.n.size() <= 200))
+        && (!('s' in data) || data.s is number);
+    }
+
+    function isValidClipPresence(data) {
+      return data.keys().hasAll(['ts', 'n'])
+        && data.keys().hasOnly(['ts', 'n'])
+        && data.ts is number
+        && data.n is string && data.n.size() > 0 && data.n.size() <= 32;
+    }
+
+    match /clip_rooms/{roomCode} {
+      allow read, list, write: if false;
+
+      match /items/{itemId} {
+        allow get, list: if isValidClipRoomCode(roomCode);
+        allow create: if isValidClipRoomCode(roomCode) && isValidId(itemId) && isValidClipItem(incoming());
+        allow update: if isValidClipRoomCode(roomCode) && isValidId(itemId)
+          && isValidClipItem(incoming())
+          && incoming().diff(existing()).affectedKeys().hasOnly(['pin']);
+        allow delete: if isValidClipRoomCode(roomCode) && isValidId(itemId);
+      }
+
+      match /presence/{deviceId} {
+        allow get, list: if isValidClipRoomCode(roomCode);
+        allow create, update: if isValidClipRoomCode(roomCode) && isValidId(deviceId) && isValidClipPresence(incoming());
+        allow delete: if isValidClipRoomCode(roomCode) && isValidId(deviceId);
+      }
+    }
   }
 }

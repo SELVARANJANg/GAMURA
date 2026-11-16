@@ -156,6 +156,33 @@
         "status": { "type": "string" },
         "timestamp": { "type": "object" }
       }
+    },
+    "ClipRoomItem": {
+      "title": "ClipRoomItem",
+      "description": "Cross-device clipboard item in a Gamura Clip room",
+      "type": "object",
+      "properties": {
+        "t": { "type": "string", "enum": ["text", "link", "image", "file", "enc"] },
+        "v": { "type": "string", "maxLength": 920000 },
+        "iv": { "type": "string", "maxLength": 64 },
+        "n": { "type": "string", "maxLength": 200 },
+        "s": { "type": "number" },
+        "ts": { "type": "number" },
+        "exp": { "type": "number" },
+        "pin": { "type": "boolean" },
+        "from": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["t", "v", "ts", "exp", "pin", "from"]
+    },
+    "ClipRoomPresence": {
+      "title": "ClipRoomPresence",
+      "description": "Active device presence heartbeat in a Gamura Clip room",
+      "type": "object",
+      "properties": {
+        "ts": { "type": "number" },
+        "n": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["ts", "n"]
     }
   },
   "firestore": {
@@ -210,6 +237,14 @@
     "/system/stats": {
       "schema": "object",
       "description": "Global system statistics"
+    },
+    "/clip_rooms/{roomCode}/items/{itemId}": {
+      "schema": { "$ref": "#/entities/ClipRoomItem" },
+      "description": "Cross-device shared clipboard items inside a 6-character room"
+    },
+    "/clip_rooms/{roomCode}/presence/{deviceId}": {
+      "schema": { "$ref": "#/entities/ClipRoomPresence" },
+      "description": "Active device presence heartbeats inside a 6-character clip room"
     }
   }
 }
