@@ -47,6 +47,10 @@ export const GAMURA_VEO_LOGO_URL =
   "/assets/aistudio/IMG_20261115_083802_9866b1da.png";
 export const GAMURA_VEO_LOGO_FALLBACK =
   "https://lh3.googleusercontent.com/d/1FqBAdXuyDDSSuYtd3iZzf9x5PM8orKrd";
+export const GAMURA_CALC_LOGO_URL =
+  "/assets/aistudio/gamura-calc-logo_d6aec2f0.png";
+export const GAMURA_CALC_LOGO_FALLBACK =
+  "https://lh3.googleusercontent.com/d/19GM0X_7lRgIlwQ-PJP8uAJzVqkDOE2s_=w512";
 
 const driveLogo = (id: string) => ({
   logoUrl: `https://lh3.googleusercontent.com/d/${id}=w512`,
@@ -387,6 +391,25 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     chart: "Featured",
     dl: "Featured",
     size: "Web · 2 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-calculator",
+    name: "GAMURA CALCULATOR",
+    cat: "Utilities",
+    tag: "Scientific calculator, 13 converters, finance & math lab",
+    desc: "GAMURA CALCULATOR delivers a full scientific keypad with memory and history, 13 unit converters, Finance calculators (Currency, GST, Investment/SIP, Loan/EMI), and an interactive Math Lab with live function graphing, equation solvers, statistics, and physics constants.",
+    url: "/calculator",
+    c1: "#3a3a3c",
+    c2: "#1c1c1e",
+    iconKind: "calc",
+    logoUrl: GAMURA_CALC_LOGO_URL,
+    logoFallbackUrl: GAMURA_CALC_LOGO_FALLBACK,
+    rating: 4.9,
+    age: "3+",
+    chart: "No. 1 Utility",
+    dl: "Featured",
+    size: "Web · 1 MB",
     isBuiltin: true,
   },
 ];

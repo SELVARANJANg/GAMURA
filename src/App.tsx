@@ -200,6 +200,7 @@ import GamuraStoreLaunch, {
 import UniverseAppsView from "./components/UniverseAppsView";
 import GamuraVeoPage from "./components/GamuraVeoPage";
 import GamuraClipPage from "./components/GamuraClipPage";
+import GamuraCalcPage from "./components/GamuraCalcPage";
 import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
@@ -8756,6 +8757,7 @@ export default function App() {
     | "launch"
     | "veo"
     | "clip"
+    | "calculator"
     | "privacy"
     | "terms"
     | "delete-account";
@@ -8772,6 +8774,10 @@ export default function App() {
     "gamura-veo",
     "clip",
     "gamura-clip",
+    "calculator",
+    "calc",
+    "gamura-calculator",
+    "gamura-calc",
     "claim",
     "universe",
     "universe-active",
@@ -8832,6 +8838,14 @@ export default function App() {
     if (lower === "launch" || lower === "store") return { page: "launch", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "veo" || lower === "gamura-veo") return { page: "veo", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "clip" || lower === "gamura-clip") return { page: "clip", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (
+      lower === "calculator" ||
+      lower === "calc" ||
+      lower === "gamura-calculator" ||
+      lower === "gamura-calc"
+    ) {
+      return { page: "calculator", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "terms") return { page: "terms", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13168,6 +13182,17 @@ ${targetContext}`;
   if (currentPage === "clip") {
     return (
       <GamuraClipPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "calculator") {
+    return (
+      <GamuraCalcPage
         onBackHome={() => {
           window.history.pushState({}, "", "/");
           setCurrentPage("home");
