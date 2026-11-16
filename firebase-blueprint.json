@@ -10,6 +10,7 @@
         "nickname": { "type": "string" },
         "username": { "type": "string" },
         "avatarUrl": { "type": "string" },
+        "universePreferences": { "type": "object" },
         "createdAt": { "type": "number" }
       },
       "required": ["uid", "email", "nickname", "createdAt"]

@@ -84,6 +84,7 @@ import {
   PieChart as PieChartIcon,
   Flame,
   Music,
+  Compass,
 } from "lucide-react";
 import {
   DndContext,
@@ -198,6 +199,11 @@ import GamuraStoreLaunch, {
   LAUNCH_LOGO_FALLBACK,
 } from "./components/GamuraStoreLaunch";
 import UniverseAppsView from "./components/UniverseAppsView";
+import UniverseSettingsView, {
+  UniversePreferences,
+  UNIVERSE_PREFS_STORAGE_KEY,
+  loadUniversePreferences,
+} from "./components/UniverseSettingsView";
 import GamuraVeoPage from "./components/GamuraVeoPage";
 import GamuraClipPage from "./components/GamuraClipPage";
 import GamuraCalcPage from "./components/GamuraCalcPage";
@@ -2566,7 +2572,7 @@ const GalaxyCoreView = () => {
               className={`w-2 h-2 rounded-full ${
                 serverStatus === "offline"
                   ? "bg-amber-500"
-                  : "bg-emerald-500 animate-pulse"
+                  : "bg-emerald-500"
               }`}
             />
             <span className="text-xs font-semibold text-emerald-700">
@@ -5138,7 +5144,7 @@ const UsersView = ({
           </div>
           <div className="bg-emerald-50/70 border border-emerald-200/70 rounded-2xl px-4 py-2.5 flex flex-col items-center min-w-[96px]">
             <span className="text-[11px] font-medium text-emerald-700 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
               Active Now
             </span>
             <span className="text-base font-bold text-emerald-700 mt-0.5">
@@ -5681,8 +5687,11 @@ const UniverseDashboard = ({
   setShowDeleteConfirm: (val: boolean) => void;
   setShowSignOutConfirm: (val: boolean) => void;
 }) => {
+  const [universePrefs, setUniversePrefs] = useState<UniversePreferences>(() =>
+    loadUniversePreferences(),
+  );
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("Overview");
+  const [activeTab, setActiveTab] = useState(() => loadUniversePreferences().defaultStartupTab || "Overview");
   const [quickAddText, setQuickAddText] = useState("");
   const [quickPriority, setQuickPriority] = useState("Medium");
   const [quickDueDate, setQuickDueDate] = useState("");
@@ -5855,7 +5864,7 @@ const UniverseDashboard = ({
         snap.docChanges().forEach((change) => {
           if (change.type === "added") {
             const data = change.doc.data();
-            if (data.senderUid !== user?.uid) {
+            if (data.senderUid !== user?.uid && universePrefs.broadcastAlerts) {
               showToast("📡", "GLOBAL BROADCAST", `${data.message}`);
             }
           }
@@ -5871,7 +5880,7 @@ const UniverseDashboard = ({
       unsubConn();
       unsubBroadcasts();
     };
-  }, [user, db, showToast]);
+  }, [user, db, showToast, universePrefs.broadcastAlerts]);
 
   const activitySummary = useMemo(() => {
     if (activities.length === 0) {
@@ -6249,6 +6258,7 @@ const UniverseDashboard = ({
       }
     }
     // Backward compatibility for templates using msg instead of content
+    if (!universePrefs.inAppAlerts && deducedType === "info") return;
     setToasts((prev) => [
       ...prev,
       { id, ic, title, content, msg: content, type: deducedType },
@@ -6603,7 +6613,7 @@ const UniverseDashboard = ({
   }, [user, isAuthUser, activityFilter]);
 
   useEffect(() => {
-    if (isAuthUser && db) {
+    if (isAuthUser && db && universePrefs.broadcastPresence) {
       const updatePulse = async () => {
         try {
           await setDoc(
@@ -6619,12 +6629,65 @@ const UniverseDashboard = ({
       const interval = setInterval(updatePulse, 45000);
       return () => clearInterval(interval);
     }
-  }, [user, isAuthUser, db]);
+  }, [user, isAuthUser, db, universePrefs.broadcastPresence]);
+
+  useEffect(() => {
+    if (userInfo?.universePreferences) {
+      setUniversePrefs((prev) => {
+        const merged = { ...prev, ...userInfo.universePreferences };
+        try {
+          localStorage.setItem(UNIVERSE_PREFS_STORAGE_KEY, JSON.stringify(merged));
+        } catch {}
+        return merged;
+      });
+    }
+  }, [userInfo?.universePreferences]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (universePrefs.enableKeyboardShortcut && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      } else if (e.key === "Escape" && searchOpen) {
+        setSearchOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [universePrefs.enableKeyboardShortcut, searchOpen]);
+
+  const handleUpdatePreferences = async (next: UniversePreferences) => {
+    setUniversePrefs(next);
+    try {
+      localStorage.setItem(UNIVERSE_PREFS_STORAGE_KEY, JSON.stringify(next));
+    } catch {}
+    setThemeColors((prev) => ({ ...prev, primary: next.accentColor }));
+    setIsDark(next.surfaceMode === "dark");
+    setActivityFilter(next.defaultActivityScope);
+
+    if (isAuthUser && user?.uid && userInfo) {
+      try {
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            uid: user.uid,
+            nickname: userInfo.nickname || user.displayName || "Member",
+            createdAt: userInfo.createdAt || Date.now(),
+            universePreferences: next,
+          },
+          { merge: true },
+        );
+      } catch {
+        // fallback already saved in localStorage
+      }
+    }
+  };
 
   useEffect(() => {
     if (editProfileOpen && userInfo) {
       setNewUsername(userInfo.username || "");
       setNewNickname(userInfo.nickname || "");
+      setNewBio(userInfo.bio || "");
       setNewAvatar(userInfo.avatarUrl || "");
     }
   }, [editProfileOpen, userInfo]);
@@ -7028,6 +7091,16 @@ const UniverseDashboard = ({
           badge: universeAppsCount > 0 ? `${universeAppsCount}` : undefined,
         },
         {
+          name: "Join Selvaranjan",
+          icon: <Compass size={16} />,
+          badge: "NETWORK",
+        },
+        {
+          name: "Settings",
+          icon: <Settings size={16} />,
+          badge: "SYSTEM",
+        },
+        {
           name: "Users",
           icon: <Users size={16} />,
           badge: allUsers.length > 0 ? `${allUsers.length}` : undefined,
@@ -7063,55 +7136,39 @@ const UniverseDashboard = ({
           badge: "ACTIVE",
         },
         { name: "Gamura Link", icon: <Link size={16} /> },
-        { name: "Aura Settings", icon: <Settings size={16} /> },
+        { name: "Aura Settings", icon: <Sparkles size={16} /> },
         { name: "Portfolio Builder", icon: <Briefcase size={16} /> },
         {
           name: "Website",
           icon: <Globe size={16} />,
-          action: () => window.open(window.location.origin, "_blank"),
+          action: () => window.open(window.location.origin, "_blank", "noopener,noreferrer"),
         },
         {
           name: "GCP",
           icon: <Cloud size={16} />,
-          action: () => window.open("https://gamuracp.vercel.app/", "_blank"),
-        },
-        {
-          name: "Gamura Elvaran",
-          icon: <Sparkles size={16} />,
-          badge: "SOON",
-          action: () =>
-            showToast(
-              "⌛",
-              "Coming Soon",
-              "GAMURA ELVARAN is currently in development.",
-            ),
+          action: () => window.open("https://gamuracp.vercel.app/", "_blank", "noopener,noreferrer"),
         },
         {
           name: "Gamura Galaxy",
           icon: <Sparkles size={16} />,
           action: () =>
-            window.open("https://gamuragalaxy.vercel.app/", "_blank"),
+            window.open("https://gamuragalaxy.vercel.app/", "_blank", "noopener,noreferrer"),
         },
         {
           name: "SR Portfolio",
           icon: <User size={16} />,
           action: () =>
-            window.open("https://selvaranjan.netlify.app/", "_blank"),
+            window.open("https://selvaranjan.netlify.app/", "_blank", "noopener,noreferrer"),
         },
         {
           name: "BuBuBai",
           icon: <Bot size={16} />,
-          action: () => window.open("https://bububai.vercel.app/", "_blank"),
+          action: () => window.open("https://bububai.vercel.app/", "_blank", "noopener,noreferrer"),
         },
         {
-          name: "Resume Builder",
+          name: "Resume & Portfolio Studio",
           icon: <FileText size={16} />,
-          action: () =>
-            showToast(
-              "📝",
-              "Resume Builder",
-              "Go to Gamura Galaxy to build your resume.",
-            ),
+          action: () => setActiveTab("Portfolio Builder"),
         },
       ],
     },
@@ -7350,10 +7407,11 @@ const UniverseDashboard = ({
       <style>{`
         .universe-dashboard-root {
           font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Plus Jakarta Sans', system-ui, sans-serif;
-          background: #f5f5f7;
+          background: ${universePrefs.surfaceMode === "dark" ? "#0c0c0f" : universePrefs.surfaceMode === "frost" ? "#eef2f6" : "#f5f5f7"};
           color: #1d1d1f;
           min-height: 100vh;
           overflow-x: clip;
+          --ud-accent: ${universePrefs.accentColor || "#0071E3"};
         }
         .universe-dashboard-root * { box-sizing: border-box; }
 
@@ -7361,9 +7419,9 @@ const UniverseDashboard = ({
           min-height: 100vh;
           display: flex;
           flex-direction: column;
-          background: #f5f5f7;
-          padding-top: 54px;
-          padding-bottom: 76px;
+          background: transparent;
+          padding-top: 56px;
+          padding-bottom: 78px;
         }
         .ud-topbar {
           position: fixed;
@@ -7371,9 +7429,9 @@ const UniverseDashboard = ({
           left: 0;
           right: 0;
           z-index: 300;
-          height: 54px;
-          background: rgba(255, 255, 255, 0.92);
-          backdrop-filter: saturate(180%) blur(20px);
+          height: 56px;
+          background: rgba(255, 255, 255, 0.9);
+          backdrop-filter: saturate(180%) blur(22px);
           border-bottom: 1px solid rgba(0, 0, 0, 0.06);
           display: flex;
           align-items: center;
@@ -7382,17 +7440,17 @@ const UniverseDashboard = ({
         }
         .ud-content {
           flex: 1;
-          padding: 18px 14px 24px;
+          padding: ${universePrefs.density === "compact" ? "12px 12px 20px" : "18px 14px 24px"};
           display: flex;
           flex-direction: column;
-          gap: 14px;
+          gap: ${universePrefs.density === "compact" ? "10px" : "14px"};
           max-width: 960px;
           margin: 0 auto;
           width: 100%;
         }
         @media (min-width: 768px) {
           .ud-topbar { padding: 0 24px; gap: 12px; }
-          .ud-content { padding: 22px 24px 28px; gap: 16px; }
+          .ud-content { padding: ${universePrefs.density === "compact" ? "16px 20px 24px" : "22px 24px 28px"}; gap: ${universePrefs.density === "compact" ? "12px" : "16px"}; }
         }
       `}</style>
 
@@ -7401,33 +7459,37 @@ const UniverseDashboard = ({
         {[
           { name: "Overview", label: "Home", icon: <Home size={16} />, count: 0 },
           { name: "Apps", label: "Apps", icon: <LayoutGrid size={16} />, count: universeAppsCount },
+          { name: "Join Selvaranjan", label: "Join", icon: <Compass size={16} />, count: 0 },
           { name: "Daily Streak", label: "Streak", icon: <Flame size={16} />, count: 0 },
-          { name: "Audio Module", label: "Audio", icon: <Music size={16} />, count: 0 },
-          { name: "Neutral Link", label: "Links", icon: <Link size={16} />, count: 0 },
-        ].map((item) => (
-          <button
-            key={item.name}
-            onClick={() => {
-              setActiveTab(item.name);
-              setMobileOpen(false);
-            }}
-            className={`relative flex flex-col items-center justify-center gap-0.5 px-2.5 py-1 rounded-xl transition-all cursor-pointer ${
-              activeTab === item.name
-                ? "text-zinc-950 font-semibold"
-                : "text-zinc-400 hover:text-zinc-700"
-            }`}
-          >
-            <div className="relative">
-              {item.icon}
-              {item.count > 0 && (
-                <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-1 rounded-full bg-[#059669] text-white text-[9px] font-bold flex items-center justify-center leading-none">
-                  {item.count}
-                </span>
-              )}
-            </div>
-            <span className="text-[10px] tracking-tight">{item.label}</span>
-          </button>
-        ))}
+          { name: "Settings", label: "Settings", icon: <Settings size={16} />, count: 0 },
+        ].map((item) => {
+          const isSelected = activeTab === item.name;
+          return (
+            <button
+              key={item.name}
+              onClick={() => {
+                setActiveTab(item.name);
+                setMobileOpen(false);
+              }}
+              style={isSelected ? { color: universePrefs.accentColor } : undefined}
+              className={`relative flex flex-col items-center justify-center gap-0.5 px-2.5 py-1 rounded-xl transition-all cursor-pointer ${
+                isSelected
+                  ? "font-semibold"
+                  : "text-zinc-400 hover:text-zinc-700"
+              }`}
+            >
+              <div className="relative">
+                {item.icon}
+                {universePrefs.showDockBadges && item.count > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-1 rounded-full bg-[#059669] text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                    {item.count}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] tracking-tight">{item.label}</span>
+            </button>
+          );
+        })}
         <button
           onClick={() => setMobileOpen(true)}
           className={`flex flex-col items-center justify-center gap-0.5 px-2.5 py-1 rounded-xl transition-all cursor-pointer ${
@@ -7466,33 +7528,47 @@ const UniverseDashboard = ({
                   setMobileOpen(false);
                 }
               }}
-              className="fixed bottom-0 left-0 right-0 z-[500] mx-auto w-full max-w-2xl h-[62vh] min-h-[380px] max-h-[600px] bg-white/95 backdrop-blur-2xl rounded-t-[2.25rem] border-t border-x border-zinc-200/80 shadow-[0_-24px_60px_rgba(0,0,0,0.14)] flex flex-col overflow-hidden text-zinc-900 select-none"
+              className="fixed bottom-0 left-0 right-0 z-[500] mx-auto w-full max-w-2xl h-[68vh] min-h-[380px] max-h-[640px] bg-white/95 backdrop-blur-2xl rounded-t-[2.25rem] border-t border-x border-zinc-200/80 shadow-[0_-24px_60px_rgba(0,0,0,0.14)] flex flex-col overflow-hidden text-zinc-900 select-none"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Drag Handle & Compact Header */}
               <div className="pt-2.5 pb-2 px-5 flex flex-col items-center border-b border-zinc-100 shrink-0 bg-white/80 cursor-grab active:cursor-grabbing">
                 <div className="w-10 h-1 rounded-full bg-zinc-300 mb-2.5" />
-                <div className="w-full flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-xl bg-zinc-100 border border-zinc-200/70 flex items-center justify-center p-1">
+                <div className="w-full flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-xl bg-zinc-100 border border-zinc-200/70 flex items-center justify-center p-1 shrink-0">
                       <img src={GAMURA_G_LOGO} className="w-full h-full object-contain mix-blend-multiply" alt="Gamura" />
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold tracking-tight text-zinc-900 leading-none">
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-bold tracking-tight text-zinc-900 leading-none truncate">
                         Universe Menu
                       </span>
-                      <span className="text-[10px] text-zinc-500 font-medium mt-0.5">
-                        Workspace Navigation
+                      <span className="text-[10px] text-zinc-500 font-medium mt-0.5 truncate">
+                        Workspace &amp; Settings
                       </span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setMobileOpen(false)}
-                    className="w-7 h-7 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-600 transition-colors cursor-pointer"
-                    aria-label="Close Menu"
-                  >
-                    <X size={14} />
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab("Settings");
+                        setMobileOpen(false);
+                      }}
+                      className="px-2.5 py-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200 inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-800 transition-colors cursor-pointer"
+                      aria-label="Open Universe Settings"
+                    >
+                      <Settings size={13} />
+                      <span>Settings</span>
+                    </button>
+                    <button
+                      onClick={() => setMobileOpen(false)}
+                      className="w-7 h-7 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-zinc-600 transition-colors cursor-pointer"
+                      aria-label="Close Menu"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -7505,30 +7581,58 @@ const UniverseDashboard = ({
                 }}
                 className="flex-1 overflow-y-auto touch-pan-y px-4 sm:px-5 py-3.5 space-y-4 bg-[#f5f5f7]"
               >
-                <a
-                  href="/join-selvaranjan"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-white via-emerald-50/70 to-sky-50/70 border border-emerald-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-md transition-all group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-zinc-900 text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Sparkles size={16} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-zinc-950 tracking-tight truncate">
-                        Join Selvaranjan on Gamura
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("Join Selvaranjan");
+                      setMobileOpen(false);
+                    }}
+                    className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-white via-emerald-50/70 to-sky-50/70 border border-emerald-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-md transition-all group text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-9 h-9 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs"
+                        style={{ backgroundColor: universePrefs.accentColor }}
+                      >
+                        <Compass size={16} />
                       </div>
-                      <div className="text-[10px] text-zinc-500 font-medium truncate">
-                        Open Developer Network in a new page
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-zinc-950 tracking-tight truncate">
+                          Join Selvaranjan on Gamura
+                        </div>
+                        <div className="text-[10px] text-zinc-500 font-medium truncate">
+                          Open inside Universe Page
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="w-7 h-7 rounded-full bg-[#E2F5ED] text-[#059669] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                    <ArrowUpRight size={14} />
-                  </div>
-                </a>
+                    <ChevronRight size={15} className="text-[#059669] shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("Settings");
+                      setMobileOpen(false);
+                    }}
+                    className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-md transition-all group text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-zinc-900 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <Settings size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-zinc-950 tracking-tight truncate">
+                          Universe Settings
+                        </div>
+                        <div className="text-[10px] text-zinc-500 font-medium truncate">
+                          Theme, privacy, access &amp; controls
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight size={15} className="text-zinc-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                </div>
 
                 {navGroups.map((group, gIdx) => (
                   <div key={gIdx} className="space-y-1.5">
@@ -7558,9 +7662,12 @@ const UniverseDashboard = ({
                             }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                                isActive ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-600"
-                              }`}>
+                              <div
+                                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                  isActive ? "text-white" : "bg-zinc-100 text-zinc-600"
+                                }`}
+                                style={isActive ? { backgroundColor: universePrefs.accentColor } : undefined}
+                              >
                                 {item.icon}
                               </div>
                               <span className="text-xs truncate">{item.name}</span>
@@ -7660,8 +7767,12 @@ const UniverseDashboard = ({
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search Universe..."
+                onFocus={() => setSearchOpen(true)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (!searchOpen) setSearchOpen(true);
+                }}
+                placeholder={universePrefs.enableKeyboardShortcut ? "Search Universe... (⌘K)" : "Search Universe..."}
                 className="w-full bg-zinc-100 border border-zinc-200/70 rounded-xl pl-8 pr-7 py-1.5 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:bg-white focus:border-zinc-300 transition-all"
               />
               {searchQuery && (
@@ -7677,17 +7788,46 @@ const UniverseDashboard = ({
           </div>
 
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
-            <a
-              href="/join-selvaranjan"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-2.5 sm:px-3 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200/80 text-zinc-900 text-[11px] font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0"
-              title="Join Selvaranjan on Gamura"
+            {universePrefs.showJoinSelvaranjanPill && (
+              <button
+                type="button"
+                onClick={() => setActiveTab("Join Selvaranjan")}
+                style={
+                  activeTab === "Join Selvaranjan"
+                    ? { backgroundColor: universePrefs.accentColor, color: "#fff", borderColor: universePrefs.accentColor }
+                    : undefined
+                }
+                className={`px-2.5 sm:px-3 h-8 rounded-full border text-[11px] font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                  activeTab === "Join Selvaranjan"
+                    ? "shadow-xs"
+                    : "bg-zinc-100 hover:bg-zinc-200/80 border-zinc-200/80 text-zinc-900"
+                }`}
+                title="Join Selvaranjan on Gamura"
+              >
+                <Compass size={12} className={activeTab === "Join Selvaranjan" ? "text-white" : "text-[#059669]"} />
+                <span className="sm:hidden">Join Selvaranjan</span>
+                <span className="hidden sm:inline">Join Selvaranjan on Gamura</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setActiveTab("Settings")}
+              style={
+                activeTab === "Settings"
+                  ? { backgroundColor: universePrefs.accentColor, color: "#fff", borderColor: universePrefs.accentColor }
+                  : undefined
+              }
+              className={`h-8 px-2.5 rounded-xl border flex items-center gap-1.5 text-[11px] font-semibold transition-all cursor-pointer shrink-0 ${
+                activeTab === "Settings"
+                  ? "shadow-xs"
+                  : "bg-zinc-100 hover:bg-zinc-200/80 border-zinc-200/70 text-zinc-700"
+              }`}
+              aria-label="Universe Settings"
+              title="Universe Settings"
             >
-              <span className="sm:hidden">Join Selvaranjan</span>
-              <span className="hidden sm:inline">Join Selvaranjan on Gamura</span>
-              <ArrowUpRight size={12} className="text-[#059669] shrink-0" />
-            </a>
+              <Settings size={14} />
+              <span className="hidden lg:inline">Settings</span>
+            </button>
             <button
               onClick={() => {
                 setNotifOpen(!notifOpen);
@@ -7703,7 +7843,7 @@ const UniverseDashboard = ({
             </button>
             <button
               onClick={handleRefresh}
-              className="w-8 h-8 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200/70 flex items-center justify-center text-zinc-600 transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-xl bg-zinc-100 hover:bg-zinc-200/80 border border-zinc-200/70 flex items-center justify-center text-zinc-600 transition-colors cursor-pointer hidden sm:flex"
               aria-label="Refresh"
             >
               <RotateCw size={14} className={isRefreshing ? "animate-spin" : ""} />
@@ -7725,13 +7865,55 @@ const UniverseDashboard = ({
             maxWidth:
               activeTab === "Portfolio Builder"
                 ? "1360px"
-                : activeTab === "Gamura Universe"
-                  ? "1040px"
+                : activeTab === "Gamura Universe" ||
+                    activeTab === "Settings" ||
+                    activeTab === "Join Selvaranjan"
+                  ? "1080px"
                   : "960px",
           }}
         >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={universePrefs.reduceMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={universePrefs.reduceMotion ? undefined : { opacity: 0, y: -6 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="w-full"
+            >
           {activeTab === "Apps" ? (
             <UniverseAppsView showToast={showToast} />
+          ) : activeTab === "Join Selvaranjan" ? (
+            <SelvaranjanGamura
+              embeddedInUniverse
+              onBack={() => setActiveTab("Overview")}
+              showToast={showToast}
+              accentColor={universePrefs.accentColor}
+            />
+          ) : activeTab === "Settings" ? (
+            <UniverseSettingsView
+              user={user}
+              userInfo={userInfo}
+              setCurrentUserInfo={setCurrentUserInfo}
+              preferences={universePrefs}
+              onUpdatePreferences={handleUpdatePreferences}
+              onNavigateTab={(t) => setActiveTab(t)}
+              onBack={() => setActiveTab("Overview")}
+              showToast={showToast}
+              isLoggedIn={isLoggedIn}
+              onConnect={onConnect}
+              gamuraAccounts={gamuraAccounts}
+              setCurrentPage={setCurrentPage}
+              setEmail={setEmail}
+              setUsername={setUsername}
+              setShowDeleteConfirm={setShowDeleteConfirm}
+              setShowSignOutConfirm={setShowSignOutConfirm}
+              connectedApps={connectedApps}
+              onConnectApp={handleConnectApp}
+              onDisconnectApp={handleDisconnectApp}
+              onExportTelemetry={exportTelemetryData}
+              addActivity={addActivity}
+            />
           ) : activeTab === "Network Graph" ? (
             <NetworkGraphView
               currentUser={user}
@@ -7932,18 +8114,38 @@ const UniverseDashboard = ({
                     Welcome back, {displayName}
                   </h2>
                   <p className="text-[11px] text-zinc-500 mt-0.5">
-                    Gamura Universe • Compact Workspace
+                    Gamura Universe · {greeting} Workspace
                   </p>
                 </div>
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-50 border border-zinc-200/80 rounded-xl self-start sm:self-auto">
-                  <span className="text-[10px] font-medium text-zinc-500">ID</span>
-                  <span className="text-xs font-mono font-semibold text-zinc-900 tracking-wide">
-                    {gamuraId}
-                  </span>
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("Join Selvaranjan")}
+                    style={{ backgroundColor: universePrefs.accentColor }}
+                    className="px-3 py-1.5 rounded-xl text-white text-[11px] font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-xs transition-transform active:scale-[0.98]"
+                  >
+                    <Compass size={12} />
+                    <span>Join Selvaranjan</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("Settings")}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-[11px] font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Settings size={12} />
+                    <span>Settings</span>
+                  </button>
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-zinc-50 border border-zinc-200/80 rounded-xl">
+                    <span className="text-[10px] font-medium text-zinc-500">ID</span>
+                    <span className="text-xs font-mono font-semibold text-zinc-900 tracking-wide">
+                      {gamuraId}
+                    </span>
+                  </div>
                 </div>
               </div>
 
               {/* COMPACT APPLE QUICK BROADCAST BAR */}
+              {universePrefs.showQuickBroadcastBar && (
               <form
                 onSubmit={handleQuickAdd}
                 className="bg-white border border-zinc-200/80 rounded-2xl p-1.5 flex items-center gap-2 shadow-xs"
@@ -7966,6 +8168,7 @@ const UniverseDashboard = ({
                   Send
                 </button>
               </form>
+              )}
 
               {/* COMPACT STREAK & AUDIO WIDGETS */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -8099,6 +8302,8 @@ const UniverseDashboard = ({
               </div>
             </div>
           )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
 
@@ -8109,7 +8314,7 @@ const UniverseDashboard = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/25 backdrop-blur-sm z-[500] flex items-start justify-center pt-[15vh] px-4"
+            className="fixed inset-0 bg-black/25 backdrop-blur-sm z-[500] flex items-start justify-center pt-[14vh] px-4"
             onClick={() => setSearchOpen(false)}
           >
             <motion.div
@@ -8124,7 +8329,7 @@ const UniverseDashboard = ({
                 <input
                   autoFocus
                   className="flex-1 bg-transparent border-none outline-none text-xs text-zinc-900 placeholder:text-zinc-400"
-                  placeholder="Search Universe..."
+                  placeholder="Jump to any Universe tool, Settings, or Builder..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -8132,15 +8337,29 @@ const UniverseDashboard = ({
                   ESC
                 </div>
               </div>
-              <div className="p-2 space-y-1 max-h-[320px] overflow-y-auto">
+              <div className="p-2 space-y-1 max-h-[360px] overflow-y-auto">
                 {[
-                  { ic: "🏠", title: "Overview", sub: "Main workspace" },
-                  { ic: "🔥", title: "Daily Streak", sub: "Check-in & points" },
-                  { ic: "🎵", title: "Audio Module", sub: "Ambient soundscapes" },
-                  { ic: "🌌", title: "Galaxy Core", sub: "Ecosystem overview" },
+                  { ic: "🏠", title: "Overview", sub: "Main workspace & shared projects" },
+                  { ic: "🚀", title: "Join Selvaranjan", sub: "Developer network, Free URL studio & HTML sandbox" },
+                  { ic: "⚙️", title: "Settings", sub: "Theme accent, privacy, access, audio & export" },
+                  { ic: "📱", title: "Apps", sub: "Installed Gamura Launch Store workspace apps" },
+                  { ic: "🌐", title: "Gamura Universe", sub: "Claim your /@username personal hub" },
+                  { ic: "💼", title: "Portfolio Builder", sub: "Design & publish your web portfolio" },
+                  { ic: "🔗", title: "Gamura Link", sub: "Short /go/ redirects & analytics" },
+                  { ic: "👥", title: "Users", sub: "Directory of live Universe members" },
+                  { ic: "📡", title: "Active Users", sub: "Currently online members" },
+                  { ic: "🕸️", title: "Network Graph", sub: "Interactive node connection topology" },
+                  { ic: "🔥", title: "Daily Streak", sub: "Weekly check-in & points" },
+                  { ic: "🎵", title: "Audio Module", sub: "Focus ambient soundscapes" },
+                  { ic: "💬", title: "Neutral Link", sub: "Ephemeral 24h channels & groups" },
+                  { ic: "🔌", title: "Integrations", sub: "Vercel, Netlify, Slack & Discord hooks" },
+                  { ic: "🌌", title: "Galaxy Core", sub: "Live Firestore & server telemetry" },
+                  { ic: "✨", title: "Aura Settings", sub: "8-subsystem Aura Engine panel" },
                 ]
-                  .filter((i) =>
-                    i.title.toLowerCase().includes(searchQuery.toLowerCase()),
+                  .filter(
+                    (i) =>
+                      i.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      i.sub.toLowerCase().includes(searchQuery.toLowerCase()),
                   )
                   .map((item, i) => (
                     <div
@@ -8432,43 +8651,44 @@ const UniverseDashboard = ({
         )}
       </AnimatePresence>
 
-      {/* EDIT PROFILE MODAL */}
+      {/* EDIT PROFILE MODAL (APPLE STYLE) */}
       <AnimatePresence>
         {editProfileOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[1000] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[1000] flex items-center justify-center p-4"
+            onClick={() => setEditProfileOpen(false)}
           >
             <motion.div
-              initial={{ scale: 0.9, y: 20 }}
+              initial={{ scale: 0.95, y: 14 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden relative"
+              exit={{ scale: 0.95, y: 14 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-white border border-zinc-200/90 rounded-3xl shadow-2xl overflow-hidden text-[#1D1D1F]"
             >
-              <div className="p-8 border-b border-white/5 bg-gradient-to-br from-cyan-500/10 to-violet-500/10">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-xl font-black text-white uppercase tracking-widest leading-none">
-                      Edit Profile
-                    </h2>
-                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-2">
-                      Re-calibrate your Universe identity
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setEditProfileOpen(false)}
-                    className="text-zinc-500 hover:text-white transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
+              <div className="px-6 py-4 border-b border-zinc-100 flex justify-between items-center bg-[#F5F5F7]/70">
+                <div>
+                  <h2 className="text-base font-bold text-[#1D1D1F] leading-tight">
+                    Edit Profile
+                  </h2>
+                  <p className="text-[11px] text-[#6E6E73] mt-0.5">
+                    Update your Gamura Universe identity
+                  </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setEditProfileOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white border border-zinc-200/70 text-[#6E6E73] hover:text-[#1D1D1F] flex items-center justify-center cursor-pointer"
+                >
+                  <X size={15} />
+                </button>
               </div>
 
-              <form onSubmit={handleUpdateProfile} className="p-8 space-y-6">
-                <div className="flex flex-col items-center gap-4 py-2">
-                  <div className="w-24 h-24 rounded-full bg-zinc-800 border-2 border-white/10 overflow-hidden relative group shadow-[0_0_30px_rgba(56,189,248,0.2)]">
+              <form onSubmit={handleUpdateProfile} className="p-6 space-y-5">
+                <div className="flex flex-col items-center gap-2.5">
+                  <div className="w-20 h-20 rounded-full bg-[#F5F5F7] border border-zinc-200 overflow-hidden relative group shadow-xs">
                     {newAvatar ? (
                       <img
                         src={newAvatar}
@@ -8476,12 +8696,12 @@ const UniverseDashboard = ({
                         alt="Avatar Preview"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                        <ImageIcon size={32} />
+                      <div className="w-full h-full flex items-center justify-center text-zinc-400">
+                        <ImageIcon size={28} />
                       </div>
                     )}
-                    <label className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                      <ImageIcon size={20} className="text-white" />
+                    <label className="absolute inset-0 bg-black/45 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                      <ImageIcon size={18} className="text-white" />
                       <input
                         type="file"
                         onChange={handleAvatarFile}
@@ -8490,20 +8710,20 @@ const UniverseDashboard = ({
                       />
                     </label>
                   </div>
-                  <p className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">
-                    Click to upload custom avatar image
+                  <p className="text-[11px] font-medium text-[#0071E3]">
+                    Tap avatar to upload photo
                   </p>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center ml-1">
-                      <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
+                <div className="space-y-3.5">
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-semibold text-[#1D1D1F]">
                         Username Handle
                       </label>
                       {isUsernameLocked && (
-                        <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest bg-rose-500/10 px-2 py-0.5 rounded">
-                          LOCKED
+                        <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                          Locked
                         </span>
                       )}
                     </div>
@@ -8514,147 +8734,144 @@ const UniverseDashboard = ({
                         !isUsernameLocked && setNewUsername(e.target.value)
                       }
                       readOnly={isUsernameLocked}
-                      className={`w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-xs font-bold transition-all font-sans ${isUsernameLocked ? "text-zinc-500 cursor-not-allowed border-rose-500/20" : "text-white focus:outline-none focus:border-cyan-500/50"}`}
+                      className={`w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl px-3.5 py-2.5 text-sm transition-all ${isUsernameLocked ? "text-[#6E6E73] cursor-not-allowed" : "text-[#1D1D1F] focus:outline-none focus:bg-white focus:border-[#0071E3]"}`}
                       placeholder="Universe ID handle"
                     />
-                    <p
-                      className={`text-[9px] font-bold uppercase tracking-widest mt-1 ml-1 ${isUsernameLocked ? "text-rose-400" : "text-zinc-500"}`}
-                    >
+                    <p className="text-[11px] text-[#6E6E73]">
                       {isUsernameLocked
-                        ? `Gamura ID can be updated once per year. Next update: ${nextAllowedDateStr}`
-                        : "Your unique Gamura handle. Can be modified once per year."}
+                        ? `Updated once per year. Next edit: ${nextAllowedDateStr}`
+                        : "Unique Gamura handle (editable once per year)."}
                     </p>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
-                      Identity Nickname
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-[#1D1D1F]">
+                      Display Name
                     </label>
                     <input
                       type="text"
                       value={newNickname}
                       onChange={(e) => setNewNickname(e.target.value)}
-                      className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50 transition-all font-sans"
+                      className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl px-3.5 py-2.5 text-sm text-[#1D1D1F] focus:outline-none focus:bg-white focus:border-[#0071E3] transition-all"
                       placeholder="Display nickname"
                     />
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-[#1D1D1F]">
                       Bio
                     </label>
                     <input
                       type="text"
                       value={newBio}
                       onChange={(e) => setNewBio(e.target.value)}
-                      className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50 transition-all font-sans"
-                      placeholder="Write a short bio about yourself..."
+                      className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl px-3.5 py-2.5 text-sm text-[#1D1D1F] focus:outline-none focus:bg-white focus:border-[#0071E3] transition-all"
+                      placeholder="Write a short bio..."
                     />
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full py-5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-black text-[11px] font-black uppercase tracking-[0.2em] shadow-lg shadow-cyan-500/20 active:scale-[0.98] transition-all font-sans"
-                >
-                  Confirm Re-calibration
-                </button>
+                <div className="flex gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditProfileOpen(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-[#F5F5F7] hover:bg-zinc-200 text-xs font-semibold text-[#1D1D1F] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{ backgroundColor: universePrefs.accentColor }}
+                    className="flex-1 py-2.5 rounded-xl text-white text-xs font-semibold shadow-xs active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    Save Changes
+                  </button>
+                </div>
               </form>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ADD PROJECT MODAL */}
+      {/* ADD PROJECT MODAL (APPLE STYLE) */}
       <AnimatePresence>
         {showProjectModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[1000] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[1000] flex items-center justify-center p-4"
+            onClick={() => setShowProjectModal(false)}
           >
             <motion.div
-              initial={{ scale: 0.9, y: 20 }}
+              initial={{ scale: 0.95, y: 14 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
+              exit={{ scale: 0.95, y: 14 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-white border border-zinc-200/90 rounded-3xl shadow-2xl overflow-hidden text-[#1D1D1F]"
             >
-              <div className="p-6 border-b border-white/5 bg-gradient-to-br from-violet-500/10 to-cyan-500/10">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setShowProjectModal(false)}
-                      className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-all active:scale-90"
-                    >
-                      <ArrowLeft size={14} />
-                    </button>
-                    <div>
-                      <h2 className="text-lg font-black text-white uppercase tracking-widest leading-none">
-                        Share Broadcast
-                      </h2>
-                      <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1.5">
-                        Broadcast your innovation to the Gamura Universe
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowProjectModal(false)}
-                    className="text-zinc-500 hover:text-white transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
+              <div className="px-6 py-4 border-b border-zinc-100 bg-[#F5F5F7]/70 flex justify-between items-center">
+                <div>
+                  <h2 className="text-base font-bold text-[#1D1D1F] leading-tight">
+                    Share Project
+                  </h2>
+                  <p className="text-[11px] text-[#6E6E73] mt-0.5">
+                    Publish your build to Gamura Universe
+                  </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowProjectModal(false)}
+                  className="w-8 h-8 rounded-full bg-white border border-zinc-200/70 text-[#6E6E73] hover:text-[#1D1D1F] flex items-center justify-center cursor-pointer"
+                >
+                  <X size={15} />
+                </button>
               </div>
 
               <form onSubmit={handleAddProject} className="p-6 space-y-4">
-                <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-3.5">
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">
-                      Innovation Title
+                    <label className="text-xs font-semibold text-[#1D1D1F]">
+                      Project Title
                     </label>
                     <input
                       type="text"
                       required
                       value={projectTitle}
                       onChange={(e) => setProjectTitle(e.target.value)}
-                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-[10px] font-bold text-white focus:outline-none focus:border-violet-500/50 transition-all font-sans"
+                      className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl px-3.5 py-2.5 text-sm text-[#1D1D1F] focus:outline-none focus:bg-white focus:border-[#0071E3] transition-all"
                       placeholder="e.g. Galaxy Core Integration"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">
-                      Neural Uplink URL
+                    <label className="text-xs font-semibold text-[#1D1D1F]">
+                      Project URL
                     </label>
                     <input
                       type="url"
                       required
                       value={projectLink}
                       onChange={(e) => setProjectLink(e.target.value)}
-                      className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-[10px] font-bold text-white focus:outline-none focus:border-violet-500/50 transition-all font-sans"
+                      className="w-full bg-[#F5F5F7] border border-zinc-200/80 rounded-xl px-3.5 py-2.5 text-sm text-[#1D1D1F] focus:outline-none focus:bg-white focus:border-[#0071E3] transition-all"
                       placeholder="https://your-project.vercel.app"
                     />
                   </div>
                 </div>
 
-                <div className="p-3 bg-violet-500/5 border border-violet-500/10 rounded-xl text-[8px] font-bold text-violet-400 leading-relaxed uppercase tracking-[0.05em]">
-                  PROTOCOL NOTICE: Each inhabitant can only host ONE active
-                  broadcast at a time. Sharing a new module will terminate your
-                  previous signal.
-                </div>
-
-                <div className="flex flex-col gap-2 pt-2">
-                  <button
-                    type="submit"
-                    className="w-full py-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-violet-500/20 active:scale-[0.98] transition-all font-sans"
-                  >
-                    Initialize Broadcast Signal
-                  </button>
+                <div className="flex gap-2.5 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowProjectModal(false)}
-                    className="w-full py-3 text-[9px] font-black text-zinc-600 uppercase tracking-widest hover:text-white transition-colors"
+                    className="flex-1 py-2.5 rounded-xl bg-[#F5F5F7] hover:bg-zinc-200 text-xs font-semibold text-[#1D1D1F] cursor-pointer"
                   >
-                    Return to Universe
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{ backgroundColor: universePrefs.accentColor }}
+                    className="flex-1 py-2.5 rounded-xl text-white text-xs font-semibold shadow-xs active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    Share Live
                   </button>
                 </div>
               </form>
