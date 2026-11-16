@@ -118,6 +118,23 @@ export default function StoreAppGlyph({
         );
       case "user":
         return <User size={iconPx} strokeWidth={2.2} className="text-white" />;
+      case "clip":
+        return (
+          <svg
+            width={iconPx}
+            height={iconPx}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-white"
+          >
+            <rect x="8" y="3" width="12" height="14" rx="3" />
+            <path d="M16 21H7a3 3 0 0 1-3-3V8" />
+          </svg>
+        );
       case "gainosor":
         return (
           <svg

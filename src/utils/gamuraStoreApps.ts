@@ -13,6 +13,7 @@ export type StoreIconKind =
   | "chart"
   | "notes"
   | "user"
+  | "clip"
   | "letter";
 
 export interface StoreAppItem {
@@ -334,6 +335,23 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     chart: "Trending",
     dl: "2K+",
     size: "Web · 2 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-clip",
+    name: "GAMURA CLIP",
+    cat: "Utilities",
+    tag: "Copy here. Paste there across devices.",
+    desc: "Send text, links, images and files between your phone and laptop with a six-letter room code. Add a PIN for AES-256 encryption, QR sharing, auto-expiring clips, and Firebase room sync.",
+    url: "/clip",
+    c1: "#34d399",
+    c2: "#0f9f6e",
+    iconKind: "clip",
+    rating: 4.9,
+    age: "3+",
+    chart: "No. 1 Utility",
+    dl: "Featured",
+    size: "Web · 1 MB",
     isBuiltin: true,
   },
   {

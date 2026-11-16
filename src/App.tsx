@@ -199,6 +199,7 @@ import GamuraStoreLaunch, {
 } from "./components/GamuraStoreLaunch";
 import UniverseAppsView from "./components/UniverseAppsView";
 import GamuraVeoPage from "./components/GamuraVeoPage";
+import GamuraClipPage from "./components/GamuraClipPage";
 import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
@@ -8754,6 +8755,7 @@ export default function App() {
     | "gpdf"
     | "launch"
     | "veo"
+    | "clip"
     | "privacy"
     | "terms"
     | "delete-account";
@@ -8768,6 +8770,8 @@ export default function App() {
     "store",
     "veo",
     "gamura-veo",
+    "clip",
+    "gamura-clip",
     "claim",
     "universe",
     "universe-active",
@@ -8827,6 +8831,7 @@ export default function App() {
     if (lower === "gpdf" || lower === "g-pdf") return { page: "gpdf", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "launch" || lower === "store") return { page: "launch", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "veo" || lower === "gamura-veo") return { page: "veo", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "clip" || lower === "gamura-clip") return { page: "clip", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "terms") return { page: "terms", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13152,6 +13157,17 @@ ${targetContext}`;
   if (currentPage === "veo") {
     return (
       <GamuraVeoPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "clip") {
+    return (
+      <GamuraClipPage
         onBackHome={() => {
           window.history.pushState({}, "", "/");
           setCurrentPage("home");
