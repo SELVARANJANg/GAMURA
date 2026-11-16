@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, LayoutGrid, Trash2, Sparkles, Star } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { ArrowUpRight, Info, LayoutGrid, Sparkles, Star, Trash2 } from "lucide-react";
 import StoreAppGlyph from "./StoreAppGlyph";
 import {
   APP_RATINGS_EVENT,
@@ -8,6 +9,7 @@ import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
   getAppRatingStats,
+  getAppVersion,
   getUniverseInstalledApps,
   rateStoreApp,
   removeAppFromUniverse,
@@ -20,14 +22,20 @@ interface UniverseAppsViewProps {
     content: string,
     type?: "success" | "error" | "info" | "warning",
   ) => void;
+  accentColor?: string;
 }
 
-export default function UniverseAppsView({ showToast }: UniverseAppsViewProps) {
+export default function UniverseAppsView({
+  showToast,
+  accentColor = "#0071E3",
+}: UniverseAppsViewProps) {
   const [apps, setApps] = useState<StoreAppItem[]>(() =>
     getUniverseInstalledApps(),
   );
   const [ratingsTick, setRatingsTick] = useState(0);
   const [sortByRating, setSortByRating] = useState(true);
+  const [hoveredAppId, setHoveredAppId] = useState<string | null>(null);
+  const [pinnedTooltipId, setPinnedTooltipId] = useState<string | null>(null);
 
   useEffect(() => {
     const syncApps = () => {
@@ -66,6 +74,8 @@ export default function UniverseAppsView({ showToast }: UniverseAppsViewProps) {
   const handleUninstall = (app: StoreAppItem) => {
     const next = removeAppFromUniverse(app.id);
     setApps(next);
+    if (hoveredAppId === app.id) setHoveredAppId(null);
+    if (pinnedTooltipId === app.id) setPinnedTooltipId(null);
     showToast(
       "🗑️",
       `${app.name} Uninstalled`,
@@ -99,7 +109,7 @@ export default function UniverseAppsView({ showToast }: UniverseAppsViewProps) {
             <p className="text-xs text-zinc-500 mt-0.5">
               {apps.length === 0
                 ? "Empty until you install apps from Gamura Launch Store."
-                : `${apps.length} installed ${apps.length === 1 ? "app" : "apps"} ready to use inside Universe`}
+                : `${apps.length} installed ${apps.length === 1 ? "app" : "apps"} · Hover any card for version & details`}
             </p>
           </div>
         </div>
@@ -150,7 +160,7 @@ export default function UniverseAppsView({ showToast }: UniverseAppsViewProps) {
           </a>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 overflow-visible">
           {displayedApps.map((app) => {
             const stats = getAppRatingStats(app);
             const activeStarDisplay =
@@ -158,12 +168,95 @@ export default function UniverseAppsView({ showToast }: UniverseAppsViewProps) {
                 ? stats.userRating
                 : Math.round(stats.average);
             const isPopular = stats.average >= 4.8;
+            const versionLabel = getAppVersion(app);
+            const isPopoverOpen =
+              hoveredAppId === app.id || pinnedTooltipId === app.id;
 
             return (
               <div
                 key={`${app.id}-${ratingsTick}`}
-                className="bg-white border border-zinc-200/80 rounded-[22px] p-4 flex flex-col gap-3 shadow-xs hover:shadow-md transition-shadow"
+                onMouseEnter={() => setHoveredAppId(app.id)}
+                onMouseLeave={() =>
+                  setHoveredAppId((prev) => (prev === app.id ? null : prev))
+                }
+                onFocus={() => setHoveredAppId(app.id)}
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setHoveredAppId((prev) => (prev === app.id ? null : prev));
+                    setPinnedTooltipId((prev) => (prev === app.id ? null : prev));
+                  }
+                }}
+                tabIndex={0}
+                className="relative overflow-visible bg-white border border-zinc-200/80 rounded-[22px] p-4 flex flex-col gap-3 shadow-xs hover:shadow-md transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                style={
+                  isPopoverOpen
+                    ? { zIndex: 35, borderColor: "rgba(0,113,227,0.28)" }
+                    : undefined
+                }
               >
+                {/* Hover-Activated Apple-Style Popover Tooltip */}
+                <AnimatePresence>
+                  {isPopoverOpen && (
+                    <motion.div
+                      role="tooltip"
+                      initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 4, scale: 0.97 }}
+                      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                      className="pointer-events-auto absolute left-3 right-3 bottom-full mb-2.5 z-40 rounded-2xl bg-white/95 backdrop-blur-xl border border-zinc-200/90 shadow-[0_18px_42px_rgba(0,0,0,0.14)] p-3.5 text-left"
+                    >
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-[#1D1D1F] truncate">
+                            {app.name}
+                          </div>
+                          <div className="text-[11px] text-[#6E6E73] mt-0.5 flex items-center gap-1.5 tabular-nums">
+                            <span
+                              className="font-semibold"
+                              style={{ color: accentColor }}
+                            >
+                              Version {versionLabel}
+                            </span>
+                            <span aria-hidden="true">·</span>
+                            <span>{app.cat}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{app.size}</span>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-semibold text-[#1D1D1F] tabular-nums shrink-0">
+                          ★ {stats.average.toFixed(1)}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-[#424245] leading-relaxed mt-2 line-clamp-3">
+                        {app.desc || app.tag}
+                      </p>
+
+                      <div className="mt-2.5 pt-2 border-t border-zinc-100 flex items-center justify-between text-[11px] text-[#6E6E73] tabular-nums">
+                        <span>
+                          {app.chart || "Featured"} · Rated {app.age || "3+"}
+                        </span>
+                        <a
+                          href={app.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-semibold hover:underline inline-flex items-center gap-0.5"
+                          style={{ color: accentColor }}
+                        >
+                          <span>Launch</span>
+                          <ArrowUpRight size={11} />
+                        </a>
+                      </div>
+
+                      {/* Subtle Apple Popover Caret */}
+                      <span
+                        aria-hidden="true"
+                        className="absolute left-7 -bottom-1.5 w-3 h-3 rotate-45 bg-white/95 border-r border-b border-zinc-200/90"
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="flex items-center gap-3.5">
                   <StoreAppGlyph app={app} sizeClass="w-12 h-12" iconPx={24} />
 
@@ -173,7 +266,7 @@ export default function UniverseAppsView({ showToast }: UniverseAppsViewProps) {
                         {app.name}
                       </h3>
                       {isPopular && (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200/80 text-amber-700 text-[9px] font-bold tracking-tight shrink-0">
+                        <span className="text-[10px] font-semibold text-amber-700 shrink-0">
                           Top Rated
                         </span>
                       )}
@@ -181,12 +274,30 @@ export default function UniverseAppsView({ showToast }: UniverseAppsViewProps) {
                     <p className="text-xs text-zinc-500 truncate mt-0.5">
                       {app.tag}
                     </p>
-                    <span className="inline-block text-[10px] font-medium text-zinc-400 mt-0.5">
-                      {app.cat} · {app.dl}
-                    </span>
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400 mt-0.5 tabular-nums">
+                      <span>{app.cat}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>v{versionLabel}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{app.dl}</span>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPinnedTooltipId((prev) =>
+                          prev === app.id ? null : app.id,
+                        );
+                      }}
+                      className="w-8 h-8 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-zinc-600 flex items-center justify-center transition-colors cursor-pointer"
+                      aria-label={`App info and version for ${app.name}`}
+                      title={`Version ${versionLabel} details`}
+                    >
+                      <Info size={14} />
+                    </button>
                     <a
                       href={app.url}
                       target="_blank"

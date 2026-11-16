@@ -29,6 +29,7 @@ export interface StoreAppItem {
   logoUrl?: string;
   logoFallbackUrl?: string;
   rating: number;
+  version?: string;
   age?: string;
   chart?: string;
   dl: string;
@@ -70,6 +71,7 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     iconKind: "g-outline",
     ...driveLogo("1K0M7bYtdycSjgmTQoUH3NLkT1zxisZ6x"),
     rating: 4.9,
+    version: "3.4",
     age: "3+",
     chart: "No. 1",
     dl: "10K+",
@@ -88,6 +90,7 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     iconKind: "sparkles",
     ...driveLogo("13tcEyolbVvBRSozc2-J-NcPQYQGDCcoC"),
     rating: 4.9,
+    version: "3.1",
     age: "3+",
     chart: "No. 1 AI",
     dl: "6K+",
@@ -106,6 +109,7 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     iconKind: "code",
     ...driveLogo("1m5BQU-4xvdapNsi4tos5iM2cFmasKfGc"),
     rating: 4.8,
+    version: "2.6",
     age: "3+",
     chart: "No. 1 Dev",
     dl: "4K+",
@@ -124,6 +128,7 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     iconKind: "sparkles",
     ...driveLogo("1YQ_yqbUkfjuIDrM6rH1IYThahwYLReZw"),
     rating: 4.8,
+    version: "2.1",
     age: "3+",
     chart: "No. 2 AI",
     dl: "3K+",
@@ -142,6 +147,7 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     iconKind: "gainosor",
     ...driveLogo("1b9yNo3yTx-NTOmcmmzhLfFSKtI9P-_y9"),
     rating: 4.9,
+    version: "1.8",
     age: "3+",
     chart: "No. 1 Game",
     dl: "5K+",
@@ -159,6 +165,7 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     c2: "#dc2626",
     iconKind: "gigor",
     rating: 4.9,
+    version: "1.5",
     age: "3+",
     chart: "No. 2 Game",
     dl: "4K+",
@@ -352,6 +359,7 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     c2: "#0f9f6e",
     iconKind: "clip",
     rating: 4.9,
+    version: "2.2",
     age: "3+",
     chart: "No. 1 Utility",
     dl: "Featured",
@@ -369,6 +377,7 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     c2: "#047857",
     iconKind: "pdf",
     rating: 4.9,
+    version: "2.9",
     age: "3+",
     chart: "Top Productivity",
     dl: "4K+",
@@ -387,6 +396,7 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     logoUrl: GAMURA_VEO_LOGO_URL,
     logoFallbackUrl: GAMURA_VEO_LOGO_FALLBACK,
     rating: 4.9,
+    version: "3.0",
     age: "3+",
     chart: "Featured",
     dl: "Featured",
@@ -406,6 +416,7 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     logoUrl: GAMURA_CALC_LOGO_URL,
     logoFallbackUrl: GAMURA_CALC_LOGO_FALLBACK,
     rating: 4.9,
+    version: "2.4",
     age: "3+",
     chart: "No. 1 Utility",
     dl: "Featured",
@@ -413,6 +424,11 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     isBuiltin: true,
   },
 ];
+
+export function getAppVersion(app: StoreAppItem): string {
+  if (app.version && app.version.trim()) return app.version.trim();
+  return app.isBuiltin ? "2.0" : "1.0";
+}
 
 export function readStoreJson<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;

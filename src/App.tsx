@@ -200,6 +200,7 @@ import GamuraStoreLaunch, {
 } from "./components/GamuraStoreLaunch";
 import UniverseAppsView from "./components/UniverseAppsView";
 import UniverseSettingsView, {
+  DEFAULT_ALLOW_ACCESS,
   UniversePreferences,
   UNIVERSE_PREFS_STORAGE_KEY,
   loadUniversePreferences,
@@ -6634,7 +6635,15 @@ const UniverseDashboard = ({
   useEffect(() => {
     if (userInfo?.universePreferences) {
       setUniversePrefs((prev) => {
-        const merged = { ...prev, ...userInfo.universePreferences };
+        const merged: UniversePreferences = {
+          ...prev,
+          ...userInfo.universePreferences,
+          allowAccess: {
+            ...DEFAULT_ALLOW_ACCESS,
+            ...(prev.allowAccess || {}),
+            ...(userInfo.universePreferences?.allowAccess || {}),
+          },
+        };
         try {
           localStorage.setItem(UNIVERSE_PREFS_STORAGE_KEY, JSON.stringify(merged));
         } catch {}
@@ -7882,7 +7891,10 @@ const UniverseDashboard = ({
               className="w-full"
             >
           {activeTab === "Apps" ? (
-            <UniverseAppsView showToast={showToast} />
+            <UniverseAppsView
+              showToast={showToast}
+              accentColor={universePrefs.accentColor}
+            />
           ) : activeTab === "Join Selvaranjan" ? (
             <SelvaranjanGamura
               embeddedInUniverse
@@ -8341,7 +8353,7 @@ const UniverseDashboard = ({
                 {[
                   { ic: "🏠", title: "Overview", sub: "Main workspace & shared projects" },
                   { ic: "🚀", title: "Join Selvaranjan", sub: "Developer network, Free URL studio & HTML sandbox" },
-                  { ic: "⚙️", title: "Settings", sub: "Theme accent, privacy, access, audio & export" },
+                  { ic: "⚙️", title: "Settings", sub: "Allow Access (camera, messages, video, mic, storage, notifications), theme & privacy" },
                   { ic: "📱", title: "Apps", sub: "Installed Gamura Launch Store workspace apps" },
                   { ic: "🌐", title: "Gamura Universe", sub: "Claim your /@username personal hub" },
                   { ic: "💼", title: "Portfolio Builder", sub: "Design & publish your web portfolio" },
