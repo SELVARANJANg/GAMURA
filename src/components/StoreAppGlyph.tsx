@@ -121,6 +121,28 @@ export default function StoreAppGlyph({
         return <User size={iconPx} strokeWidth={2.2} className="text-white" />;
       case "camera":
         return <Camera size={iconPx} strokeWidth={2.2} className="text-white" />;
+      case "messenger":
+        return (
+          <svg
+            width={iconPx}
+            height={iconPx}
+            viewBox="0 0 76 76"
+            fill="none"
+            className="text-white"
+          >
+            <path
+              d="M38 15c-12.7 0-23 8.8-23 19.7 0 6.1 3.3 11.6 8.4 15.2L21.5 60l10.6-5.7c1.9.4 3.9.7 5.9.7 12.7 0 23-8.8 23-19.7S50.7 15 38 15z"
+              fill="currentColor"
+            />
+            <rect x="30" y="31" width="16" height="12.5" rx="3.2" fill="#c4151f" />
+            <path
+              d="M33 31v-3.5a5 5 0 0 1 10 0V31"
+              stroke="#c4151f"
+              strokeWidth="2.8"
+              strokeLinecap="round"
+            />
+          </svg>
+        );
       case "clip":
         return (
           <svg

@@ -1059,6 +1059,7 @@ export default function GamuraStoreLaunch({
                     >
                       {[
                         "Platform",
+                        "Communication",
                         "AI",
                         "Games",
                         "Developer tools",

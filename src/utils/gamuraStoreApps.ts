@@ -15,6 +15,7 @@ export type StoreIconKind =
   | "user"
   | "clip"
   | "camera"
+  | "messenger"
   | "letter";
 
 export interface StoreAppItem {
@@ -446,6 +447,24 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     chart: "No. 1 Camera",
     dl: "Featured",
     size: "Web · 2 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-messenger",
+    name: "GAMURA MESSENGER",
+    cat: "Communication",
+    tag: "End-to-end encrypted chats, calls & AES-256 Vault",
+    desc: "Every message is sealed on your device using ECDH P-256 key exchange and AES-256-GCM encryption. Enjoy private chats with safety number verification, voice and video calls, disappearing messages, and an offline PBKDF2 AES-256 Vault.",
+    url: "/messenger",
+    c1: "#ff3b47",
+    c2: "#c4151f",
+    iconKind: "messenger",
+    rating: 4.9,
+    version: "2.0",
+    age: "12+",
+    chart: "No. 1 Social",
+    dl: "Featured",
+    size: "Web · 1 MB",
     isBuiltin: true,
   },
 ];

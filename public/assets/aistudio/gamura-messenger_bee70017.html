@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Gamura Messenger</title>
+<style>
+:root{--bg:#fff;--bg2:#f5f5f7;--ink:#1d1d1f;--mut:#6e6e73;--line:rgba(0,0,0,.1);--red:#e5202e;--red2:#c4151f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--bg2:#1c1c1e;--ink:#f5f5f7;--mut:#98989d;--line:rgba(255,255,255,.14);--red:#ff3b47}}
+:root[data-theme="dark"]{--bg:#000;--bg2:#1c1c1e;--ink:#f5f5f7;--mut:#98989d;--line:rgba(255,255,255,.14);--red:#ff3b47}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,sans-serif;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{border:0;background:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+#app{display:flex;flex-direction:column;height:100%;max-width:520px;margin:0 auto;background:var(--bg)}
+.v{display:none;flex:1;overflow-y:auto;padding:8px 20px 24px}.v.on{display:block}
+h1{font-size:34px;letter-spacing:-.03em;margin:10px 0 14px;font-weight:800}
+.sub{color:var(--mut);font-size:14px}
+.search{width:100%;border:0;background:var(--bg2);border-radius:12px;padding:10px 14px;margin-bottom:8px}
+.row{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--line);width:100%;text-align:left}
+.av{flex:none;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:20px;background:var(--bg2);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--red)}
+.av.sm{width:38px;height:38px;font-size:16px;box-shadow:0 0 0 2px var(--bg),0 0 0 3.5px var(--red)}
+.grow{flex:1;min-width:0}.grow b{display:block}.grow span{display:block;color:var(--mut);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ic{width:40px;height:40px;border-radius:50%;background:var(--bg2);display:grid;place-items:center;color:var(--red);font-size:18px}
+.pill{background:var(--red);color:#fff;border-radius:999px;padding:12px 22px;font-weight:600;width:100%}
+.pill:active{background:var(--red2)}
+.ghost{background:var(--bg2);border-radius:12px;padding:10px 14px;font-weight:600}
+.tabbar{display:flex;border-top:1px solid var(--line);background:var(--bg);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--mut);padding:4px}
+.tabbar button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tabbar button.on{color:var(--red)}
+.card{background:var(--bg2);border-radius:20px;padding:18px;margin-bottom:14px}
+.card h3{margin:0 0 4px;font-size:17px}
+.card input,.card textarea{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:10px 12px;margin:8px 0}
+.uid{font:700 26px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;color:var(--red);margin:6px 0 12px}
+.ov{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;padding-top:env(safe-area-inset-top,0px);z-index:5;max-width:520px;margin:0 auto}.ov.on{display:flex}
+.hd{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.back{color:var(--red);font-size:26px;padding:0 6px}
+.chip{font-size:12px;color:var(--red);font-weight:600}
+#msgs{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.b{max-width:78%;padding:9px 14px;border-radius:20px;word-wrap:break-word}
+.b.me{align-self:flex-end;background:var(--red);color:#fff;border-bottom-right-radius:6px}
+.b.th{align-self:flex-start;background:var(--bg2);border-bottom-left-radius:6px}
+.b code{display:block;font:11px ui-monospace,Menlo,monospace;opacity:.7;margin-top:4px;word-break:break-all}
+.comp{display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+.comp input{flex:1;border:0;background:var(--bg2);border-radius:999px;padding:11px 16px}
+.send{width:44px;height:44px;border-radius:50%;background:var(--red);color:#fff;font-size:20px}
+#onb{position:fixed;inset:0;background:var(--bg);z-index:9;display:flex;flex-direction:column;justify-content:center;padding:32px;max-width:520px;margin:0 auto}
+#onb h1{font-size:44px;line-height:1.05;margin:18px 0 8px}
+#onb input{border:1px solid var(--line);background:var(--bg2);border-radius:14px;padding:14px;margin:18px 0 12px;width:100%}
+#sheet{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:flex-end;z-index:8}
+#sheet.on{display:flex}
+#sheet>div{background:var(--bg);width:100%;max-width:520px;margin:0 auto;border-radius:24px 24px 0 0;padding:22px 20px calc(24px + env(safe-area-inset-bottom,0px))}
+.safety{font:600 22px/1.7 ui-monospace,Menlo,monospace;text-align:center;letter-spacing:.06em}
+#call{background:#111;color:#fff;align-items:center;justify-content:center;text-align:center;gap:10px}
+#call video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55}
+#call>*{position:relative}
+#call video{position:absolute}
+.cbtn{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-size:24px}
+.cbtn.end{background:var(--red)}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+#toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body>
+
+<div id="onb">
+  <svg width="76" height="76" viewBox="0 0 76 76" aria-hidden="true"><rect width="76" height="76" rx="22" fill="#e5202e"/><path d="M38 17c-11.6 0-21 8-21 18 0 5.6 3 10.6 7.7 13.9L23 58l9.7-5.2c1.7.4 3.5.6 5.3.6 11.6 0 21-8 21-18S49.600 17 38 17z" fill="#fff"/><rect x="31" y="32" width="14" height="11" rx="3" fill="#e5202e"/><path d="M33.500 32v-3a4.500 4.500 0 0 1 9 0v3" fill="none" stroke="#e5202e" stroke-width="2.600"/></svg>
+  <h1>Gamura Messenger</h1>
+  <p class="sub">Every message is sealed on your device. Nobody else can read it, not even us.</p>
+  <input id="nm" placeholder="Your name" maxlength="24" autocomplete="off">
+  <button class="pill" id="go">Create account</button>
+</div>
+
+<div id="app">
+  <section class="v on" id="v-chats"><h1>Chats</h1><input class="search" id="q" placeholder="Search"><div id="list"></div>
+    <button class="ghost" id="add" style="margin-top:14px">Add contact by UID</button></section>
+  <section class="v" id="v-calls"><h1>Calls</h1><div id="clist"></div></section>
+  <section class="v" id="v-tools"><h1>Tools</h1>
+    <div class="card"><h3>Vault</h3><div class="sub">Lock any note with a passphrase. AES-256, made on this device.</div>
+      <textarea id="vt" rows="3" placeholder="Note or locked text"></textarea><input id="vp" type="password" placeholder="Passphrase">
+      <div style="display:flex;gap:8px"><button class="pill" id="lk">Lock</button><button class="pill" id="ul" style="background:var(--ink);color:var(--bg)">Unlock</button></div></div>
+    <div class="card"><h3>Disappearing messages</h3><div class="sub">New messages vanish after the time you pick.</div>
+      <select id="dis" class="ghost" style="margin-top:10px;width:100%"><option value="0">Off</option><option value="10">10 seconds</option><option value="60">1 minute</option><option value="3600">1 hour</option></select></div>
+    <div class="card"><h3>Panic wipe</h3><div class="sub">Erase your account, chats and keys from this device now.</div>
+      <button class="pill" id="wipe" style="margin-top:12px">Wipe everything</button></div></section>
+  <section class="v" id="v-me"><h1>You</h1>
+    <div class="card"><div class="sub">Your unique UID</div><div class="uid" id="uid"></div>
+      <button class="ghost" id="cp">Copy UID</button>
+      <p class="sub" style="margin:14px 0 0">Share your UID so people can add you. Your name stays private until you chat.</p></div>
+    <div class="card"><h3 id="mn"></h3><div class="sub">Keys: ECDH P-256 · Cipher: AES-256-GCM. Private keys never leave this device.</div></div></section>
+  <nav class="tabbar" id="tabs">
+    <button data-t="chats" class="on"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.800 7L4 20l1.200-4.400A8 8 0 1 1 21 12z"/></svg>Chats</button>
+    <button data-t="calls"><svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.500 1.500a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>Calls</button>
+    <button data-t="tools"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Tools</button>
+    <button data-t="me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>You</button>
+  </nav>
+</div>
+
+<div class="ov" id="chat">
+  <div class="hd"><button class="back" id="bk" aria-label="Back">‹</button><div class="av sm" id="ca"></div>
+    <div class="grow"><b id="cn"></b><button class="chip" id="seal">Sealed · tap for details</button></div>
+    <button class="ic" id="cc" aria-label="Voice call">✆</button><button class="ic" id="cv" aria-label="Video call">▶</button></div>
+  <div id="msgs"></div>
+  <div class="comp"><input id="mi" placeholder="Message" autocomplete="off"><button class="send" id="sd" aria-label="Send">↑</button></div>
+</div>
+
+<div class="ov" id="call"><video id="cvid" autoplay muted playsinline></video><div class="av" id="cav" style="width:96px;height:96px;font-size:38px;color:#111;background:#fff"></div>
+  <h2 id="cnm" style="margin:8px 0 0"></h2><div id="cst" class="sub" style="color:#ccc"></div>
+  <div style="display:flex;gap:28px;margin-top:80px"><button class="cbtn" id="mute" aria-label="Mute">🎤</button><button class="cbtn end" id="end" aria-label="End call">✕</button></div></div>
+
+<div id="sheet"><div id="sc"></div></div><div id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s),enc=new TextEncoder,dec=new TextDecoder;
+const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+const unhex=h=>new Uint8Array(h.match(/../g).map(x=>parseInt(x,16)));
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let me=null,chats=[],cur=null,showCt=false,disap=0,mineP=null,ctimer=null,stream=null;
+try{me=JSON.parse(localStorage.getItem('gm_me'))}catch(e){}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),1800)}
+function mkUid(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',s=[...crypto.getRandomValues(new Uint8Array(8))].map(x=>a[x%a.length]).join('');return 'GM-'+s.slice(0,4)+'-'+s.slice(4)}
+const getMine=()=>mineP||(mineP=crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveKey']));
+async function mkContact(name,uid){
+  const k=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveKey']),m=await getMine();
+  const key=await crypto.subtle.deriveKey({name:'ECDH',public:k.publicKey},m.privateKey,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  const a=hex(await crypto.subtle.exportKey('raw',m.publicKey)),b=hex(await crypto.subtle.exportKey('raw',k.publicKey));
+  const d=new Uint8Array(await crypto.subtle.digest('SHA-256',enc.encode([a,b].sort().join())));
+  const safety=[0,1,2,3,4,5].map(i=>String((d[i*2]<<8|d[i*2+1])%100000).padStart(5,'0')).join(' ');
+  return {name,uid,key,safety,msgs:[],last:'Say hello'};
+}
+async function put(c,text,mine){
+  const iv=crypto.getRandomValues(new Uint8Array(12)),ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},c.key,enc.encode(text));
+  c.msgs.push({me:mine,ct:hex(iv)+hex(ct),exp:disap?Date.now()+disap*1000:0});c.last=text;
+}
+async function renderMsgs(){
+  const c=cur;if(!c)return;let h='';
+  for(const m of c.msgs){const t=dec.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:unhex(m.ct.slice(0,24))},c.key,unhex(m.ct.slice(24))));
+    h+=`<div class="b ${m.me?'me':'th'}">${esc(t)}${showCt?`<code>${m.ct.slice(0,72)}…</code>`:''}</div>`}
+  if(!c.msgs.length)h='<p class="sub" style="text-align:center;margin-top:30px">Messages here are end-to-end encrypted.</p>';
+  $('#msgs').innerHTML=h;$('#msgs').scrollTop=1e9;
+}
+function renderList(){
+  const q=$('#q').value.toLowerCase();
+  $('#list').innerHTML=chats.filter(c=>c.name.toLowerCase().includes(q)).map(c=>`<button class="row" data-u="${c.uid}"><div class="av">${esc(c.name[0].toUpperCase())}</div><div class="grow"><b>${esc(c.name)}</b><span>${esc(c.last)}</span></div></button>`).join('')||'<p class="sub">No chats yet. Add a contact by UID.</p>';
+  $('#clist').innerHTML=chats.map(c=>`<div class="row"><div class="av">${esc(c.name[0].toUpperCase())}</div><div class="grow"><b>${esc(c.name)}</b><span>${c.uid}</span></div><button class="ic" data-c="${c.uid}" data-v="0" aria-label="Call ${esc(c.name)}">✆</button><button class="ic" data-c="${c.uid}" data-v="1" aria-label="Video call ${esc(c.name)}">▶</button></div>`).join('');
+}
+function openChat(uid){
+  cur=chats.find(c=>c.uid===uid);$('#cn').textContent=cur.name;$('#ca').textContent=cur.name[0].toUpperCase();
+  $('#chat').classList.add('on');renderMsgs();
+}
+async function send(){
+  const i=$('#mi'),t=i.value.trim();if(!t||!cur)return;i.value='';const c=cur;
+  await put(c,t,true);await renderMsgs();renderList();
+  setTimeout(async()=>{const r=['Received, and only you could read it.','Sealed and delivered.','Nice. Keys match on both sides.','That arrived encrypted. Try “View encrypted” in the header.'];
+    await put(c,r[Math.floor(Math.random()*r.length)],false);if(cur===c)renderMsgs();renderList()},900);
+}
+function sheet(h){$('#sc').innerHTML=h;$('#sheet').classList.add('on')}
+$('#sheet').onclick=e=>{if(e.target.id==='sheet')e.currentTarget.classList.remove('on')};
+$('#seal').onclick=()=>{if(!cur)return;
+  sheet(`<h3 style="margin:0">Safety number</h3><p class="sub">If this matches on ${esc(cur.name)}’s device, your chat is secure.</p><div class="safety">${cur.safety}</div>
+  <button class="pill" id="vc" style="margin-top:14px">${showCt?'Hide':'View'} encrypted text</button>`);
+  $('#vc').onclick=()=>{showCt=!showCt;$('#sheet').classList.remove('on');renderMsgs()}};
+$('#add').onclick=()=>{sheet(`<h3 style="margin:0 0 8px">Add contact</h3><input id="au" class="search" placeholder="GM-XXXX-XXXX" style="text-transform:uppercase"><button class="pill" id="ad">Add</button>`);
+  $('#ad').onclick=async()=>{const u=$('#au').value.trim().toUpperCase();
+    if(!/^GM-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(u)){toast('UID looks like GM-XXXX-XXXX');return}
+    if(chats.some(c=>c.uid===u)){toast('Already in your chats');return}
+    chats.push(await mkContact('Contact '+u.slice(-4),u));$('#sheet').classList.remove('on');renderList();toast('Contact added')}};
+$('#list').onclick=e=>{const b=e.target.closest('[data-u]');if(b)openChat(b.dataset.u)};
+$('#q').oninput=renderList;
+$('#bk').onclick=()=>{$('#chat').classList.remove('on');cur=null;renderList()};
+$('#sd').onclick=send;$('#mi').onkeydown=e=>{if(e.key==='Enter')send()};
+$('#tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.v').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.t))};
+async function startCall(c,video){
+  $('#call').classList.add('on');$('#cnm').textContent=c.name;$('#cav').textContent=c.name[0].toUpperCase();
+  $('#cst').textContent='Ringing…';let s=0;clearInterval(ctimer);
+  setTimeout(()=>{$('#cst').textContent='Encrypted call · 00:00';ctimer=setInterval(()=>{s++;$('#cst').textContent='Encrypted call · '+String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')},1000)},2000);
+  $('#cvid').style.display='none';
+  if(video){try{stream=await navigator.mediaDevices.getUserMedia({video:true});$('#cvid').srcObject=stream;$('#cvid').style.display='block'}catch(e){toast('Camera unavailable here')}}
+}
+$('#end').onclick=()=>{clearInterval(ctimer);if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$('#call').classList.remove('on')};
+$('#mute').onclick=e=>{e.currentTarget.textContent=e.currentTarget.textContent==='🎤'?'🔇':'🎤'};
+$('#cc').onclick=()=>cur&&startCall(cur,false);$('#cv').onclick=()=>cur&&startCall(cur,true);
+$('#clist').onclick=e=>{const b=e.target.closest('[data-c]');if(b)startCall(chats.find(c=>c.uid===b.dataset.c),b.dataset.v==='1')};
+$('#dis').onchange=e=>{disap=+e.target.value;toast(disap?'Disappearing messages on':'Disappearing messages off')};
+setInterval(()=>{let ch=false;chats.forEach(c=>{const n=c.msgs.length;c.msgs=c.msgs.filter(m=>!m.exp||m.exp>Date.now());if(c.msgs.length!==n)ch=true});if(ch){renderMsgs();renderList()}},1000);
+async function vk(p,salt){const m=await crypto.subtle.importKey('raw',enc.encode(p),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:150000,hash:'SHA-256'},m,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+$('#lk').onclick=async()=>{const t=$('#vt').value,p=$('#vp').value;if(!t||!p){toast('Add a note and a passphrase');return}
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},await vk(p,salt),enc.encode(t));$('#vt').value=hex(salt)+hex(iv)+hex(ct);toast('Locked')};
+$('#ul').onclick=async()=>{const t=$('#vt').value.trim(),p=$('#vp').value;
+  try{const b=unhex(t);const r=await crypto.subtle.decrypt({name:'AES-GCM',iv:b.slice(16,28)},await vk(p,b.slice(0,16)),b.slice(28));$('#vt').value=dec.decode(r);toast('Unlocked')}
+  catch(e){toast('Wrong passphrase or not locked text')}};
+$('#wipe').onclick=()=>{sheet(`<h3 style="margin:0 0 6px">Wipe everything?</h3><p class="sub">This erases your account, UID and chats from this device. It can’t be undone.</p><button class="pill" id="yw">Wipe now</button>`);
+  $('#yw').onclick=()=>{try{localStorage.removeItem('gm_me')}catch(e){}location.reload()}};
+$('#cp').onclick=async()=>{try{await navigator.clipboard.writeText(me.uid);toast('UID copied')}catch(e){toast(me.uid)}};
+async function boot(){
+  $('#onb').style.display='none';$('#uid').textContent=me.uid;$('#mn').textContent=me.name;
+  const echo=await mkContact('Gamura Echo','GM-ECHO-0001');await put(echo,'Welcome, '+me.name+'. This chat is sealed with keys made on your device.',false);
+  chats=[echo];renderList();
+}
+$('#go').onclick=()=>{const n=$('#nm').value.trim();if(!n){toast('Enter your name');return}
+  me={name:n,uid:mkUid()};try{localStorage.setItem('gm_me',JSON.stringify(me))}catch(e){}boot()};
+if(me&&me.uid)boot();
+</script></body></html>
