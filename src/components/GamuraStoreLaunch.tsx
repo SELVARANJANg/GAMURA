@@ -15,6 +15,7 @@ import {
   Globe,
   Smartphone,
   Layers,
+  ChevronDown,
 } from "lucide-react";
 import StoreAppGlyph from "./StoreAppGlyph";
 import {
@@ -1049,29 +1050,36 @@ export default function GamuraStoreLaunch({
                     placeholder="Short tagline"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#059669]"
                   />
-                  <select
-                    value={fCat}
-                    onChange={(e) => setFCat(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#059669]"
-                  >
-                    {[
-                      "Platform",
-                      "AI",
-                      "Games",
-                      "Developer tools",
-                      "Music & Audio",
-                      "Finance",
-                      "Portfolio",
-                      "Productivity",
-                      "Creative",
-                      "Education",
-                      "Utilities",
-                    ].map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={fCat}
+                      onChange={(e) => setFCat(e.target.value)}
+                      aria-label="App Category"
+                      className="w-full appearance-none pl-3.5 pr-9 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm text-[#1D1D1F] outline-none focus:bg-white focus:border-[#059669] cursor-pointer"
+                    >
+                      {[
+                        "Platform",
+                        "AI",
+                        "Games",
+                        "Developer tools",
+                        "Music & Audio",
+                        "Finance",
+                        "Portfolio",
+                        "Productivity",
+                        "Creative",
+                        "Education",
+                        "Utilities",
+                      ].map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={15}
+                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6E6E73]"
+                    />
+                  </div>
                 </div>
 
                 <textarea

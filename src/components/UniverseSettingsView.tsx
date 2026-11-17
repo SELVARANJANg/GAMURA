@@ -31,60 +31,19 @@ import {
   Globe,
   Cpu,
   Briefcase,
-  Camera,
-  MessageSquare,
-  Video,
-  Mic,
-  HardDrive,
-  Clipboard,
-  Image as ImageIcon,
-  Monitor,
-  MapPin,
-  FileDown,
-  Users,
-  Music,
-  RefreshCw,
   KeyRound,
 } from "lucide-react";
-import { doc, setDoc, updateDoc, deleteDoc, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
 import { signOut as firebaseSignOut } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { handleFirestoreError, OperationType } from "../firebaseErrorHandler";
 import { AuraEngineControlPanel } from "./GamuraAuraHub";
+import UniversePermissionsManager, {
+  type AllowAccessPermissions,
+  DEFAULT_ALLOW_ACCESS,
+} from "./UniversePermissionsManager";
 
-export interface AllowAccessPermissions {
-  camera: boolean;
-  messages: boolean;
-  video: boolean;
-  microphone: boolean;
-  storage: boolean;
-  notifications: boolean;
-  photosMedia: boolean;
-  screenCapture: boolean;
-  clipboard: boolean;
-  location: boolean;
-  filesDownloads: boolean;
-  contactsProfile: boolean;
-  audioPlayback: boolean;
-  backgroundSync: boolean;
-}
-
-export const DEFAULT_ALLOW_ACCESS: AllowAccessPermissions = {
-  camera: true,
-  messages: true,
-  video: true,
-  microphone: true,
-  storage: true,
-  notifications: true,
-  photosMedia: true,
-  screenCapture: true,
-  clipboard: true,
-  location: false,
-  filesDownloads: true,
-  contactsProfile: true,
-  audioPlayback: true,
-  backgroundSync: true,
-};
+export { DEFAULT_ALLOW_ACCESS, type AllowAccessPermissions };
 
 export interface UniversePreferences {
   accentColor: string;
@@ -324,9 +283,6 @@ export default function UniverseSettingsView({
     }
   };
 
-  const [checkingPermKey, setCheckingPermKey] = useState<string | null>(null);
-  const [browserPermStatus, setBrowserPermStatus] = useState<Record<string, string>>({});
-
   const allowAccess: AllowAccessPermissions = {
     ...DEFAULT_ALLOW_ACCESS,
     ...(preferences.allowAccess || {}),
@@ -402,101 +358,6 @@ export default function UniverseSettingsView({
         : "All optional Universe permissions turned off.",
       enabled ? "success" : "info",
     );
-  };
-
-  const requestBrowserPermission = async (
-    key: keyof AllowAccessPermissions,
-    label: string,
-  ) => {
-    setCheckingPermKey(key);
-    try {
-      if (key === "notifications") {
-        if (typeof Notification === "undefined") {
-          setBrowserPermStatus((s) => ({ ...s, [key]: "Saved in Universe" }));
-          showToast("🔔", "Preference Active", "In-app notification access is enabled.", "info");
-        } else {
-          const result = await Notification.requestPermission();
-          const granted = result === "granted";
-          setBrowserPermStatus((s) => ({
-            ...s,
-            [key]: granted ? "Browser Allowed" : result === "denied" ? "Browser Blocked" : "Prompt Dismissed",
-          }));
-          if (granted) setAccessPerm("notifications", true, label);
-          else showToast("⚠️", "Browser Setting", `Notifications permission: ${result}`, "warning");
-        }
-      } else if (key === "camera" || key === "video") {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          setBrowserPermStatus((s) => ({ ...s, [key]: "Saved in Universe" }));
-          showToast("📷", "Preference Saved", "Camera preference saved for this workspace.", "info");
-        } else {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          stream.getTracks().forEach((t) => t.stop());
-          setBrowserPermStatus((s) => ({ ...s, [key]: "Browser Allowed" }));
-          setAccessPerm(key, true, label);
-        }
-      } else if (key === "microphone") {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          setBrowserPermStatus((s) => ({ ...s, [key]: "Saved in Universe" }));
-          showToast("🎙️", "Preference Saved", "Microphone preference saved for this workspace.", "info");
-        } else {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          stream.getTracks().forEach((t) => t.stop());
-          setBrowserPermStatus((s) => ({ ...s, [key]: "Browser Allowed" }));
-          setAccessPerm("microphone", true, label);
-        }
-      } else if (key === "storage") {
-        if (navigator.storage?.persist) {
-          const persisted = await navigator.storage.persist();
-          setBrowserPermStatus((s) => ({
-            ...s,
-            storage: persisted ? "Persistent Granted" : "Standard Storage",
-          }));
-          setAccessPerm("storage", true, label);
-        } else {
-          setBrowserPermStatus((s) => ({ ...s, storage: "Local Storage Ready" }));
-          setAccessPerm("storage", true, label);
-        }
-      } else if (key === "location") {
-        if (!navigator.geolocation) {
-          setBrowserPermStatus((s) => ({ ...s, location: "Unavailable" }));
-        } else {
-          await new Promise<void>((resolve) => {
-            navigator.geolocation.getCurrentPosition(
-              () => {
-                setBrowserPermStatus((s) => ({ ...s, location: "Browser Allowed" }));
-                setAccessPerm("location", true, label);
-                resolve();
-              },
-              () => {
-                setBrowserPermStatus((s) => ({ ...s, location: "Browser Blocked" }));
-                showToast("📍", "Location Denied", "Browser blocked geolocation request.", "warning");
-                resolve();
-              },
-              { timeout: 6000 },
-            );
-          });
-        }
-      } else if (key === "clipboard") {
-        try {
-          await navigator.clipboard.readText();
-          setBrowserPermStatus((s) => ({ ...s, clipboard: "Browser Allowed" }));
-          setAccessPerm("clipboard", true, label);
-        } catch {
-          setBrowserPermStatus((s) => ({ ...s, clipboard: "Write Ready" }));
-          setAccessPerm("clipboard", true, label);
-        }
-      }
-    } catch {
-      setBrowserPermStatus((s) => ({ ...s, [key]: "Blocked in Browser" }));
-      showToast(
-        "⚠️",
-        `${label} Blocked by Browser`,
-        "Allow access in your browser site settings to test hardware capture.",
-        "warning",
-      );
-    } finally {
-      setCheckingPermKey(null);
-    }
   };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -764,7 +625,7 @@ export default function UniverseSettingsView({
       </div>
 
       {/* Responsive Mobile Pill Strip */}
-      <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+      <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
         {sections.map((sec) => {
           const isCurrent = activeSection === sec.id;
           return (
@@ -1109,249 +970,15 @@ export default function UniverseSettingsView({
               )}
 
               {/* ALLOW ACCESS & DEVICE PERMISSIONS */}
-              {activeSection === "permissions" && (() => {
-                const permissionEntries: {
-                  group: string;
-                  items: {
-                    key: keyof AllowAccessPermissions;
-                    label: string;
-                    description: string;
-                    icon: React.ReactNode;
-                    iconBg: string;
-                    supportsBrowserCheck?: boolean;
-                  }[];
-                }[] = [
-                  {
-                    group: "Media, Camera & Audio",
-                    items: [
-                      {
-                        key: "camera",
-                        label: "Camera",
-                        description: "Capture profile photos, snapshots, and live visual media.",
-                        icon: <Camera size={15} />,
-                        iconBg: "bg-sky-500 text-white",
-                        supportsBrowserCheck: true,
-                      },
-                      {
-                        key: "video",
-                        label: "Video",
-                        description: "Enable video playback, clip capture, and Gamura Veo studio.",
-                        icon: <Video size={15} />,
-                        iconBg: "bg-indigo-500 text-white",
-                        supportsBrowserCheck: true,
-                      },
-                      {
-                        key: "microphone",
-                        label: "Microphone",
-                        description: "Record voiceovers, audio notes, and spoken prompts.",
-                        icon: <Mic size={15} />,
-                        iconBg: "bg-orange-500 text-white",
-                        supportsBrowserCheck: true,
-                      },
-                      {
-                        key: "photosMedia",
-                        label: "Photos & Media Library",
-                        description: "Import images, artwork, and custom avatars into Universe.",
-                        icon: <ImageIcon size={15} />,
-                        iconBg: "bg-emerald-500 text-white",
-                      },
-                      {
-                        key: "screenCapture",
-                        label: "Screen Capture & Canvas Recording",
-                        description: "Allow exporting studio canvas recordings and workspace captures.",
-                        icon: <Monitor size={15} />,
-                        iconBg: "bg-violet-500 text-white",
-                      },
-                      {
-                        key: "audioPlayback",
-                        label: "Audio Playback & Synthesizer",
-                        description: "Play ambient focus soundscapes and tactile UI chimes.",
-                        icon: <Music size={15} />,
-                        iconBg: "bg-pink-500 text-white",
-                      },
-                    ],
-                  },
-                  {
-                    group: "Messages, Alerts & Contacts",
-                    items: [
-                      {
-                        key: "messages",
-                        label: "Messages",
-                        description: "Send and receive Neutral Link messages, notes, and quick signals.",
-                        icon: <MessageSquare size={15} />,
-                        iconBg: "bg-green-500 text-white",
-                      },
-                      {
-                        key: "notifications",
-                        label: "Notifications",
-                        description: "Deliver workspace banners, broadcast alerts, and streak reminders.",
-                        icon: <Bell size={15} />,
-                        iconBg: "bg-rose-500 text-white",
-                        supportsBrowserCheck: true,
-                      },
-                      {
-                        key: "contactsProfile",
-                        label: "Contacts & Developer Directory",
-                        description: "Allow discovering collaborators and connecting via @handle.",
-                        icon: <Users size={15} />,
-                        iconBg: "bg-blue-500 text-white",
-                      },
-                    ],
-                  },
-                  {
-                    group: "Storage, Files & System",
-                    items: [
-                      {
-                        key: "storage",
-                        label: "Storage",
-                        description: "Store installed Universe apps, workspace drafts, and offline state.",
-                        icon: <HardDrive size={15} />,
-                        iconBg: "bg-slate-700 text-white",
-                        supportsBrowserCheck: true,
-                      },
-                      {
-                        key: "filesDownloads",
-                        label: "Files & Downloads",
-                        description: "Allow exporting PDFs, videos, JSON backups, and CSV logs.",
-                        icon: <FileDown size={15} />,
-                        iconBg: "bg-teal-600 text-white",
-                      },
-                      {
-                        key: "clipboard",
-                        label: "Clipboard",
-                        description: "Allow one-tap link copying and Gamura Clip paste sync.",
-                        icon: <Clipboard size={15} />,
-                        iconBg: "bg-amber-500 text-white",
-                        supportsBrowserCheck: true,
-                      },
-                      {
-                        key: "location",
-                        label: "Location Services",
-                        description: "Allow regional time formatting and nearby relay routing.",
-                        icon: <MapPin size={15} />,
-                        iconBg: "bg-cyan-600 text-white",
-                        supportsBrowserCheck: true,
-                      },
-                      {
-                        key: "backgroundSync",
-                        label: "Background Refresh & Cloud Sync",
-                        description: "Keep preferences, streaks, and activity updated in real time.",
-                        icon: <RefreshCw size={15} />,
-                        iconBg: "bg-zinc-800 text-white",
-                      },
-                    ],
-                  },
-                ];
-
-                const allKeys = Object.keys(DEFAULT_ALLOW_ACCESS) as (keyof AllowAccessPermissions)[];
-                const enabledCount = allKeys.filter((k) => allowAccess[k]).length;
-
-                return (
-                  <div className="space-y-4">
-                    <div className="bg-white border border-zinc-200/80 rounded-3xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-bold text-[#1D1D1F] tabular-nums">
-                          {enabledCount} of {allKeys.length} Permissions Turned On
-                        </div>
-                        <div className="text-xs text-[#6E6E73] mt-0.5">
-                          Turn access on or off individually for Camera, Messages, Video, Microphone, Storage, Notifications, and workspace capabilities.
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setAllAccessPerms(false)}
-                          className="px-3.5 py-2 rounded-xl bg-[#F5F5F7] hover:bg-zinc-200/80 text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer"
-                        >
-                          Turn All Off
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAllAccessPerms(true)}
-                          style={{ backgroundColor: accent }}
-                          className="px-3.5 py-2 rounded-xl text-white text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer shadow-xs"
-                        >
-                          Allow All
-                        </button>
-                      </div>
-                    </div>
-
-                    {permissionEntries.map((group) => (
-                      <div
-                        key={group.group}
-                        className="bg-white border border-zinc-200/80 rounded-3xl overflow-hidden divide-y divide-zinc-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
-                      >
-                        <div className="px-5 py-3 bg-[#FAFAFC]">
-                          <h4 className="text-[11px] font-semibold text-[#6E6E73] tracking-wide">
-                            {group.group}
-                          </h4>
-                        </div>
-                        {group.items.map((item) => {
-                          const isEnabled = allowAccess[item.key];
-                          const browserNote = browserPermStatus[item.key];
-                          const isChecking = checkingPermKey === item.key;
-
-                          return (
-                            <div
-                              key={item.key}
-                              className="p-4 sm:px-5 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                            >
-                              <div className="flex items-start gap-3 min-w-0">
-                                <span
-                                  className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${item.iconBg}`}
-                                >
-                                  {item.icon}
-                                </span>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-xs font-bold text-[#1D1D1F]">
-                                      {item.label}
-                                    </span>
-                                    <span
-                                      className={`text-[11px] font-semibold tabular-nums ${
-                                        isEnabled ? "text-emerald-600" : "text-[#86868B]"
-                                      }`}
-                                    >
-                                      {isEnabled ? "Allowed · On" : "Blocked · Off"}
-                                    </span>
-                                    {browserNote && (
-                                      <span className="text-[11px] text-[#6E6E73]">
-                                        · {browserNote}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-[#6E6E73] mt-0.5 leading-relaxed">
-                                    {item.description}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
-                                {item.supportsBrowserCheck && (
-                                  <button
-                                    type="button"
-                                    disabled={isChecking}
-                                    onClick={() => requestBrowserPermission(item.key, item.label)}
-                                    className="px-2.5 py-1.5 rounded-lg bg-[#F5F5F7] hover:bg-zinc-200/80 text-[11px] font-semibold text-[#1D1D1F] transition-colors cursor-pointer disabled:opacity-60 whitespace-nowrap"
-                                  >
-                                    {isChecking ? "Checking..." : "Test Access"}
-                                  </button>
-                                )}
-                                <AppleSwitch
-                                  checked={isEnabled}
-                                  onChange={(v) => setAccessPerm(item.key, v, item.label)}
-                                  accentColor={accent}
-                                  label={`Allow access to ${item.label}`}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
+              {activeSection === "permissions" && (
+                <UniversePermissionsManager
+                  allowAccess={allowAccess}
+                  accentColor={accent}
+                  onTogglePermission={setAccessPerm}
+                  onSetAllPermissions={setAllAccessPerms}
+                  showToast={showToast}
+                />
+              )}
 
               {/* 2. APPEARANCE & THEME */}
               {activeSection === "appearance" && (

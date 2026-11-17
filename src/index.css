@@ -93,6 +93,13 @@
   .gamura-surface-gradient {
     background: linear-gradient(135deg, #0e1a2a 0%, #0d1520 60%, #121020 100%);
   }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 @keyframes spinCW  { to { transform: rotate(360deg); } }

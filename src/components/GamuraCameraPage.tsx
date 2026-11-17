@@ -7,6 +7,7 @@ import {
   ExternalLink,
   FlipHorizontal,
   Grid3X3,
+  HardDrive,
   Image as ImageIcon,
   Plus,
   RotateCcw,
@@ -14,6 +15,7 @@ import {
   Share2,
   SlidersHorizontal,
   Sparkles,
+  SwitchCamera,
   Timer,
   Trash2,
   Upload,
@@ -90,6 +92,26 @@ interface RecordedVideoItem {
   createdAt: number;
 }
 
+const CAMERA_STORAGE_KEY = "gamura_camera_saved_photos_v1";
+const MAX_STORED_PHOTOS = 18;
+
+interface StoredCameraPhoto {
+  id: string;
+  dataUrl: string;
+  thumb: string;
+  pi: number;
+  int: number;
+  adj: AdjValues;
+  ang: number;
+  frame: "w" | "b" | null;
+  wm: boolean;
+  txt: string;
+  rot: number;
+  flip: boolean;
+  crop: [number, number] | null;
+  createdAt: number;
+}
+
 const DEFAULT_ADJ: AdjValues = {
   b: 0,
   c: 0,
@@ -105,15 +127,18 @@ const DEFAULT_ADJ: AdjValues = {
 };
 
 const PRESET_FILTERS: [string, FilterParams][] = [
-  ["Natural", {}],
+  ["Normal", {}],
+  ["Grayscale", { g: 1 }],
+  ["Sepia", { sp: 1, c: 8 }],
+  ["High Contrast", { c: 65, s: 12, b: 4 }],
   ["Vivid", { s: 38, c: 14 }],
   ["Portrait", { c: 8, s: -4, w: 9, b: 5, vig: 0.2, fade: 0.05 }],
-  ["Noir", { g: 1, c: 28, vig: 0.45 }],
+  ["Noir", { g: 1, c: 34, vig: 0.45 }],
   ["Silver", { g: 1, c: -6, b: 7, fade: 0.22 }],
   ["Warm", { w: 32, s: 10, b: 5 }],
   ["Ice", { w: -32, c: 8, s: 5 }],
   ["Emerald", { w: -12, s: 16, c: 10, t: 30 }],
-  ["Vintage", { sp: 0.5, fade: 0.4, vig: 0.4, grain: 0.5, w: 15 }],
+  ["Vintage", { sp: 0.45, fade: 0.4, vig: 0.4, grain: 0.5, w: 15 }],
   ["Cinema", { c: 22, s: -12, w: -8, t: 12, vig: 0.5 }],
   ["Pop", { s: 62, c: 22, b: 5 }],
   ["Dream", { b: 10, c: -12, fade: 0.3, w: 10, s: 10 }],
@@ -126,7 +151,7 @@ const PRESET_FILTERS: [string, FilterParams][] = [
   ["Moody", { b: -10, c: 25, s: -18, vig: 0.55, w: -6 }],
   ["Golden", { w: 38, b: 8, s: 14, fade: 0.1, vig: 0.2 }],
   ["Crisp", { c: 25, s: 12, b: 3 }],
-  ["Kodak", { w: 18, s: 8, c: 12, fade: 0.15, grain: 0.35, sp: 0.12 }],
+  ["Kodak", { w: 18, s: 8, c: 12, fade: 0.15, grain: 0.35, sp: 0.15 }],
   ["Lomo", { s: 35, c: 30, vig: 0.7, grain: 0.3, t: 10 }],
   ["Neon", { s: 90, c: 30, t: 25, w: -20 }],
   ["Pastel", { b: 12, c: -18, s: -10, fade: 0.3, w: 6 }],
@@ -173,7 +198,7 @@ const APPLE_FONT_STYLE: React.CSSProperties = {
 };
 
 function cssFilterFromPreset(p: FilterParams, expo: number): string {
-  return `brightness(${1 + (p.b || 0) / 100}) contrast(${1 + (p.c || 0) / 100}) saturate(${1 + (p.s || 0) / 100}) grayscale(${p.g || 0}) sepia(${(p.sp || 0) * 0.6}) hue-rotate(${-(p.w || 0) * 0.2}deg) brightness(${1 + expo / 100})`;
+  return `brightness(${1 + (p.b || 0) / 100}) contrast(${1 + (p.c || 0) / 100}) saturate(${1 + (p.s || 0) / 100}) grayscale(${p.g || 0}) sepia(${p.sp || 0}) hue-rotate(${-(p.w || 0) * 0.2}deg) brightness(${1 + expo / 100})`;
 }
 
 function buildGeometryCanvas(
@@ -459,6 +484,12 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
   const [photos, setPhotos] = useState<CameraPhotoItem[]>([]);
   const [videos, setVideos] = useState<RecordedVideoItem[]>([]);
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
+  const [cameraDeviceCount, setCameraDeviceCount] = useState<number>(0);
+  const [hasFrontBackSwitch, setHasFrontBackSwitch] = useState<boolean>(() =>
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || ""),
+  );
+  const [storedPhotoIds, setStoredPhotoIds] = useState<Set<string>>(new Set());
 
   // Editor UI state
   const [editorTab, setEditorTab] = useState<EditorTab>("pf");
@@ -494,6 +525,134 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       document.title = prevTitle;
     };
   }, []);
+
+  const detectAvailableCameras = useCallback(async (activeStream?: MediaStream | null) => {
+    const isMobileUA =
+      typeof navigator !== "undefined" &&
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+
+    let count = 0;
+    let multiFacing = false;
+
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.enumerateDevices) {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoInputs = devices.filter((d) => d.kind === "videoinput");
+        count = videoInputs.length;
+        const labels = videoInputs.map((d) => d.label.toLowerCase()).join(" ");
+        if (count >= 2 || (labels.includes("front") && labels.includes("back"))) {
+          multiFacing = true;
+        }
+      } catch {
+        // ignore enumerateDevices errors
+      }
+    }
+
+    if (activeStream) {
+      const track = activeStream.getVideoTracks()[0];
+      const caps = track?.getCapabilities ? (track.getCapabilities() as any) : null;
+      if (Array.isArray(caps?.facingMode) && caps.facingMode.length > 1) {
+        multiFacing = true;
+      }
+    }
+
+    setCameraDeviceCount(count);
+    setHasFrontBackSwitch(multiFacing || isMobileUA);
+  }, []);
+
+  const persistPhotosToBrowser = useCallback((items: CameraPhotoItem[]) => {
+    const prefs = loadUniversePreferences();
+    if (!prefs.allowAccess.storage) return;
+
+    const toStore = items.slice(0, MAX_STORED_PHOTOS).map((p) => {
+      const maxSaveDim = 1280;
+      const scale = Math.min(1, maxSaveDim / Math.max(p.src.width, p.src.height));
+      const sc = document.createElement("canvas");
+      sc.width = Math.max(1, Math.round(p.src.width * scale));
+      sc.height = Math.max(1, Math.round(p.src.height * scale));
+      sc.getContext("2d")!.drawImage(p.src, 0, 0, sc.width, sc.height);
+      const record: StoredCameraPhoto = {
+        id: p.id,
+        dataUrl: sc.toDataURL("image/jpeg", 0.82),
+        thumb: p.thumb,
+        pi: p.pi,
+        int: p.int,
+        adj: p.adj,
+        ang: p.ang,
+        frame: p.frame,
+        wm: p.wm,
+        txt: p.txt,
+        rot: p.rot,
+        flip: p.flip,
+        crop: p.crop,
+        createdAt: p.createdAt,
+      };
+      return record;
+    });
+
+    let candidate = toStore;
+    while (candidate.length > 0) {
+      try {
+        localStorage.setItem(CAMERA_STORAGE_KEY, JSON.stringify(candidate));
+        setStoredPhotoIds(new Set(candidate.map((c) => c.id)));
+        return;
+      } catch {
+        candidate = candidate.slice(0, candidate.length - 1);
+      }
+    }
+  }, []);
+
+  // Rehydrate still captures saved in browser storage on mount
+  useEffect(() => {
+    detectAvailableCameras();
+    try {
+      const raw = localStorage.getItem(CAMERA_STORAGE_KEY);
+      if (!raw) return;
+      const parsed: StoredCameraPhoto[] = JSON.parse(raw);
+      if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+      Promise.all(
+        parsed.map(
+          (entry) =>
+            new Promise<CameraPhotoItem | null>((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                const c = document.createElement("canvas");
+                c.width = img.width;
+                c.height = img.height;
+                c.getContext("2d")!.drawImage(img, 0, 0);
+                resolve({
+                  id: entry.id,
+                  src: c,
+                  pi: entry.pi ?? 0,
+                  int: entry.int ?? 100,
+                  adj: { ...DEFAULT_ADJ, ...(entry.adj || {}) },
+                  ang: entry.ang ?? 0,
+                  frame: entry.frame ?? null,
+                  wm: Boolean(entry.wm),
+                  txt: entry.txt || "",
+                  rot: entry.rot ?? 0,
+                  flip: Boolean(entry.flip),
+                  crop: entry.crop ?? null,
+                  thumb: entry.thumb || entry.dataUrl,
+                  createdAt: entry.createdAt || Date.now(),
+                });
+              };
+              img.onerror = () => resolve(null);
+              img.src = entry.dataUrl;
+            }),
+        ),
+      ).then((rehydrated) => {
+        const valid = rehydrated.filter((x): x is CameraPhotoItem => Boolean(x));
+        if (valid.length > 0) {
+          setPhotos((prev) => (prev.length === 0 ? valid : prev));
+          setStoredPhotoIds(new Set(valid.map((v) => v.id)));
+        }
+      });
+    } catch {
+      // ignore corrupted storage
+    }
+  }, [detectAvailableCameras]);
 
   useEffect(() => {
     const syncUniverse = () => {
@@ -619,13 +778,14 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
         videoRef.current.srcObject = s;
         videoRef.current.play().catch(() => null);
       }
+      detectAvailableCameras(s);
       window.setTimeout(computeMaskBox, 80);
     } catch {
       setCameraBlockedReason(
         "Camera permission is blocked or no hardware camera was found. Allow browser camera permission, open your phone camera, or import a photo.",
       );
     }
-  }, [computeMaskBox, facing, mode, stopCamera]);
+  }, [computeMaskBox, detectAvailableCameras, facing, mode, stopCamera]);
 
   useEffect(() => {
     if (view === "cam") {
@@ -635,6 +795,38 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     }
     return () => stopCamera();
   }, [view, facing, startCamera, stopCamera]);
+
+  // Listen for live browser camera permission changes via navigator.permissions API
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.permissions?.query) return;
+    let active = true;
+    let permStatus: PermissionStatus | null = null;
+    const handlePermChange = () => {
+      if (!active || !permStatus) return;
+      if (permStatus.state === "granted" && view === "cam") {
+        startCamera();
+      } else if (permStatus.state === "denied") {
+        stopCamera();
+        setCameraBlockedReason(
+          "Browser camera permission is denied. Allow camera in site settings or import a photo below.",
+        );
+      }
+    };
+
+    navigator.permissions
+      .query({ name: "camera" as PermissionName })
+      .then((status) => {
+        if (!active) return;
+        permStatus = status;
+        status.addEventListener?.("change", handlePermChange);
+      })
+      .catch(() => null);
+
+    return () => {
+      active = false;
+      permStatus?.removeEventListener?.("change", handlePermChange);
+    };
+  }, [view, startCamera, stopCamera]);
 
   useEffect(() => {
     computeMaskBox();
@@ -655,12 +847,21 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
   }, [gridOn]);
 
   const addPhotoAndOpenEditor = useCallback(
-    (srcCanvas: HTMLCanvasElement, filterIdx: number, isCamera: boolean, withHdr: boolean) => {
+    (
+      srcCanvas: HTMLCanvasElement,
+      filterIdx: number,
+      isCamera: boolean,
+      withHdr: boolean,
+      openEditorImmediately = true,
+    ) => {
       const thumbCanvas = document.createElement("canvas");
-      const ts = 240 / Math.max(srcCanvas.width, srcCanvas.height);
+      const ts = 260 / Math.max(srcCanvas.width, srcCanvas.height);
       thumbCanvas.width = Math.max(1, Math.round(srcCanvas.width * ts));
       thumbCanvas.height = Math.max(1, Math.round(srcCanvas.height * ts));
-      thumbCanvas.getContext("2d")!.drawImage(srcCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+      const tCtx = thumbCanvas.getContext("2d")!;
+      tCtx.filter = cssFilterFromPreset(PRESET_FILTERS[filterIdx]?.[1] || {}, isCamera ? expo : 0);
+      tCtx.drawImage(srcCanvas, 0, 0, thumbCanvas.width, thumbCanvas.height);
+      tCtx.filter = "none";
 
       const id = `cam_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const item: CameraPhotoItem = {
@@ -681,17 +882,25 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
         rot: 0,
         flip: false,
         crop: null,
-        thumb: thumbCanvas.toDataURL("image/jpeg", 0.78),
+        thumb: thumbCanvas.toDataURL("image/jpeg", 0.82),
         createdAt: Date.now(),
       };
 
-      setPhotos((prev) => [item, ...prev]);
+      setPhotos((prev) => {
+        const next = [item, ...prev];
+        persistPhotosToBrowser(next);
+        return next;
+      });
       setActivePhotoId(id);
       baseGeoRef.current = null;
       setShowOriginal(false);
-      setView("edit");
+      if (openEditorImmediately) {
+        setView("edit");
+      } else {
+        showToast("Captured & saved to browser storage ✓");
+      }
     },
-    [expo],
+    [expo, persistPhotosToBrowser, showToast],
   );
 
   const loadImageFile = (file?: File | null) => {
@@ -892,7 +1101,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     if (nextMode === "PORTRAIT") {
       setLiveFilterIdx(PRESET_FILTERS.findIndex(([name]) => name === "Portrait"));
     } else if (nextMode === "B&W") {
-      setLiveFilterIdx(PRESET_FILTERS.findIndex(([name]) => name === "Mono"));
+      setLiveFilterIdx(PRESET_FILTERS.findIndex(([name]) => name === "Grayscale"));
     } else if (nextMode !== "VIDEO") {
       setLiveFilterIdx(0);
     }
@@ -905,12 +1114,24 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
   const updateActivePhoto = useCallback(
     (updater: (prev: CameraPhotoItem) => CameraPhotoItem) => {
       if (!activePhotoId) return;
-      setPhotos((prev) =>
-        prev.map((item) => (item.id === activePhotoId ? updater(item) : item)),
-      );
+      setPhotos((prev) => {
+        const next = prev.map((item) => (item.id === activePhotoId ? updater(item) : item));
+        persistPhotosToBrowser(next);
+        return next;
+      });
     },
-    [activePhotoId],
+    [activePhotoId, persistPhotosToBrowser],
   );
+
+  const handleCameraSwitchToggle = () => {
+    const nextFacing = facing === "environment" ? "user" : "environment";
+    setFacing(nextFacing);
+    showToast(
+      nextFacing === "user"
+        ? "Front Camera ON"
+        : "Back Camera ON",
+    );
+  };
 
   // Compute geo base & render editor preview canvas
   useEffect(() => {
@@ -1080,32 +1301,34 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
   return (
     <div
       style={APPLE_FONT_STYLE}
-      className="min-h-screen bg-[#050b08] text-[#f5f5f7] flex flex-col select-none"
+      className={`bg-[#050b08] text-[#f5f5f7] flex flex-col select-none ${
+        view === "cam" ? "h-[100dvh] overflow-hidden" : "min-h-screen"
+      }`}
     >
       {/* Top Apple Studio Header Bar */}
-      <header className="sticky top-0 z-30 bg-[#07110c]/90 backdrop-blur-2xl border-b border-white/[0.08]">
-        <div className="max-w-7xl mx-auto px-3 sm:px-5 h-14 flex items-center justify-between gap-2.5">
+      <header className="sticky top-0 z-30 bg-[#07110c]/92 backdrop-blur-2xl border-b border-white/[0.08] shrink-0">
+        <div className="max-w-7xl mx-auto px-3 sm:px-5 h-13 sm:h-14 flex md:grid md:grid-cols-[1fr_auto_1fr] items-center justify-between gap-2">
           {/* Brand & Back Controls */}
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink-0 justify-self-start">
             <button
               type="button"
               onClick={onBackHome}
-              className="min-h-[38px] px-3 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+              className="min-h-[36px] sm:min-h-[38px] px-2.5 sm:px-3 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
             >
               <ArrowLeft size={14} />
-              <span>Home</span>
+              <span className="hidden sm:inline">Home</span>
             </button>
 
             <a
               href="/launch"
-              className="hidden sm:inline-flex min-h-[38px] px-3 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-white items-center gap-1 transition-colors whitespace-nowrap shrink-0"
+              className="hidden lg:inline-flex min-h-[38px] px-3 rounded-full bg-white/[0.08] hover:bg-white/[0.14] text-xs font-semibold text-white items-center gap-1 transition-colors whitespace-nowrap shrink-0"
             >
               <span>Launch Store</span>
               <ExternalLink size={12} />
             </a>
 
-            <div className="flex items-center gap-2 min-w-0 pl-1">
-              <div className="w-8 h-8 rounded-[10px] overflow-hidden border border-white/15 bg-[#0a1c13] shrink-0">
+            <div className="flex items-center gap-2 pl-0.5 shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-[9px] overflow-hidden border border-white/15 bg-[#0a1c13] shrink-0">
                 <img
                   src={logoSrc}
                   alt="GAMURA CAMERA Logo"
@@ -1114,29 +1337,34 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="min-w-0">
-                <div className="text-xs sm:text-sm font-bold tracking-tight text-white truncate whitespace-nowrap">
-                  GAMURA <span className="text-[#30d158]">CAMERA</span>
+              <div className="shrink-0">
+                <div className="text-[11px] sm:text-sm font-bold tracking-tight text-white whitespace-nowrap leading-tight">
+                  <span className="sm:hidden">
+                    <span className="text-[#30d158]">CG</span> CAM
+                  </span>
+                  <span className="hidden sm:inline">
+                    GAMURA <span className="text-[#30d158]">CAMERA</span>
+                  </span>
                 </div>
-                <div className="hidden md:block text-[10px] text-zinc-400 leading-none">
+                <div className="hidden lg:block text-[10px] text-zinc-400 leading-none mt-0.5">
                   CG PIC Studio · Live Capture &amp; Pro Editor
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Center Mode Switcher */}
-          <nav className="flex items-center gap-1 p-1 rounded-full bg-white/[0.06] border border-white/[0.08]">
+          {/* Center Mode Switcher (Perfectly Centered) */}
+          <nav className="flex items-center gap-0.5 sm:gap-1 p-0.5 sm:p-1 rounded-full bg-white/[0.06] border border-white/[0.08] shrink-0 justify-self-center">
             <button
               type="button"
               onClick={() => setView("cam")}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
+              className={`min-h-[32px] px-2.5 sm:px-3.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
                 view === "cam"
                   ? "bg-[#30d158] text-[#04130c]"
                   : "text-zinc-300 hover:text-white"
               }`}
             >
-              <Camera size={13} />
+              <Camera size={12} />
               <span>Camera</span>
             </button>
             <button
@@ -1145,31 +1373,31 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                 if (activePhoto) setView("edit");
                 else uploadInputRef.current?.click();
               }}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
+              className={`min-h-[32px] px-2.5 sm:px-3.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 ${
                 view === "edit"
                   ? "bg-[#30d158] text-[#04130c]"
                   : "text-zinc-300 hover:text-white"
               }`}
             >
-              <SlidersHorizontal size={13} />
+              <SlidersHorizontal size={12} />
               <span>{activePhoto ? "Edit" : "Import"}</span>
             </button>
             <button
               type="button"
               onClick={() => setView("gal")}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 tabular-nums ${
+              className={`min-h-[32px] px-2.5 sm:px-3.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1.5 tabular-nums ${
                 view === "gal"
                   ? "bg-[#30d158] text-[#04130c]"
                   : "text-zinc-300 hover:text-white"
               }`}
             >
-              <ImageIcon size={13} />
+              <ImageIcon size={12} />
               <span>Gallery ({photos.length + videos.length})</span>
             </button>
           </nav>
 
           {/* Right Action */}
-          <div className="hidden md:flex items-center gap-2 shrink-0">
+          <div className="hidden md:flex items-center gap-2 shrink-0 justify-self-end">
             <button
               type="button"
               onClick={handleToggleUniverseInstall}
@@ -1188,7 +1416,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
 
       {/* VIEW 1: LIVE CAMERA */}
       {view === "cam" && (
-        <main className="flex-1 flex flex-col max-w-6xl w-full mx-auto px-2 sm:px-5 py-3 gap-3 min-h-[calc(100vh-56px)]">
+        <main className="flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-2 sm:px-5 py-2 sm:py-3 gap-2 sm:gap-3 overflow-hidden">
           {/* Viewfinder Stage */}
           <div
             ref={stageContainerRef}
@@ -1202,7 +1430,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
               focusTimerRef.current = window.setTimeout(() => setFocusBox(null), 3500);
             }}
-            className="relative flex-1 min-h-[380px] sm:min-h-[480px] rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl"
+            className="relative flex-1 min-h-[200px] sm:min-h-[420px] rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl"
           >
             <video
               ref={videoRef}
@@ -1292,13 +1520,19 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               </div>
             )}
 
-            {/* Top Viewfinder Tool Row */}
-            <div className="absolute top-0 left-0 right-0 p-3 sm:p-4 flex items-center justify-between gap-2 bg-gradient-to-b from-black/70 to-transparent z-[5]">
-              <div className="text-sm font-extrabold tracking-wide text-white drop-shadow-sm">
-                CG <span className="text-[#30d158]">PIC</span>
+            {/* Top Viewfinder Tool Row — Single-line Aligned Apple HUD */}
+            <div className="absolute top-0 left-0 right-0 px-3 py-2.5 sm:px-4 sm:py-3 flex items-center justify-between gap-2 bg-gradient-to-b from-black/75 via-black/35 to-transparent z-[5]">
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink-0">
+                <span className="text-xs sm:text-sm font-extrabold tracking-wide text-white drop-shadow-xs whitespace-nowrap">
+                  CG <span className="text-[#30d158]">PIC</span>
+                </span>
+                <span className="text-[11px] font-semibold text-zinc-200 whitespace-nowrap">
+                  · {facing === "user" ? "Front" : "Back"}
+                  {liveFilterIdx > 0 ? ` · ${PRESET_FILTERS[liveFilterIdx][0]}` : ""}
+                </span>
               </div>
 
-              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar justify-end">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -1308,13 +1542,13 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     showToast(next ? "Flash on" : "Flash off");
                   }}
                   title="Flash"
-                  className={`w-10 h-10 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
+                  className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                     flashOn
                       ? "bg-[#30d158] text-[#04130c] border-[#30d158]"
-                      : "bg-black/50 text-white border-white/15 backdrop-blur-md hover:bg-black/70"
+                      : "bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75"
                   }`}
                 >
-                  <Zap size={16} />
+                  <Zap size={15} />
                 </button>
 
                 <button
@@ -1332,13 +1566,13 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     showToast(next ? `Timer ${next}s` : "Timer off");
                   }}
                   title="Timer"
-                  className={`min-w-[40px] h-10 px-2 rounded-full border text-xs font-bold flex items-center justify-center transition-colors cursor-pointer tabular-nums ${
+                  className={`min-w-[36px] sm:min-w-[40px] h-9 sm:h-10 px-2 rounded-full border text-xs font-bold flex items-center justify-center transition-colors cursor-pointer tabular-nums shrink-0 ${
                     timerSec > 0
                       ? "bg-[#30d158] text-[#04130c] border-[#30d158]"
-                      : "bg-black/50 text-white border-white/15 backdrop-blur-md hover:bg-black/70"
+                      : "bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75"
                   }`}
                 >
-                  {timerSec ? `${timerSec}s` : <Timer size={16} />}
+                  {timerSec ? `${timerSec}s` : <Timer size={15} />}
                 </button>
 
                 <button
@@ -1348,13 +1582,13 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     setGridOn((g) => !g);
                   }}
                   title="Grid & Level"
-                  className={`w-10 h-10 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
+                  className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                     gridOn
                       ? "bg-[#30d158] text-[#04130c] border-[#30d158]"
-                      : "bg-black/50 text-white border-white/15 backdrop-blur-md hover:bg-black/70"
+                      : "bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75"
                   }`}
                 >
-                  <Grid3X3 size={16} />
+                  <Grid3X3 size={15} />
                 </button>
 
                 <button
@@ -1366,10 +1600,10 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     showToast(next ? "HDR on" : "HDR off");
                   }}
                   title="HDR"
-                  className={`h-10 px-3 rounded-full border text-[11px] font-extrabold tracking-wide flex items-center justify-center transition-colors cursor-pointer ${
+                  className={`h-9 sm:h-10 px-2.5 sm:px-3 rounded-full border text-[11px] font-extrabold tracking-wide flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                     hdrOn
                       ? "bg-[#30d158] text-[#04130c] border-[#30d158]"
-                      : "bg-black/50 text-white border-white/15 backdrop-blur-md hover:bg-black/70"
+                      : "bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75"
                   }`}
                 >
                   HDR
@@ -1382,7 +1616,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     setRatioIdx((idx) => (idx + 1) % RATIOS.length);
                   }}
                   title="Aspect Ratio"
-                  className="h-10 px-3 rounded-full border bg-black/50 text-white border-white/15 backdrop-blur-md hover:bg-black/70 text-[11px] font-extrabold tracking-wide cursor-pointer tabular-nums"
+                  className="h-9 sm:h-10 px-2.5 sm:px-3 rounded-full border bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75 text-[11px] font-extrabold tracking-wide cursor-pointer tabular-nums shrink-0"
                 >
                   {RATIOS[ratioIdx][0]}
                 </button>
@@ -1394,9 +1628,9 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     uploadInputRef.current?.click();
                   }}
                   title="Import Photo"
-                  className="w-10 h-10 rounded-full border bg-black/50 text-white border-white/15 backdrop-blur-md hover:bg-black/70 flex items-center justify-center transition-colors cursor-pointer"
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75 flex items-center justify-center transition-colors cursor-pointer shrink-0"
                 >
-                  <Upload size={16} />
+                  <Upload size={15} />
                 </button>
               </div>
             </div>
@@ -1474,31 +1708,36 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
             </div>
           </div>
 
-          {/* Shutter & Live Filter Deck */}
-          <div className="bg-[#0b1812] border border-white/[0.08] rounded-3xl p-3 sm:p-4 space-y-3">
-            {/* Live 26-Filter Strip */}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-              {PRESET_FILTERS.map(([name], i) => {
-                const active = i === liveFilterIdx;
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => setLiveFilterIdx(i)}
-                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
-                      active
-                        ? "bg-[#30d158] text-[#04130c] border-[#30d158] font-bold"
-                        : "bg-[#11231a] text-zinc-200 border-white/10 hover:bg-[#173024]"
-                    }`}
-                  >
-                    {name}
-                  </button>
-                );
-              })}
+          {/* Shutter & Live Filter Deck — Perfectly Aligned Apple Camera Dock */}
+          <div className="bg-[#0b1812] border border-white/[0.08] rounded-3xl p-2.5 sm:p-4 space-y-2.5 sm:space-y-3 shrink-0">
+            {/* Real-Time CSS Filter Strip */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 flex gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-0.5">
+                {PRESET_FILTERS.map(([name], i) => {
+                  const active = i === liveFilterIdx;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => {
+                        setLiveFilterIdx(i);
+                        showToast(`Filter: ${name}`);
+                      }}
+                      className={`shrink-0 min-h-[32px] px-3 sm:px-3.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold border transition-colors cursor-pointer whitespace-nowrap ${
+                        active
+                          ? "bg-[#30d158] text-[#04130c] border-[#30d158] font-bold"
+                          : "bg-[#11231a] text-zinc-200 border-white/10 hover:bg-[#173024]"
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Camera Mode Strip */}
-            <div className="flex items-center justify-center gap-5 overflow-x-auto no-scrollbar">
+            <div className="flex items-center justify-center gap-4 sm:gap-6 overflow-x-auto no-scrollbar border-b border-white/[0.06] pb-1.5">
               {MODES.map((m) => {
                 const active = mode === m;
                 return (
@@ -1506,7 +1745,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     key={m}
                     type="button"
                     onClick={() => handleModeSwitch(m)}
-                    className={`text-xs font-bold tracking-wider py-1 transition-colors cursor-pointer whitespace-nowrap ${
+                    className={`relative text-[11px] sm:text-xs font-bold tracking-wider py-1 transition-colors cursor-pointer whitespace-nowrap ${
                       active ? "text-[#ffd60a]" : "text-zinc-400 hover:text-white"
                     }`}
                   >
@@ -1516,57 +1755,131 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               })}
             </div>
 
-            {/* Shutter Row */}
-            <div className="flex items-center justify-around pt-1">
-              <button
-                type="button"
-                onClick={() => setView("gal")}
-                title="Open Session Gallery"
-                className="relative w-14 h-14 rounded-2xl bg-[#1c1c1e] border border-white/15 flex items-center justify-center overflow-hidden cursor-pointer hover:border-white/30 transition-colors"
-              >
-                {photos[0] ? (
-                  <img
-                    src={photos[0].thumb}
-                    alt="Last captured"
-                    className="w-full h-full object-cover"
+            {/* 3-Column Balanced Shutter Row */}
+            <div className="grid grid-cols-3 items-center gap-2 pt-0.5">
+              {/* Left Column: Gallery Preview & Browser Storage Quick-Snap */}
+              <div className="flex items-center gap-2 justify-self-start">
+                <button
+                  type="button"
+                  onClick={() => setView("gal")}
+                  title="Open Session Gallery"
+                  className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#1c1c1e] border border-white/15 flex items-center justify-center overflow-hidden cursor-pointer hover:border-white/30 transition-colors shrink-0"
+                >
+                  {photos[0] ? (
+                    <img
+                      src={photos[0].thumb}
+                      alt="Last captured"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon size={20} className="text-zinc-300" />
+                  )}
+                  {photos.length + videos.length > 0 && (
+                    <span className="absolute right-1 top-1 bg-[#30d158] text-[#04130c] rounded-full text-[10px] font-extrabold px-1.5 py-0.5 leading-none tabular-nums">
+                      {photos.length + videos.length}
+                    </span>
+                  )}
+                </button>
+
+                {mode !== "VIDEO" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const v = videoRef.current;
+                      if (!streamRef.current || !v || !v.videoWidth) {
+                        nativeCamInputRef.current?.click();
+                        return;
+                      }
+                      const w = v.videoWidth;
+                      const h = v.videoHeight;
+                      const c = document.createElement("canvas");
+                      c.width = w;
+                      c.height = h;
+                      const ctx = c.getContext("2d")!;
+                      if (facing === "user") {
+                        ctx.translate(c.width, 0);
+                        ctx.scale(-1, 1);
+                      }
+                      ctx.drawImage(v, 0, 0, w, h);
+                      playShutterSound();
+                      addPhotoAndOpenEditor(c, liveFilterIdx, true, hdrOn, false);
+                    }}
+                    title="Quick Snap & Save to Browser Storage"
+                    className="hidden sm:inline-flex min-h-[38px] px-3 py-1.5 rounded-xl bg-[#11231a] hover:bg-[#173024] border border-white/12 text-[11px] font-semibold text-zinc-100 items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
+                  >
+                    <HardDrive size={13} className="text-[#30d158]" />
+                    <span>Quick Save</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Center Column: Primary Concentric Shutter Button */}
+              <div className="justify-self-center">
+                <button
+                  type="button"
+                  onClick={handleShutter}
+                  aria-label={mode === "VIDEO" ? "Record video" : "Capture still photo and save"}
+                  className="w-[66px] h-[66px] sm:w-[74px] sm:h-[74px] rounded-full border-4 border-white flex items-center justify-center cursor-pointer active:scale-95 transition-transform shadow-lg"
+                >
+                  <span
+                    className={`block transition-all ${
+                      mode === "VIDEO"
+                        ? isRecording
+                          ? "w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[#ff453a]"
+                          : "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#ff453a]"
+                        : "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white"
+                    }`}
                   />
-                ) : (
-                  <ImageIcon size={22} className="text-zinc-300" />
-                )}
-                {photos.length + videos.length > 0 && (
-                  <span className="absolute right-1 top-1 bg-[#30d158] text-[#04130c] rounded-full text-[10px] font-extrabold px-1.5 py-0.5 leading-none tabular-nums">
-                    {photos.length + videos.length}
-                  </span>
-                )}
-              </button>
+                </button>
+              </div>
 
-              <button
-                type="button"
-                onClick={handleShutter}
-                aria-label={mode === "VIDEO" ? "Record video" : "Take photo"}
-                className="w-[76px] h-[76px] rounded-full border-4 border-white flex items-center justify-center cursor-pointer active:scale-95 transition-transform"
-              >
-                <span
-                  className={`block transition-all ${
-                    mode === "VIDEO"
-                      ? isRecording
-                        ? "w-7 h-7 rounded-md bg-[#ff453a]"
-                        : "w-14 h-14 rounded-full bg-[#ff453a]"
-                      : "w-14 h-14 rounded-full bg-white"
-                  }`}
-                />
-              </button>
+              {/* Right Column: Apple Front/Back Camera Visual On/Off Switch */}
+              <div className="flex items-center justify-end justify-self-end gap-2">
+                <div
+                  className="flex items-center gap-2 bg-[#141f19] border border-white/12 rounded-2xl px-2.5 py-1.5"
+                  title={
+                    hasFrontBackSwitch
+                      ? "Switch between Front and Back cameras"
+                      : "Single camera detected (tap to toggle facing mode)"
+                  }
+                >
+                  <div className="flex flex-col text-right leading-tight">
+                    <span className="text-[11px] font-bold text-white whitespace-nowrap">
+                      {facing === "user" ? "Front" : "Back"}
+                    </span>
+                    <span className="hidden sm:block text-[9px] text-zinc-400 whitespace-nowrap">
+                      {cameraDeviceCount > 1
+                        ? `${cameraDeviceCount} Lenses`
+                        : hasFrontBackSwitch
+                          ? "Camera Flip"
+                          : "Lens"}
+                    </span>
+                  </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setFacing((f) => (f === "user" ? "environment" : "user"))
-                }
-                title="Flip camera"
-                className="w-14 h-14 rounded-2xl bg-[#1c1c1e] border border-white/15 flex items-center justify-center text-white hover:bg-[#2c2c2e] transition-colors cursor-pointer"
-              >
-                <RotateCw size={22} />
-              </button>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={facing === "user"}
+                    aria-label={
+                      facing === "user"
+                        ? "Front camera on, tap for back camera"
+                        : "Back camera active, tap to turn front camera on"
+                    }
+                    onClick={handleCameraSwitchToggle}
+                    className={`relative w-[48px] h-[28px] rounded-full p-[2px] transition-colors duration-200 cursor-pointer shrink-0 flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#30d158]/60 ${
+                      facing === "user" ? "bg-[#30d158]" : "bg-zinc-600"
+                    }`}
+                  >
+                    <span
+                      className={`w-[24px] h-[24px] rounded-full bg-white shadow-sm flex items-center justify-center text-[#04130c] transition-transform duration-200 ${
+                        facing === "user" ? "translate-x-[20px]" : "translate-x-0"
+                      }`}
+                    >
+                      <SwitchCamera size={12} />
+                    </span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </main>
@@ -1576,7 +1889,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       {view === "edit" && activePhoto && (
         <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
           {/* Canvas Stage */}
-          <div className="lg:col-span-7 bg-black border border-white/10 rounded-3xl p-3 sm:p-5 flex flex-col items-center justify-center min-h-[340px] sm:min-h-[540px]">
+          <div className="lg:col-span-7 lg:sticky lg:top-20 bg-black border border-white/10 rounded-3xl p-3 sm:p-5 flex flex-col items-center justify-center min-h-[340px] sm:min-h-[540px]">
             <canvas
               ref={editorCanvasRef}
               className="max-w-full max-h-[65vh] rounded-xl shadow-2xl border border-white/10"
@@ -1937,14 +2250,33 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-white tracking-tight">
-                This Session
+                Saved Photos &amp; Captures
               </h2>
               <p className="text-xs text-zinc-400 tabular-nums">
-                {photos.length} photos · {videos.length} videos captured in this browser session
+                {photos.length} photos ({storedPhotoIds.size} in browser storage) · {videos.length} videos
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {photos.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      localStorage.removeItem(CAMERA_STORAGE_KEY);
+                    } catch {
+                      // ignore
+                    }
+                    setPhotos([]);
+                    setStoredPhotoIds(new Set());
+                    setActivePhotoId(null);
+                    showToast("Cleared saved browser photos");
+                  }}
+                  className="px-3.5 py-2 rounded-full bg-[#1c1c1e] hover:bg-red-500/20 border border-white/15 text-xs font-semibold text-zinc-200 inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 size={13} /> Clear Saved
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => uploadInputRef.current?.click()}
@@ -1969,7 +2301,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               </div>
               <h3 className="text-base font-bold text-white">No Captures Yet</h3>
               <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
-                Take a photo, record a filtered video, or import an image from your device to edit with 26 filters and 11 tonal adjustments.
+                Capture a still photo with live Grayscale, Sepia, or High Contrast filters—saved automatically to your browser storage.
               </p>
             </div>
           ) : (
@@ -1992,18 +2324,38 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                         alt={`Session photo ${photos.length - idx}`}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                       />
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPhotos((prev) => prev.filter((x) => x.id !== p.id));
-                          if (activePhotoId === p.id) setActivePhotoId(null);
-                        }}
-                        aria-label="Delete photo"
-                        className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/65 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/80 via-black/40 to-transparent flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-medium text-zinc-200 truncate">
+                          {PRESET_FILTERS[p.pi]?.[0] || "Normal"}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <a
+                            href={p.thumb}
+                            download={`CGPIC_${p.id}.jpg`}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label="Download photo"
+                            className="w-7 h-7 rounded-full bg-white/15 hover:bg-[#30d158] hover:text-[#04130c] text-white flex items-center justify-center transition-colors"
+                          >
+                            <Download size={12} />
+                          </a>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPhotos((prev) => {
+                                const next = prev.filter((x) => x.id !== p.id);
+                                persistPhotosToBrowser(next);
+                                return next;
+                              });
+                              if (activePhotoId === p.id) setActivePhotoId(null);
+                            }}
+                            aria-label="Delete photo"
+                            className="w-7 h-7 rounded-full bg-white/15 hover:bg-red-600 text-white flex items-center justify-center transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
