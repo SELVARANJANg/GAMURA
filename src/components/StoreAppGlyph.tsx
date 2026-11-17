@@ -10,6 +10,7 @@ import {
   TrendingUp,
   StickyNote,
   User,
+  Camera,
 } from "lucide-react";
 import type { StoreAppItem } from "../utils/gamuraStoreApps";
 
@@ -118,6 +119,8 @@ export default function StoreAppGlyph({
         );
       case "user":
         return <User size={iconPx} strokeWidth={2.2} className="text-white" />;
+      case "camera":
+        return <Camera size={iconPx} strokeWidth={2.2} className="text-white" />;
       case "clip":
         return (
           <svg

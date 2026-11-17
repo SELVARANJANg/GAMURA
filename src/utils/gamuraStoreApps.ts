@@ -14,6 +14,7 @@ export type StoreIconKind =
   | "notes"
   | "user"
   | "clip"
+  | "camera"
   | "letter";
 
 export interface StoreAppItem {
@@ -52,6 +53,10 @@ export const GAMURA_CALC_LOGO_URL =
   "/assets/aistudio/gamura-calc-logo_d6aec2f0.png";
 export const GAMURA_CALC_LOGO_FALLBACK =
   "https://lh3.googleusercontent.com/d/19GM0X_7lRgIlwQ-PJP8uAJzVqkDOE2s_=w512";
+export const GAMURA_CAMERA_LOGO_URL =
+  "/assets/aistudio/1794885573140_43c1db18.png";
+export const GAMURA_CAMERA_LOGO_FALLBACK =
+  "https://lh3.googleusercontent.com/d/1joiKBbYSqZSH-rcuixhuHd5lWWxqisW6=w512";
 
 const driveLogo = (id: string) => ({
   logoUrl: `https://lh3.googleusercontent.com/d/${id}=w512`,
@@ -421,6 +426,26 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     chart: "No. 1 Utility",
     dl: "Featured",
     size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-camera",
+    name: "GAMURA CAMERA",
+    cat: "Creative",
+    tag: "Pro live camera, 26 filters, RAW-grade adjust & video",
+    desc: "GAMURA CAMERA (CG PIC) delivers a pro browser camera & Apple-grade photo studio: live 26-filter viewfinder, HDR, grid level, timer, 1x-3x zoom, video recording, 11 tonal adjustments, Auto Enhance, straighten, aspect crops, frames, watermark & full-resolution export.",
+    url: "/camera",
+    c1: "#30d158",
+    c2: "#050b08",
+    iconKind: "camera",
+    logoUrl: GAMURA_CAMERA_LOGO_URL,
+    logoFallbackUrl: GAMURA_CAMERA_LOGO_FALLBACK,
+    rating: 4.9,
+    version: "2.5",
+    age: "3+",
+    chart: "No. 1 Camera",
+    dl: "Featured",
+    size: "Web · 2 MB",
     isBuiltin: true,
   },
 ];

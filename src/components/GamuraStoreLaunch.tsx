@@ -293,16 +293,24 @@ export default function GamuraStoreLaunch({
   const renderAppRow = (app: StoreAppItem, rank?: number) => {
     const isInstalled = installedIdSet.has(app.id);
     const isInstalling = installingId === app.id;
+    const isDirectLaunchApp = app.id === "gamura-camera";
+    const handleRowActivate = () => {
+      if (isDirectLaunchApp) {
+        window.open(app.url, "_blank", "noopener,noreferrer");
+      } else {
+        setSelectedApp(app);
+      }
+    };
     return (
       <div
         key={app.id}
-        onClick={() => setSelectedApp(app)}
+        onClick={handleRowActivate}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            setSelectedApp(app);
+            handleRowActivate();
           }
         }}
         className="w-full flex items-center gap-3.5 py-3.5 px-2.5 sm:px-3 rounded-2xl hover:bg-[#F5F5F7] transition-colors text-left cursor-pointer"
@@ -347,6 +355,25 @@ export default function GamuraStoreLaunch({
           >
             OPEN
           </a>
+        ) : isDirectLaunchApp ? (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={(e) => handleGetClick(app, e)}
+              className="px-4 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide whitespace-nowrap cursor-pointer transition-colors"
+            >
+              GET
+            </button>
+            <a
+              href={app.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide whitespace-nowrap transition-colors"
+            >
+              OPEN
+            </a>
+          </div>
         ) : (
           <button
             type="button"
@@ -360,30 +387,55 @@ export default function GamuraStoreLaunch({
     );
   };
 
-  const renderAppTile = (app: StoreAppItem) => (
-    <button
-      key={app.id}
-      type="button"
-      onClick={() => setSelectedApp(app)}
-      className="w-[116px] sm:w-[126px] shrink-0 text-left group cursor-pointer space-y-2"
-    >
-      <div className="group-hover:scale-[1.03] transition-transform">
-        <StoreAppGlyph
-          app={app}
-          sizeClass="w-[116px] h-[116px] sm:w-[126px] sm:h-[126px] text-4xl"
-          iconPx={46}
-        />
-      </div>
-      <div>
-        <div className="text-xs font-semibold text-[#1D1D1F] truncate">
-          {app.name}
+  const renderAppTile = (app: StoreAppItem) =>
+    app.id === "gamura-camera" ? (
+      <a
+        key={app.id}
+        href={app.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="w-[116px] sm:w-[126px] shrink-0 text-left group cursor-pointer space-y-2 block"
+      >
+        <div className="group-hover:scale-[1.03] transition-transform">
+          <StoreAppGlyph
+            app={app}
+            sizeClass="w-[116px] h-[116px] sm:w-[126px] sm:h-[126px] text-4xl"
+            iconPx={46}
+          />
         </div>
-        <div className="text-[11px] text-[#6E6E73] tabular-nums">
-          {app.rating} ★ · {app.dl}
+        <div>
+          <div className="text-xs font-semibold text-[#1D1D1F] truncate">
+            {app.name}
+          </div>
+          <div className="text-[11px] text-[#6E6E73] tabular-nums">
+            {app.rating} ★ · {app.dl}
+          </div>
         </div>
-      </div>
-    </button>
-  );
+      </a>
+    ) : (
+      <button
+        key={app.id}
+        type="button"
+        onClick={() => setSelectedApp(app)}
+        className="w-[116px] sm:w-[126px] shrink-0 text-left group cursor-pointer space-y-2"
+      >
+        <div className="group-hover:scale-[1.03] transition-transform">
+          <StoreAppGlyph
+            app={app}
+            sizeClass="w-[116px] h-[116px] sm:w-[126px] sm:h-[126px] text-4xl"
+            iconPx={46}
+          />
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-[#1D1D1F] truncate">
+            {app.name}
+          </div>
+          <div className="text-[11px] text-[#6E6E73] tabular-nums">
+            {app.rating} ★ · {app.dl}
+          </div>
+        </div>
+      </button>
+    );
 
   const ratingBars = [72, 18, 6, 3, 1];
 
@@ -517,119 +569,228 @@ export default function GamuraStoreLaunch({
           <>
             {tab === "foryou" && (
               <div className="space-y-6">
-                {/* Gamura Veo Spotlight Card */}
-                {(() => {
-                  const veoApp = allApps.find((a) => a.id === "veo");
-                  if (!veoApp) return null;
-                  const veoInstalled = installedIdSet.has(veoApp.id);
-                  const veoInstalling = installingId === veoApp.id;
-                  return (
-                    <div
-                      onClick={() => setSelectedApp(veoApp)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setSelectedApp(veoApp);
-                        }
-                      }}
-                      className="bg-white border border-zinc-200/80 rounded-3xl p-4 sm:p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <StoreAppGlyph
-                          app={veoApp}
-                          sizeClass="w-16 h-16 sm:w-18 sm:h-18"
-                          iconPx={32}
-                        />
-                        <div className="min-w-0">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#059669]">
-                            Spotlight · Video Studio
-                          </span>
-                          <h2 className="text-lg font-bold text-[#1D1D1F] tracking-tight truncate">
-                            {veoApp.name}
-                          </h2>
-                          <p className="text-xs text-[#6E6E73] truncate">
-                            {veoApp.tag}
-                          </p>
+                {/* Featured Studio Spotlights: Gamura Veo & GAMURA CAMERA */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {(() => {
+                    const veoApp = allApps.find((a) => a.id === "veo");
+                    if (!veoApp) return null;
+                    const veoInstalled = installedIdSet.has(veoApp.id);
+                    const veoInstalling = installingId === veoApp.id;
+                    return (
+                      <div
+                        onClick={() => setSelectedApp(veoApp)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedApp(veoApp);
+                          }
+                        }}
+                        className="bg-white border border-zinc-200/80 rounded-3xl p-4 sm:p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <StoreAppGlyph
+                            app={veoApp}
+                            sizeClass="w-16 h-16"
+                            iconPx={32}
+                          />
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#059669]">
+                              Spotlight · Video Studio
+                            </span>
+                            <h2 className="text-lg font-bold text-[#1D1D1F] tracking-tight truncate">
+                              {veoApp.name}
+                            </h2>
+                            <p className="text-xs text-[#6E6E73] truncate">
+                              {veoApp.tag}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {veoInstalling ? (
+                            <span className="px-4 py-2 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums">
+                              {installPct}%
+                            </span>
+                          ) : veoInstalled ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUninstallAll(veoApp);
+                              }}
+                              className="px-3.5 py-2 rounded-full bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-xs font-semibold text-[#6E6E73] cursor-pointer transition-colors"
+                            >
+                              Uninstall
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => handleGetClick(veoApp, e)}
+                              className="px-4 py-2 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide cursor-pointer transition-colors"
+                            >
+                              GET
+                            </button>
+                          )}
+                          <a
+                            href={veoApp.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="px-4 py-2 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                          >
+                            <span>OPEN</span>
+                            <ExternalLink size={12} />
+                          </a>
                         </div>
                       </div>
+                    );
+                  })()}
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {veoInstalling ? (
-                          <span className="px-5 py-2 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums">
-                            {installPct}%
+                  {(() => {
+                    const camApp = allApps.find((a) => a.id === "gamura-camera");
+                    if (!camApp) return null;
+                    const camInstalled = installedIdSet.has(camApp.id);
+                    const camInstalling = installingId === camApp.id;
+                    return (
+                      <a
+                        href={camApp.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-white border border-zinc-200/80 rounded-3xl p-4 sm:p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer text-left"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <StoreAppGlyph
+                            app={camApp}
+                            sizeClass="w-16 h-16"
+                            iconPx={32}
+                          />
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#059669]">
+                              Spotlight · Camera &amp; Editor
+                            </span>
+                            <h2 className="text-lg font-bold text-[#1D1D1F] tracking-tight truncate">
+                              {camApp.name}
+                            </h2>
+                            <p className="text-xs text-[#6E6E73] truncate">
+                              {camApp.tag}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {camInstalling ? (
+                            <span
+                              onClick={(e) => e.preventDefault()}
+                              className="px-4 py-2 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums"
+                            >
+                              {installPct}%
+                            </span>
+                          ) : camInstalled ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleUninstallAll(camApp);
+                              }}
+                              className="px-3.5 py-2 rounded-full bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-xs font-semibold text-[#6E6E73] cursor-pointer transition-colors"
+                            >
+                              Uninstall
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleGetClick(camApp, e);
+                              }}
+                              className="px-4 py-2 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide cursor-pointer transition-colors"
+                            >
+                              GET
+                            </button>
+                          )}
+                          <span className="px-4 py-2 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide inline-flex items-center gap-1.5 transition-colors whitespace-nowrap">
+                            <span>OPEN</span>
+                            <ExternalLink size={12} />
                           </span>
-                        ) : veoInstalled ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleUninstallAll(veoApp);
-                            }}
-                            className="px-4 py-2 rounded-full bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-xs font-semibold text-[#6E6E73] cursor-pointer transition-colors"
-                          >
-                            Uninstall
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => handleGetClick(veoApp, e)}
-                            className="px-5 py-2 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide cursor-pointer transition-colors"
-                          >
-                            GET
-                          </button>
-                        )}
-                        <a
-                          href={veoApp.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="px-5 py-2 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide inline-flex items-center gap-1.5 transition-colors whitespace-nowrap"
-                        >
-                          <span>OPEN</span>
-                          <ExternalLink size={12} />
-                        </a>
-                      </div>
-                    </div>
-                  );
-                })()}
+                        </div>
+                      </a>
+                    );
+                  })()}
+                </div>
 
                 {/* Featured Carousel */}
                 <div className="flex gap-3.5 overflow-x-auto no-scrollbar pb-1 snap-x snap-mandatory">
-                  {allApps.map((app) => (
-                    <button
-                      key={app.id}
-                      type="button"
-                      onClick={() => setSelectedApp(app)}
-                      style={{
-                        background: `linear-gradient(135deg, ${app.c1}, ${app.c2})`,
-                      }}
-                      className="min-w-[260px] sm:min-w-[300px] flex-1 snap-center rounded-[22px] p-5 min-h-[172px] text-white text-left relative overflow-hidden flex flex-col justify-between shadow-sm hover:scale-[1.01] transition-transform cursor-pointer"
-                    >
-                      <span className="absolute -right-2 -top-4 text-[120px] font-black opacity-15 pointer-events-none select-none leading-none">
-                        {app.name.charAt(0)}
-                      </span>
-                      <div className="relative z-10 flex items-start justify-between gap-2">
-                        <StoreAppGlyph
-                          app={app}
-                          sizeClass="w-12 h-12 text-lg"
-                          iconPx={22}
-                        />
-                        <span className="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-xs text-[10px] font-bold tracking-wider uppercase">
-                          {app.cat}
+                  {allApps.map((app) =>
+                    app.id === "gamura-camera" ? (
+                      <a
+                        key={app.id}
+                        href={app.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          background: `linear-gradient(135deg, ${app.c1}, ${app.c2})`,
+                        }}
+                        className="min-w-[260px] sm:min-w-[300px] flex-1 snap-center rounded-[22px] p-5 min-h-[172px] text-white text-left relative overflow-hidden flex flex-col justify-between shadow-sm hover:scale-[1.01] transition-transform cursor-pointer"
+                      >
+                        <span className="absolute -right-2 -top-4 text-[120px] font-black opacity-15 pointer-events-none select-none leading-none">
+                          {app.name.charAt(0)}
                         </span>
-                      </div>
-                      <div className="relative z-10 mt-3">
-                        <div className="text-lg sm:text-xl font-bold tracking-tight line-clamp-1">
-                          {app.name}
+                        <div className="relative z-10 flex items-start justify-between gap-2">
+                          <StoreAppGlyph
+                            app={app}
+                            sizeClass="w-12 h-12 text-lg"
+                            iconPx={22}
+                          />
+                          <span className="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-xs text-[10px] font-bold tracking-wider uppercase">
+                            {app.cat}
+                          </span>
                         </div>
-                        <div className="text-xs opacity-90 line-clamp-1 mt-0.5">
-                          {app.tag}
+                        <div className="relative z-10 mt-3">
+                          <div className="text-lg sm:text-xl font-bold tracking-tight line-clamp-1">
+                            {app.name}
+                          </div>
+                          <div className="text-xs opacity-90 line-clamp-1 mt-0.5">
+                            {app.tag}
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </a>
+                    ) : (
+                      <button
+                        key={app.id}
+                        type="button"
+                        onClick={() => setSelectedApp(app)}
+                        style={{
+                          background: `linear-gradient(135deg, ${app.c1}, ${app.c2})`,
+                        }}
+                        className="min-w-[260px] sm:min-w-[300px] flex-1 snap-center rounded-[22px] p-5 min-h-[172px] text-white text-left relative overflow-hidden flex flex-col justify-between shadow-sm hover:scale-[1.01] transition-transform cursor-pointer"
+                      >
+                        <span className="absolute -right-2 -top-4 text-[120px] font-black opacity-15 pointer-events-none select-none leading-none">
+                          {app.name.charAt(0)}
+                        </span>
+                        <div className="relative z-10 flex items-start justify-between gap-2">
+                          <StoreAppGlyph
+                            app={app}
+                            sizeClass="w-12 h-12 text-lg"
+                            iconPx={22}
+                          />
+                          <span className="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-xs text-[10px] font-bold tracking-wider uppercase">
+                            {app.cat}
+                          </span>
+                        </div>
+                        <div className="relative z-10 mt-3">
+                          <div className="text-lg sm:text-xl font-bold tracking-tight line-clamp-1">
+                            {app.name}
+                          </div>
+                          <div className="text-xs opacity-90 line-clamp-1 mt-0.5">
+                            {app.tag}
+                          </div>
+                        </div>
+                      </button>
+                    ),
+                  )}
                 </div>
 
                 {/* Games on Launch (GAINOSOR, GIGOR, Gamura Galaxy) */}
