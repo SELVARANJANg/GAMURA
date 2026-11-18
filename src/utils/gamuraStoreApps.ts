@@ -16,6 +16,8 @@ export type StoreIconKind =
   | "clip"
   | "camera"
   | "messenger"
+  | "numbers"
+  | "gfiles"
   | "letter";
 
 export interface StoreAppItem {
@@ -463,6 +465,42 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     version: "2.0",
     age: "12+",
     chart: "No. 1 Social",
+    dl: "Featured",
+    size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-numbers",
+    name: "GAMURA NUMBERS",
+    cat: "Utilities",
+    tag: "Explore numbers, primes, sequences & live math insights",
+    desc: "GAMURA NUMBERS lets you explore mathematical numbers, factorizations, number systems, conversions, and numerical patterns cleanly in your browser.",
+    url: "https://gamuranumbers.netlify.app/",
+    c1: "#10b981",
+    c2: "#047857",
+    iconKind: "numbers",
+    rating: 4.9,
+    version: "2.0",
+    age: "3+",
+    chart: "Featured",
+    dl: "3K+",
+    size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gfiles",
+    name: "Gfiles",
+    cat: "Utilities",
+    tag: "Gamura File Manager System (GMS) · Browse, clean & vault",
+    desc: "Gfiles (Gamura File Manager System · GMS) brings Apple Files simplicity to your browser: browse internal folders, preview images/video/audio/PDFs, edit text files, lock Private Files behind a 4-digit PIN, recover Trash for 30 days, and optimize storage locally.",
+    url: "/gfiles",
+    c1: "#0a84ff",
+    c2: "#0055d4",
+    iconKind: "gfiles",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Files",
     dl: "Featured",
     size: "Web · 1 MB",
     isBuiltin: true,

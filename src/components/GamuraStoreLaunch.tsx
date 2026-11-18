@@ -297,7 +297,7 @@ export default function GamuraStoreLaunch({
     const isDirectLaunchApp = app.id === "gamura-camera";
     const handleRowActivate = () => {
       if (isDirectLaunchApp) {
-        window.open(app.url, "_blank", "noopener,noreferrer");
+        window.location.assign(app.url);
       } else {
         setSelectedApp(app);
       }

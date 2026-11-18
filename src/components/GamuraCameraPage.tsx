@@ -1,15 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity,
   ArrowLeft,
   Camera,
   Check,
+  ChevronDown,
+  Compass,
   Download,
   ExternalLink,
   FlipHorizontal,
+  Frame,
   Grid3X3,
   HardDrive,
   Image as ImageIcon,
+  Layers,
   Plus,
+  Repeat,
   RotateCcw,
   RotateCw,
   Share2,
@@ -34,7 +40,10 @@ import {
   readStoreJson,
   removeAppFromUniverse,
 } from "../utils/gamuraStoreApps";
-import { loadUniversePreferences } from "./UniverseSettingsView";
+import {
+  UNIVERSE_PREFS_STORAGE_KEY,
+  loadUniversePreferences,
+} from "./UniverseSettingsView";
 
 interface GamuraCameraPageProps {
   onBackHome: () => void;
@@ -48,6 +57,8 @@ interface FilterParams {
   t?: number;
   g?: number;
   sp?: number;
+  inv?: number;
+  blur?: number;
   fade?: number;
   vig?: number;
   grain?: number;
@@ -132,6 +143,13 @@ const PRESET_FILTERS: [string, FilterParams][] = [
   ["Sepia", { sp: 1, c: 8 }],
   ["High Contrast", { c: 65, s: 12, b: 4 }],
   ["Vivid", { s: 38, c: 14 }],
+  ["Clarendon", { c: 22, s: 35, b: 6, w: -8 }],
+  ["Juno", { c: 18, s: 40, w: 12, t: -6 }],
+  ["Lark", { b: 10, c: -8, s: 18, w: -10 }],
+  ["Gingham", { b: 8, c: -14, s: -22, fade: 0.28, w: 6 }],
+  ["Valencia", { sp: 0.2, b: 8, c: 10, s: 14, w: 22 }],
+  ["Nashville", { b: 8, c: 18, s: 15, w: 28, t: -12 }],
+  ["Perpetua", { b: 6, s: 12, t: 18, fade: 0.15 }],
   ["Portrait", { c: 8, s: -4, w: 9, b: 5, vig: 0.2, fade: 0.05 }],
   ["Noir", { g: 1, c: 34, vig: 0.45 }],
   ["Silver", { g: 1, c: -6, b: 7, fade: 0.22 }],
@@ -154,8 +172,12 @@ const PRESET_FILTERS: [string, FilterParams][] = [
   ["Kodak", { w: 18, s: 8, c: 12, fade: 0.15, grain: 0.35, sp: 0.15 }],
   ["Lomo", { s: 35, c: 30, vig: 0.7, grain: 0.3, t: 10 }],
   ["Neon", { s: 90, c: 30, t: 25, w: -20 }],
+  ["Cyberpunk", { s: 75, c: 32, w: -45, t: 35, vig: 0.4 }],
+  ["Obsidian", { b: -12, c: 42, s: -25, vig: 0.65 }],
+  ["Soft Glow", { b: 12, c: -10, blur: 1, s: 12 }],
   ["Pastel", { b: 12, c: -18, s: -10, fade: 0.3, w: 6 }],
   ["Drama", { c: 40, s: -15, vig: 0.5, b: -4 }],
+  ["Invert X", { inv: 1, c: 15 }],
 ];
 
 const ADJ_DEFS: [keyof AdjValues, string, number, number][] = [
@@ -185,12 +207,34 @@ const RATIOS: [string, number, number][] = [
   ["4:3", 4, 3],
   ["1:1", 1, 1],
   ["16:9", 16, 9],
+  ["9:16", 9, 16],
 ];
 
-const MODES = ["PHOTO", "SQUARE", "PORTRAIT", "B&W", "VIDEO"] as const;
+const MODES = [
+  "PHOTO",
+  "SQUARE",
+  "PORTRAIT",
+  "BOOMERANG",
+  "BURST 3×",
+  "B&W",
+  "VIDEO",
+] as const;
 type CamMode = (typeof MODES)[number];
+type CameraProfile = "iphone" | "instagram" | "facebook" | "pro";
+type FrameOverlay = "none" | "cg-badge" | "ig-story" | "fb-polaroid";
 type CameraView = "cam" | "edit" | "gal";
 type EditorTab = "pf" | "pa" | "pt";
+
+const CAMERA_PROFILES: {
+  id: CameraProfile;
+  label: string;
+  desc: string;
+}[] = [
+  { id: "iphone", label: "iPhone", desc: "Photographic Styles & Leveler" },
+  { id: "instagram", label: "Instagram", desc: "Stories 9:16, Clarendon & Boomerang" },
+  { id: "facebook", label: "Facebook", desc: "Social Polaroid & Soft Beauty" },
+  { id: "pro", label: "CG Pro", desc: "Histogram, Manual Gain & Gyro" },
+];
 
 const APPLE_FONT_STYLE: React.CSSProperties = {
   fontFamily:
@@ -198,7 +242,7 @@ const APPLE_FONT_STYLE: React.CSSProperties = {
 };
 
 function cssFilterFromPreset(p: FilterParams, expo: number): string {
-  return `brightness(${1 + (p.b || 0) / 100}) contrast(${1 + (p.c || 0) / 100}) saturate(${1 + (p.s || 0) / 100}) grayscale(${p.g || 0}) sepia(${p.sp || 0}) hue-rotate(${-(p.w || 0) * 0.2}deg) brightness(${1 + expo / 100})`;
+  return `brightness(${1 + (p.b || 0) / 100}) contrast(${1 + (p.c || 0) / 100}) saturate(${1 + (p.s || 0) / 100}) grayscale(${p.g || 0}) sepia(${p.sp || 0}) invert(${p.inv || 0}) blur(${p.blur || 0}px) hue-rotate(${-(p.w || 0) * 0.2}deg) brightness(${1 + expo / 100})`;
 }
 
 function buildGeometryCanvas(
@@ -263,6 +307,8 @@ interface ProcessedParams {
   grain: number;
   g: number;
   sp: number;
+  inv: number;
+  blur: number;
 }
 
 function resolvePhotoParams(photo: CameraPhotoItem): ProcessedParams {
@@ -275,7 +321,7 @@ function resolvePhotoParams(photo: CameraPhotoItem): ProcessedParams {
     c: Math.max(-95, Math.min(95, getScaled("c") + a.c)),
     s: getScaled("s") + a.s,
     w: getScaled("w") + a.w,
-    t: a.t,
+    t: a.t + getScaled("t"),
     sh: a.sh,
     hi: a.hi,
     sharp: a.sharp / 100,
@@ -284,6 +330,8 @@ function resolvePhotoParams(photo: CameraPhotoItem): ProcessedParams {
     grain: getScaled("grain") + a.grain / 100,
     g: getScaled("g"),
     sp: getScaled("sp"),
+    inv: getScaled("inv"),
+    blur: getScaled("blur"),
   };
 }
 
@@ -369,12 +417,28 @@ function processPixels(src: HTMLCanvasElement, p: ProcessedParams): HTMLCanvasEl
         b += n;
       }
 
+      if (p.inv) {
+        r += (255 - 2 * r) * p.inv;
+        g += (255 - 2 * g) * p.inv;
+        b += (255 - 2 * b) * p.inv;
+      }
+
       d[i] = r;
       d[i + 1] = g;
       d[i + 2] = b;
     }
   }
   ctx.putImageData(im, 0, 0);
+
+  if (p.blur > 0) {
+    const glowCanvas = document.createElement("canvas");
+    glowCanvas.width = w;
+    glowCanvas.height = h;
+    const gCtx = glowCanvas.getContext("2d")!;
+    gCtx.filter = `blur(${p.blur}px)`;
+    gCtx.drawImage(c, 0, 0);
+    ctx.drawImage(glowCanvas, 0, 0);
+  }
 
   if (p.sharp > 0) {
     const s = ctx.getImageData(0, 0, w, h);
@@ -444,7 +508,8 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
-  // Camera viewfinder state
+  // Camera viewfinder & studio profiles state
+  const [cameraProfile, setCameraProfile] = useState<CameraProfile>("iphone");
   const [facing, setFacing] = useState<"environment" | "user">("environment");
   const [mode, setMode] = useState<CamMode>("PHOTO");
   const [ratioIdx, setRatioIdx] = useState(0);
@@ -457,16 +522,30 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
   const [hdrOn, setHdrOn] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [expo, setExpo] = useState(0);
+  const [beautyOn, setBeautyOn] = useState(false);
+  const [frameOverlay, setFrameOverlay] = useState<FrameOverlay>("none");
   const [cameraBlockedReason, setCameraBlockedReason] = useState<string | null>(null);
   const [streamReady, setStreamReady] = useState(false);
+  const [isDemoFeed, setIsDemoFeed] = useState(false);
   const [busyCapture, setBusyCapture] = useState(false);
 
   // Focus reticle + exposure
   const [focusBox, setFocusBox] = useState<{ x: number; y: number } | null>(null);
   const focusTimerRef = useRef<number | null>(null);
 
-  // Horizon level
-  const [gammaDeg, setGammaDeg] = useState<number | null>(null);
+  // Full 3-Axis Gyroscope & Artificial Horizon Leveler
+  const [gyroEnabled, setGyroEnabled] = useState(true);
+  const [gyroStabilize, setGyroStabilize] = useState(false);
+  const [gyroTelemetry, setGyroTelemetry] = useState<{
+    alpha: number;
+    beta: number;
+    gamma: number;
+    hasSensor: boolean;
+  }>({ alpha: 0, beta: 0, gamma: 0, hasSensor: false });
+  const [showHistogram, setShowHistogram] = useState(false);
+  const histogramCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const demoFeedRafRef = useRef<number | null>(null);
+  const shutterFlashTimerRef = useRef<number | null>(null);
 
   // Video recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -506,6 +585,20 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const nativeCamInputRef = useRef<HTMLInputElement | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraStartSeqRef = useRef(0);
+  const isMountedRef = useRef(true);
+  const computeMaskBoxRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+      if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
+      if (shutterFlashTimerRef.current) window.clearTimeout(shutterFlashTimerRef.current);
+      if (demoFeedRafRef.current) cancelAnimationFrame(demoFeedRafRef.current);
+    };
+  }, []);
 
   const activePhoto = useMemo(
     () => photos.find((p) => p.id === activePhotoId) || null,
@@ -688,6 +781,9 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       if (!Ctx) return;
       if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
       const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => null);
+      }
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.frequency.value = 1200;
@@ -702,10 +798,27 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     }
   };
 
+  const triggerVisualShutterFlash = useCallback((intensity = 0.94) => {
+    if (shutterFlashTimerRef.current) {
+      window.clearTimeout(shutterFlashTimerRef.current);
+    }
+    setScreenFlashOpacity(intensity);
+    shutterFlashTimerRef.current = window.setTimeout(() => {
+      setScreenFlashOpacity(0);
+    }, 170);
+  }, []);
+
   const stopCamera = useCallback(() => {
+    if (demoFeedRafRef.current) {
+      cancelAnimationFrame(demoFeedRafRef.current);
+      demoFeedRafRef.current = null;
+    }
     if (recorderRef.current) {
       try {
-        recorderRef.current.mr.stop();
+        recorderRef.current.stopDraw();
+        if (recorderRef.current.mr.state !== "inactive") {
+          recorderRef.current.mr.stop();
+        }
       } catch {
         // ignore
       }
@@ -718,6 +831,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       videoRef.current.srcObject = null;
     }
     setStreamReady(false);
+    setIsDemoFeed(false);
   }, []);
 
   const computeMaskBox = useCallback(() => {
@@ -739,8 +853,17 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     return { W, H, mw, mh };
   }, [ratioIdx]);
 
+  useEffect(() => {
+    computeMaskBoxRef.current = computeMaskBox;
+    computeMaskBox();
+  }, [computeMaskBox]);
+
+  const isVideoMode = mode === "VIDEO";
+
   const startCamera = useCallback(async () => {
+    const seq = ++cameraStartSeqRef.current;
     stopCamera();
+
     const prefs = loadUniversePreferences();
     if (!prefs.allowAccess.camera) {
       setCameraBlockedReason(
@@ -749,7 +872,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       return;
     }
 
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setCameraBlockedReason(
         "Live camera stream is unavailable in this browser window. Use your phone camera or import any photo below.",
       );
@@ -757,44 +880,81 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     }
 
     try {
-      const wantAudio = mode === "VIDEO" && prefs.allowAccess.microphone;
+      const wantAudio = isVideoMode && prefs.allowAccess.microphone;
       let s: MediaStream;
       try {
         s = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
           audio: wantAudio,
         });
       } catch {
-        // Fallback without audio if mic is blocked
-        s = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facing },
-          audio: false,
-        });
+        try {
+          s = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: facing } },
+            audio: false,
+          });
+        } catch {
+          s = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
       }
+
+      if (!isMountedRef.current || seq !== cameraStartSeqRef.current) {
+        s.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
       streamRef.current = s;
       setCameraBlockedReason(null);
       setStreamReady(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = s;
-        videoRef.current.play().catch(() => null);
+
+      const v = videoRef.current;
+      if (v) {
+        v.muted = true;
+        v.playsInline = true;
+        v.srcObject = s;
+        v.play().catch(() => null);
       }
+
       detectAvailableCameras(s);
-      window.setTimeout(computeMaskBox, 80);
-    } catch {
-      setCameraBlockedReason(
-        "Camera permission is blocked or no hardware camera was found. Allow browser camera permission, open your phone camera, or import a photo.",
-      );
+      window.setTimeout(() => computeMaskBoxRef.current(), 90);
+    } catch (err: any) {
+      if (!isMountedRef.current || seq !== cameraStartSeqRef.current) return;
+      const errName = String(err?.name || "");
+      if (errName === "NotAllowedError" || errName === "PermissionDeniedError") {
+        setCameraBlockedReason(
+          "Browser camera permission is blocked. Allow camera access for this site in your browser bar, open your phone camera, or import a photo.",
+        );
+      } else if (errName === "NotReadableError" || errName === "TrackStartError") {
+        setCameraBlockedReason(
+          "Your camera is currently in use by another app or tab. Close the other camera app and tap Try Camera Again, or import a photo.",
+        );
+      } else {
+        setCameraBlockedReason(
+          "No active hardware camera was detected in this browser. Open your phone camera or import any photo below.",
+        );
+      }
     }
-  }, [computeMaskBox, detectAvailableCameras, facing, mode, stopCamera]);
+  }, [detectAvailableCameras, facing, isVideoMode, stopCamera]);
 
   useEffect(() => {
     if (view === "cam") {
       startCamera();
     } else {
+      cameraStartSeqRef.current++;
       stopCamera();
     }
-    return () => stopCamera();
-  }, [view, facing, startCamera, stopCamera]);
+    return () => {
+      cameraStartSeqRef.current++;
+      stopCamera();
+    };
+  }, [view, startCamera, stopCamera]);
 
   // Listen for live browser camera permission changes via navigator.permissions API
   useEffect(() => {
@@ -829,22 +989,154 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
   }, [view, startCamera, stopCamera]);
 
   useEffect(() => {
-    computeMaskBox();
     window.addEventListener("resize", computeMaskBox);
     return () => window.removeEventListener("resize", computeMaskBox);
   }, [computeMaskBox]);
 
   useEffect(() => {
+    if (!gyroEnabled) return;
     const onOrientation = (e: DeviceOrientationEvent) => {
-      if (!gridOn || e.gamma == null) {
-        setGammaDeg(null);
-        return;
-      }
-      setGammaDeg(e.gamma);
+      if (e.gamma == null && e.beta == null && e.alpha == null) return;
+      setGyroTelemetry({
+        alpha: Math.round(e.alpha || 0),
+        beta: Number((e.beta || 0).toFixed(1)),
+        gamma: Number((e.gamma || 0).toFixed(1)),
+        hasSensor: true,
+      });
     };
     window.addEventListener("deviceorientation", onOrientation);
     return () => window.removeEventListener("deviceorientation", onOrientation);
-  }, [gridOn]);
+  }, [gyroEnabled]);
+
+  const handleToggleGyroscope = async () => {
+    if (gyroEnabled) {
+      setGyroEnabled(false);
+      setGyroStabilize(false);
+      showToast("Gyroscope HUD off");
+      return;
+    }
+    const DevOrient = window.DeviceOrientationEvent as any;
+    if (typeof DevOrient?.requestPermission === "function") {
+      try {
+        const res = await DevOrient.requestPermission();
+        if (res !== "granted") {
+          showToast("Motion sensor permission declined — simulated tilt enabled");
+        }
+      } catch {
+        // ignore
+      }
+    }
+    setGyroEnabled(true);
+    showToast("3-Axis Gyroscope Horizon ON ✓");
+  };
+
+  // Start animated studio demo canvas stream when user has no physical webcam
+  const startDemoStudioFeed = useCallback(() => {
+    stopCamera();
+    const cv = document.createElement("canvas");
+    cv.width = 1280;
+    cv.height = 720;
+    const ctx = cv.getContext("2d");
+    if (!ctx || typeof (cv as any).captureStream !== "function") {
+      showToast("Live demo stream unavailable in this browser");
+      return;
+    }
+
+    let t = 0;
+    const renderDemo = () => {
+      t += 0.025;
+      const grd = ctx.createLinearGradient(0, 0, cv.width, cv.height);
+      grd.addColorStop(0, `hsl(${(150 + Math.sin(t * 0.6) * 28).toFixed(0)}, 68%, 24%)`);
+      grd.addColorStop(0.5, `hsl(${(205 + Math.cos(t * 0.4) * 32).toFixed(0)}, 64%, 20%)`);
+      grd.addColorStop(1, "#07130d");
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, cv.width, cv.height);
+
+      // Floating studio bokeh spheres
+      for (let i = 0; i < 6; i++) {
+        const bx = cv.width * (0.2 + i * 0.14) + Math.sin(t + i) * 44;
+        const by = cv.height * (0.35 + (i % 3) * 0.18) + Math.cos(t * 1.1 + i) * 32;
+        const rad = 75 + (i % 3) * 28;
+        const bGrad = ctx.createRadialGradient(bx, by, 4, bx, by, rad);
+        bGrad.addColorStop(0, "rgba(255,255,255,0.48)");
+        bGrad.addColorStop(0.45, "rgba(52,211,153,0.22)");
+        bGrad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = bGrad;
+        ctx.beginPath();
+        ctx.arc(bx, by, rad, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Subject focal ring + timestamp
+      ctx.strokeStyle = "rgba(255,255,255,0.28)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cv.width / 2, cv.height / 2, 118 + Math.sin(t * 2) * 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.font = "700 40px -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("GAMURA LIVE STUDIO", cv.width / 2, cv.height / 2 - 8);
+      ctx.fillStyle = "rgba(52,211,153,0.92)";
+      ctx.font = "600 20px -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText(new Date().toLocaleTimeString(), cv.width / 2, cv.height / 2 + 28);
+
+      demoFeedRafRef.current = requestAnimationFrame(renderDemo);
+    };
+    renderDemo();
+
+    const s: MediaStream = (cv as any).captureStream(30);
+    streamRef.current = s;
+    setCameraBlockedReason(null);
+    setStreamReady(true);
+    setIsDemoFeed(true);
+    const v = videoRef.current;
+    if (v) {
+      v.muted = true;
+      v.playsInline = true;
+      v.srcObject = s;
+      v.play().catch(() => null);
+    }
+    window.setTimeout(() => computeMaskBoxRef.current(), 80);
+    showToast("Demo Live Studio Feed active ✓");
+  }, [showToast, stopCamera]);
+
+  // Real-time Luminance Histogram updater (active when showHistogram or CG Pro active)
+  useEffect(() => {
+    if (view !== "cam" || !showHistogram || !streamReady) return;
+    const sampleCanvas = document.createElement("canvas");
+    sampleCanvas.width = 80;
+    sampleCanvas.height = 45;
+    const sCtx = sampleCanvas.getContext("2d");
+
+    const iv = window.setInterval(() => {
+      const v = videoRef.current;
+      const hCanvas = histogramCanvasRef.current;
+      if (!v || !v.videoWidth || !sCtx || !hCanvas) return;
+      const hCtx = hCanvas.getContext("2d");
+      if (!hCtx) return;
+
+      sCtx.drawImage(v, 0, 0, 80, 45);
+      const data = sCtx.getImageData(0, 0, 80, 45).data;
+      const bins = new Array<number>(32).fill(0);
+      for (let i = 0; i < data.length; i += 4) {
+        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        const bIdx = Math.min(31, Math.floor((lum / 256) * 32));
+        bins[bIdx]++;
+      }
+      const maxBin = Math.max(1, ...bins);
+      hCtx.clearRect(0, 0, hCanvas.width, hCanvas.height);
+      hCtx.fillStyle = "rgba(48, 209, 88, 0.88)";
+      const bw = hCanvas.width / 32;
+      bins.forEach((count, i) => {
+        const bh = (count / maxBin) * hCanvas.height;
+        hCtx.fillRect(i * bw, hCanvas.height - bh, Math.max(1, bw - 1), bh);
+      });
+    }, 180);
+
+    return () => window.clearInterval(iv);
+  }, [view, showHistogram, streamReady]);
 
   const addPhotoAndOpenEditor = useCallback(
     (
@@ -917,12 +1209,24 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       URL.revokeObjectURL(objUrl);
       addPhotoAndOpenEditor(c, 0, false, false);
     };
+    img.onerror = () => {
+      URL.revokeObjectURL(objUrl);
+      showToast("Unable to decode that image file");
+    };
     img.src = objUrl;
   };
 
   const toggleVideoRecording = () => {
     if (recorderRef.current) {
-      recorderRef.current.mr.stop();
+      try {
+        recorderRef.current.stopDraw();
+        if (recorderRef.current.mr.state !== "inactive") {
+          recorderRef.current.mr.stop();
+        }
+      } catch {
+        recorderRef.current = null;
+        setIsRecording(false);
+      }
       return;
     }
     const stream = streamRef.current;
@@ -931,12 +1235,17 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       showToast("Camera stream not active yet");
       return;
     }
+    if (typeof MediaRecorder === "undefined") {
+      showToast("Video recording is not supported in this browser");
+      return;
+    }
 
     const cv = document.createElement("canvas");
     cv.width = v.videoWidth;
     cv.height = v.videoHeight;
     const ctx = cv.getContext("2d")!;
     let drawing = true;
+    let rafId = 0;
 
     const drawFrame = () => {
       if (!drawing) return;
@@ -948,17 +1257,35 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       }
       ctx.drawImage(v, 0, 0);
       ctx.restore();
-      requestAnimationFrame(drawFrame);
+      rafId = requestAnimationFrame(drawFrame);
     };
     drawFrame();
 
-    const outStream = cv.captureStream(30);
-    stream.getAudioTracks().forEach((track) => outStream.addTrack(track));
+    let outStream: MediaStream;
+    try {
+      outStream =
+        typeof (cv as any).captureStream === "function"
+          ? (cv as any).captureStream(30)
+          : stream;
+      if (outStream !== stream) {
+        stream.getAudioTracks().forEach((track) => outStream.addTrack(track));
+      }
+    } catch {
+      outStream = stream;
+    }
 
     const mime = ["video/mp4", "video/webm;codecs=vp9", "video/webm"].find(
-      (t) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t),
+      (t) => MediaRecorder.isTypeSupported(t),
     );
-    const mr = new MediaRecorder(outStream, mime ? { mimeType: mime } : undefined);
+    let mr: MediaRecorder;
+    try {
+      mr = new MediaRecorder(outStream, mime ? { mimeType: mime } : undefined);
+    } catch {
+      drawing = false;
+      cancelAnimationFrame(rafId);
+      showToast("Could not initialize video recorder");
+      return;
+    }
     const chunks: Blob[] = [];
     const startTs = Date.now();
 
@@ -967,8 +1294,10 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     };
     mr.onstop = () => {
       drawing = false;
+      cancelAnimationFrame(rafId);
       if (recorderRef.current?.iv) window.clearInterval(recorderRef.current.iv);
       const blob = new Blob(chunks, { type: mr.mimeType || "video/webm" });
+      if (!isMountedRef.current) return;
       const vidUrl = URL.createObjectURL(blob);
       const filename = `CGPIC_${Date.now()}${blob.type.includes("mp4") ? ".mp4" : ".webm"}`;
       const dur = Math.max(1, Math.round((Date.now() - startTs) / 1000));
@@ -996,7 +1325,14 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       showToast("Video saved & added to Gallery ✓");
     };
 
-    mr.start();
+    try {
+      mr.start();
+    } catch {
+      drawing = false;
+      cancelAnimationFrame(rafId);
+      showToast("Unable to start video recording");
+      return;
+    }
     const iv = window.setInterval(() => {
       setRecSeconds(Math.floor((Date.now() - startTs) / 1000));
     }, 500);
@@ -1004,6 +1340,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       mr,
       stopDraw: () => {
         drawing = false;
+        cancelAnimationFrame(rafId);
       },
       iv,
     };
@@ -1011,15 +1348,180 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     setRecSeconds(0);
   };
 
+  const stampSocialOverlay = (
+    ctx: CanvasRenderingContext2D,
+    cw: number,
+    ch: number,
+    overlay: FrameOverlay,
+    profile: CameraProfile,
+  ) => {
+    const dim = Math.max(cw, ch);
+    if (overlay === "fb-polaroid") {
+      const border = Math.round(dim * 0.032);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = border * 2;
+      ctx.strokeRect(0, 0, cw, ch);
+      ctx.fillStyle = "rgba(24,119,242,0.92)";
+      ctx.font = `700 ${Math.round(dim * 0.022)}px -apple-system, sans-serif`;
+      ctx.textAlign = "left";
+      ctx.fillText("GAMURA · SOCIAL MOMENT", border * 1.3, ch - border * 1.1);
+    } else if (overlay === "ig-story") {
+      ctx.fillStyle = "rgba(0,0,0,0.48)";
+      const pw = Math.round(dim * 0.34);
+      const ph = Math.round(dim * 0.055);
+      const px = Math.round(dim * 0.035);
+      const py = Math.round(dim * 0.035);
+      ctx.fillRect(px, py, pw, ph);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `700 ${Math.round(dim * 0.02)}px -apple-system, sans-serif`;
+      ctx.textAlign = "left";
+      ctx.fillText(
+        `${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · IG STORY`,
+        px + Math.round(dim * 0.015),
+        py + Math.round(ph * 0.65),
+      );
+    } else if (overlay === "cg-badge" || profile === "pro") {
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.font = `700 ${Math.round(dim * 0.02)}px -apple-system, sans-serif`;
+      ctx.textAlign = "right";
+      ctx.fillText(
+        `CG PIC · ${profile.toUpperCase()}`,
+        cw - Math.round(dim * 0.03),
+        ch - Math.round(dim * 0.03),
+      );
+    }
+  };
+
+  const captureSingleFrameFromVideo = (): HTMLCanvasElement | null => {
+    const v = videoRef.current;
+    if (!streamRef.current || !v || !v.videoWidth) return null;
+    const w = v.videoWidth;
+    const h = v.videoHeight;
+    const container = stageContainerRef.current;
+    const W = container?.clientWidth || w;
+    const H = container?.clientHeight || h;
+    const [, ra, rb] = RATIOS[ratioIdx];
+    const r = h > w ? rb / ra : ra / rb;
+    let mw = W;
+    let mh = W / r;
+    if (mh > H) {
+      mh = H;
+      mw = H * r;
+    }
+
+    const k = Math.max(W / w, H / h);
+    const cw = Math.min(w, mw / k / zoom);
+    const ch = Math.min(h, mh / k / zoom);
+
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(cw));
+    c.height = Math.max(1, Math.round(ch));
+    const ctx = c.getContext("2d")!;
+    ctx.save();
+    if (facing === "user") {
+      ctx.translate(c.width, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(v, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, c.width, c.height);
+    ctx.restore();
+    if (frameOverlay !== "none") {
+      stampSocialOverlay(ctx, c.width, c.height, frameOverlay, cameraProfile);
+    }
+    return c;
+  };
+
+  const captureBoomerangLoop = async () => {
+    const v = videoRef.current;
+    if (!streamRef.current || !v || !v.videoWidth) {
+      nativeCamInputRef.current?.click();
+      return;
+    }
+    setBusyCapture(true);
+    showToast("Recording Boomerang loop…");
+    try {
+      const frames: HTMLCanvasElement[] = [];
+      for (let i = 0; i < 8; i++) {
+        const snap = captureSingleFrameFromVideo();
+        if (snap) frames.push(snap);
+        await new Promise((r) => setTimeout(r, 85));
+      }
+      if (frames.length === 0) return;
+
+      const seq = [...frames, ...frames.slice(0, -1).reverse()];
+      const out = document.createElement("canvas");
+      out.width = seq[0].width;
+      out.height = seq[0].height;
+      const oCtx = out.getContext("2d")!;
+
+      if (
+        typeof MediaRecorder !== "undefined" &&
+        typeof (out as any).captureStream === "function"
+      ) {
+        const mime = ["video/webm;codecs=vp9", "video/webm", "video/mp4"].find((t) =>
+          MediaRecorder.isTypeSupported(t),
+        );
+        const recStream: MediaStream = (out as any).captureStream(24);
+        const mr = new MediaRecorder(recStream, mime ? { mimeType: mime } : undefined);
+        const chunks: Blob[] = [];
+        mr.ondataavailable = (ev) => {
+          if (ev.data.size) chunks.push(ev.data);
+        };
+        const finished = new Promise<void>((resolve) => {
+          mr.onstop = () => {
+            const blob = new Blob(chunks, { type: mr.mimeType || "video/webm" });
+            const url = URL.createObjectURL(blob);
+            const filename = `BOOMERANG_${Date.now()}.webm`;
+            setVideos((prev) => [
+              {
+                id: `vid_${Date.now()}`,
+                url,
+                filename,
+                durationSec: 2,
+                createdAt: Date.now(),
+              },
+              ...prev,
+            ]);
+            resolve();
+          };
+        });
+        mr.start();
+        for (let loop = 0; loop < 2; loop++) {
+          for (const frame of seq) {
+            oCtx.filter = cssFilterFromPreset(PRESET_FILTERS[liveFilterIdx][1], expo);
+            oCtx.drawImage(frame, 0, 0);
+            oCtx.filter = "none";
+            await new Promise((r) => setTimeout(r, 65));
+          }
+        }
+        mr.stop();
+        await finished;
+        triggerVisualShutterFlash(0.9);
+        playShutterSound();
+        showToast("Boomerang loop saved to Gallery ✓");
+      } else {
+        triggerVisualShutterFlash(0.9);
+        playShutterSound();
+        addPhotoAndOpenEditor(seq[0], liveFilterIdx, true, hdrOn, false);
+      }
+    } finally {
+      setBusyCapture(false);
+    }
+  };
+
   const handleShutter = async () => {
     if (mode === "VIDEO") {
       toggleVideoRecording();
+      return;
+    }
+    if (mode === "BOOMERANG") {
+      await captureBoomerangLoop();
       return;
     }
     if (busyCapture) return;
     const stream = streamRef.current;
     const v = videoRef.current;
     if (!stream || !v || !v.videoWidth) {
+      triggerVisualShutterFlash(0.75);
       nativeCamInputRef.current?.click();
       return;
     }
@@ -1036,78 +1538,104 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       let torchUsed = false;
       const track = stream.getVideoTracks()[0];
       if (flashOn) {
-        if (facing === "user") {
+        if (facing === "user" || isDemoFeed) {
           setScreenFlashOpacity(0.95);
-          await new Promise((r) => setTimeout(r, 240));
+          await new Promise((r) => setTimeout(r, 220));
         } else if (track?.applyConstraints) {
           try {
             await track.applyConstraints({ advanced: [{ torch: true } as any] });
             torchUsed = true;
-            await new Promise((r) => setTimeout(r, 280));
+            await new Promise((r) => setTimeout(r, 260));
           } catch {
-            setScreenFlashOpacity(0.85);
-            await new Promise((r) => setTimeout(r, 150));
+            setScreenFlashOpacity(0.9);
+            await new Promise((r) => setTimeout(r, 140));
           }
         }
       }
 
-      const w = v.videoWidth;
-      const h = v.videoHeight;
-      const container = stageContainerRef.current;
-      const W = container?.clientWidth || w;
-      const H = container?.clientHeight || h;
-      const [, ra, rb] = RATIOS[ratioIdx];
-      const r = h > w ? rb / ra : ra / rb;
-      let mw = W;
-      let mh = W / r;
-      if (mh > H) {
-        mh = H;
-        mw = H * r;
+      if (mode === "BURST 3×") {
+        for (let b = 0; b < 3; b++) {
+          const snap = captureSingleFrameFromVideo();
+          if (snap) {
+            triggerVisualShutterFlash(0.92);
+            playShutterSound();
+            addPhotoAndOpenEditor(snap, liveFilterIdx, true, hdrOn, b === 2);
+          }
+          await new Promise((r) => setTimeout(r, 180));
+        }
+        showToast("Burst 3× captured & saved ✓");
+      } else {
+        const captured = captureSingleFrameFromVideo();
+        if (torchUsed && track?.applyConstraints) {
+          track.applyConstraints({ advanced: [{ torch: false } as any] }).catch(() => null);
+        }
+        // Guaranteed crisp visual flash confirmation on Capture click
+        triggerVisualShutterFlash(0.95);
+        playShutterSound();
+        if (captured) {
+          addPhotoAndOpenEditor(
+            captured,
+            liveFilterIdx,
+            true,
+            hdrOn || beautyOn,
+          );
+        }
       }
-
-      const k = Math.max(W / w, H / h);
-      const cw = Math.min(w, mw / k / zoom);
-      const ch = Math.min(h, mh / k / zoom);
-
-      const c = document.createElement("canvas");
-      c.width = Math.max(1, Math.round(cw));
-      c.height = Math.max(1, Math.round(ch));
-      const ctx = c.getContext("2d")!;
-      if (facing === "user") {
-        ctx.translate(c.width, 0);
-        ctx.scale(-1, 1);
-      }
-      ctx.drawImage(v, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, c.width, c.height);
-
-      setScreenFlashOpacity(0);
-      if (torchUsed && track?.applyConstraints) {
-        track.applyConstraints({ advanced: [{ torch: false } as any] }).catch(() => null);
-      }
-
-      playShutterSound();
-      addPhotoAndOpenEditor(c, liveFilterIdx, true, hdrOn);
     } finally {
       setBusyCapture(false);
     }
   };
 
+  const applyCameraProfile = (profile: CameraProfile) => {
+    setCameraProfile(profile);
+    if (profile === "iphone") {
+      setRatioIdx(0);
+      setHdrOn(true);
+      setBeautyOn(false);
+      setFrameOverlay("none");
+      setShowHistogram(false);
+      setMode("PHOTO");
+      setLiveFilterIdx(0);
+      showToast("iPhone Camera · Smart HDR & Leveler");
+    } else if (profile === "instagram") {
+      setRatioIdx(3); // 9:16 Story
+      setFrameOverlay("ig-story");
+      setBeautyOn(false);
+      setShowHistogram(false);
+      const clarendon = PRESET_FILTERS.findIndex(([n]) => n === "Clarendon");
+      if (clarendon >= 0) setLiveFilterIdx(clarendon);
+      showToast("Instagram Camera · 9:16 Story & Clarendon");
+    } else if (profile === "facebook") {
+      setRatioIdx(0);
+      setFrameOverlay("fb-polaroid");
+      setBeautyOn(true);
+      setShowHistogram(false);
+      const glow = PRESET_FILTERS.findIndex(([n]) => n === "Vivid");
+      if (glow >= 0) setLiveFilterIdx(glow);
+      showToast("Facebook Camera · Social Polaroid & Soft Glow");
+    } else {
+      setRatioIdx(0);
+      setFrameOverlay("cg-badge");
+      setShowHistogram(true);
+      setGridOn(true);
+      setGyroEnabled(true);
+      showToast("CG Pro · Live Histogram & 3-Axis Gyro");
+    }
+  };
+
   const handleModeSwitch = (nextMode: CamMode) => {
-    const wasVideo = mode === "VIDEO";
     setMode(nextMode);
     if (nextMode === "SQUARE") setRatioIdx(1);
     else if (nextMode === "VIDEO") setRatioIdx(2);
+    else if (nextMode === "BOOMERANG") setRatioIdx(3);
     else setRatioIdx(0);
 
     if (nextMode === "PORTRAIT") {
       setLiveFilterIdx(PRESET_FILTERS.findIndex(([name]) => name === "Portrait"));
     } else if (nextMode === "B&W") {
       setLiveFilterIdx(PRESET_FILTERS.findIndex(([name]) => name === "Grayscale"));
-    } else if (nextMode !== "VIDEO") {
+    } else if (nextMode !== "VIDEO" && nextMode !== "BOOMERANG") {
       setLiveFilterIdx(0);
-    }
-
-    if (wasVideo !== (nextMode === "VIDEO") && view === "cam") {
-      window.setTimeout(startCamera, 20);
     }
   };
 
@@ -1171,6 +1699,8 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
         grain: p.grain || 0,
         g: p.g || 0,
         sp: p.sp || 0,
+        inv: p.inv || 0,
+        blur: p.blur || 0,
       });
       return proc.toDataURL("image/jpeg", 0.72);
     });
@@ -1283,6 +1813,27 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     showToast("Downloaded image for sharing ✓");
   };
 
+  const handleDownloadGalleryPhoto = async (photo: CameraPhotoItem) => {
+    showToast("Preparing full-resolution photo…");
+    const full = decorateCanvas(
+      processPixels(buildGeometryCanvas(photo, 3000), resolvePhotoParams(photo)),
+      photo,
+    );
+    const blob = await new Promise<Blob | null>((res) =>
+      full.toBlob((b) => res(b), "image/jpeg", 0.94),
+    );
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `CGPIC_${photo.id}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showToast("Saved full-resolution photo ✓");
+  };
+
   const enableCameraPermissionPreference = () => {
     const cur = loadUniversePreferences();
     const updated = {
@@ -1290,7 +1841,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       allowAccess: { ...cur.allowAccess, camera: true, video: true },
     };
     try {
-      localStorage.setItem("gamura_universe_settings_v1", JSON.stringify(updated));
+      localStorage.setItem(UNIVERSE_PREFS_STORAGE_KEY, JSON.stringify(updated));
     } catch {
       // ignore
     }
@@ -1416,7 +1967,78 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
 
       {/* VIEW 1: LIVE CAMERA */}
       {view === "cam" && (
-        <main className="flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-2 sm:px-5 py-2 sm:py-3 gap-2 sm:gap-3 overflow-hidden">
+        <main className="flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-2 sm:px-5 py-2 sm:py-2.5 gap-2 shrink overflow-hidden">
+          {/* Camera Engine Bar: iPhone · Instagram · Facebook · CG Pro */}
+          <div className="flex items-center justify-between gap-2 bg-[#0b1812] border border-white/[0.08] rounded-2xl px-2.5 py-1.5 shrink-0">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              {CAMERA_PROFILES.map((prof) => {
+                const active = cameraProfile === prof.id;
+                return (
+                  <button
+                    key={prof.id}
+                    type="button"
+                    title={prof.desc}
+                    onClick={() => applyCameraProfile(prof.id)}
+                    className={`px-3 py-1 rounded-xl text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                      active
+                        ? "bg-[#30d158] text-[#04130c]"
+                        : "bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1]"
+                    }`}
+                  >
+                    {prof.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setBeautyOn((b) => !b);
+                  showToast(!beautyOn ? "Soft Beauty Glow ON" : "Soft Beauty Glow OFF");
+                }}
+                title="Toggle Soft Beauty Glow"
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer whitespace-nowrap border transition-colors ${
+                  beautyOn
+                    ? "bg-pink-500/20 text-pink-300 border-pink-400/40"
+                    : "bg-white/[0.05] text-zinc-400 border-white/10 hover:text-white"
+                }`}
+              >
+                <Sparkles size={12} />
+                <span className="hidden sm:inline">Glow</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleGyroscope}
+                title="Toggle 3-Axis Gyroscope Horizon Leveler"
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer whitespace-nowrap border transition-colors ${
+                  gyroEnabled
+                    ? "bg-[#ffd60a]/15 text-[#ffd60a] border-[#ffd60a]/40"
+                    : "bg-white/[0.05] text-zinc-400 border-white/10 hover:text-white"
+                }`}
+              >
+                <Compass size={12} />
+                <span className="hidden sm:inline">Gyro</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowHistogram((h) => !h)}
+                title="Toggle Live Luminance Histogram"
+                className={`px-2.5 py-1 rounded-xl text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer whitespace-nowrap border transition-colors ${
+                  showHistogram
+                    ? "bg-[#30d158]/20 text-[#30d158] border-[#30d158]/40"
+                    : "bg-white/[0.05] text-zinc-400 border-white/10 hover:text-white"
+                }`}
+              >
+                <Activity size={12} />
+                <span className="hidden sm:inline">Histo</span>
+              </button>
+            </div>
+          </div>
+
           {/* Viewfinder Stage */}
           <div
             ref={stageContainerRef}
@@ -1430,16 +2052,22 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
               focusTimerRef.current = window.setTimeout(() => setFocusBox(null), 3500);
             }}
-            className="relative flex-1 min-h-[200px] sm:min-h-[420px] rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl"
+            className="relative flex-1 min-h-[190px] sm:min-h-[380px] rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl"
           >
+            {/* Live Camera <video> Stream with Applied CSS Filter & Zoom/Gyro Transform */}
             <video
               ref={videoRef}
               playsInline
               autoPlay
               muted
+              onLoadedMetadata={() => computeMaskBoxRef.current()}
               style={{
-                filter: cssFilterFromPreset(PRESET_FILTERS[liveFilterIdx][1], expo),
-                transform: `${facing === "user" ? "scaleX(-1) " : ""}scale(${zoom})`,
+                filter: `${cssFilterFromPreset(PRESET_FILTERS[liveFilterIdx][1], expo)}${beautyOn ? " brightness(1.06) saturate(1.08)" : ""}`,
+                transform: `${facing === "user" ? "scaleX(-1) " : ""}${
+                  gyroStabilize && gyroTelemetry.hasSensor
+                    ? `rotate(${(-gyroTelemetry.gamma * 0.35).toFixed(2)}deg) `
+                    : ""
+                }scale(${zoom})`,
               }}
               className="absolute inset-0 w-full h-full object-cover transition-transform duration-150"
             />
@@ -1449,6 +2077,26 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               style={{ width: maskSize.w, height: maskSize.h }}
               className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 shadow-[0_0_0_100vmax_rgba(0,0,0,0.48)] border border-white/15 z-[2]"
             />
+
+            {/* Social / Studio Live Overlay Preview */}
+            {frameOverlay === "fb-polaroid" && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-3 rounded-2xl border-[6px] border-white/90 z-[3] flex items-end p-3"
+              >
+                <span className="px-2.5 py-1 rounded-md bg-[#1877F2] text-white text-[10px] font-bold tracking-wider">
+                  GAMURA · FACEBOOK FRAME
+                </span>
+              </div>
+            )}
+            {frameOverlay === "ig-story" && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-14 left-4 z-[3] px-3 py-1 rounded-full bg-black/55 backdrop-blur-md border border-white/15 text-[11px] font-bold text-white"
+              >
+                {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · IG STORY
+              </div>
+            )}
 
             {/* Rule of Thirds Grid */}
             {gridOn && (
@@ -1462,17 +2110,38 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               />
             )}
 
-            {/* Horizon Level */}
-            {gridOn && gammaDeg !== null && (
+            {/* 3-Axis Gyroscope Horizon Leveler */}
+            {gyroEnabled && (
               <div
                 aria-hidden="true"
-                style={{
-                  transform: `translate(-50%, -50%) rotate(${-gammaDeg}deg)`,
-                }}
-                className={`pointer-events-none absolute left-1/2 top-1/2 w-36 h-[2px] z-[4] ${
-                  Math.abs(gammaDeg) < 1.5 ? "bg-[#ffd60a]" : "bg-white/80"
-                }`}
-              />
+                className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[4] flex flex-col items-center gap-2"
+              >
+                <div
+                  style={{
+                    transform: `rotate(${-gyroTelemetry.gamma}deg)`,
+                  }}
+                  className={`w-36 h-[2px] transition-transform duration-75 relative ${
+                    Math.abs(gyroTelemetry.gamma) < 2 ? "bg-[#ffd60a]" : "bg-white/75"
+                  }`}
+                >
+                  <span className="absolute left-1/2 -top-[3px] -translate-x-1/2 w-2 h-2 rounded-full bg-current" />
+                </div>
+                <div className="px-2 py-0.5 rounded-full bg-black/55 backdrop-blur-xs border border-white/10 text-[10px] font-semibold text-zinc-200 tabular-nums whitespace-nowrap">
+                  Roll {gyroTelemetry.gamma}° · Pitch {gyroTelemetry.beta}° · {gyroTelemetry.alpha}°
+                </div>
+              </div>
+            )}
+
+            {/* Live Luminance Histogram */}
+            {showHistogram && streamReady && (
+              <div className="pointer-events-none absolute left-3 bottom-3 z-[5] bg-black/65 backdrop-blur-md border border-white/15 rounded-xl p-1.5">
+                <canvas
+                  ref={histogramCanvasRef}
+                  width={96}
+                  height={36}
+                  className="block rounded"
+                />
+              </div>
             )}
 
             {/* Tap-to-Focus + Exposure Reticle */}
@@ -1498,11 +2167,11 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               </div>
             )}
 
-            {/* Screen Flash Overlay */}
+            {/* Visual Shutter Capture Flash Overlay */}
             <div
               aria-hidden="true"
               style={{ opacity: screenFlashOpacity }}
-              className="pointer-events-none absolute inset-0 bg-white z-[8] transition-opacity duration-200"
+              className="pointer-events-none absolute inset-0 bg-white z-[8] transition-opacity duration-150"
             />
 
             {/* Countdown Overlay */}
@@ -1526,7 +2195,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                 <span className="text-xs sm:text-sm font-extrabold tracking-wide text-white drop-shadow-xs whitespace-nowrap">
                   CG <span className="text-[#30d158]">PIC</span>
                 </span>
-                <span className="text-[11px] font-semibold text-zinc-200 whitespace-nowrap">
+                <span className="text-[11px] font-semibold text-zinc-200 whitespace-nowrap truncate max-w-[140px] sm:max-w-none">
                   · {facing === "user" ? "Front" : "Back"}
                   {liveFilterIdx > 0 ? ` · ${PRESET_FILTERS[liveFilterIdx][0]}` : ""}
                 </span>
@@ -1542,7 +2211,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     showToast(next ? "Flash on" : "Flash off");
                   }}
                   title="Flash"
-                  className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                  className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                     flashOn
                       ? "bg-[#30d158] text-[#04130c] border-[#30d158]"
                       : "bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75"
@@ -1566,7 +2235,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     showToast(next ? `Timer ${next}s` : "Timer off");
                   }}
                   title="Timer"
-                  className={`min-w-[36px] sm:min-w-[40px] h-9 sm:h-10 px-2 rounded-full border text-xs font-bold flex items-center justify-center transition-colors cursor-pointer tabular-nums shrink-0 ${
+                  className={`min-w-[36px] h-9 px-2 rounded-full border text-xs font-bold flex items-center justify-center transition-colors cursor-pointer tabular-nums shrink-0 ${
                     timerSec > 0
                       ? "bg-[#30d158] text-[#04130c] border-[#30d158]"
                       : "bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75"
@@ -1581,8 +2250,8 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     e.stopPropagation();
                     setGridOn((g) => !g);
                   }}
-                  title="Grid & Level"
-                  className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                  title="Rule of Thirds Grid"
+                  className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                     gridOn
                       ? "bg-[#30d158] text-[#04130c] border-[#30d158]"
                       : "bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75"
@@ -1595,12 +2264,31 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
+                    const order: FrameOverlay[] = ["none", "ig-story", "fb-polaroid", "cg-badge"];
+                    const next = order[(order.indexOf(frameOverlay) + 1) % order.length];
+                    setFrameOverlay(next);
+                    showToast(`Frame: ${next === "none" ? "Off" : next.toUpperCase()}`);
+                  }}
+                  title="AR Frame / Overlay"
+                  className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                    frameOverlay !== "none"
+                      ? "bg-[#30d158] text-[#04130c] border-[#30d158]"
+                      : "bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75"
+                  }`}
+                >
+                  <Frame size={15} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     const next = !hdrOn;
                     setHdrOn(next);
                     showToast(next ? "HDR on" : "HDR off");
                   }}
                   title="HDR"
-                  className={`h-9 sm:h-10 px-2.5 sm:px-3 rounded-full border text-[11px] font-extrabold tracking-wide flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                  className={`h-9 px-2.5 rounded-full border text-[11px] font-extrabold tracking-wide flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                     hdrOn
                       ? "bg-[#30d158] text-[#04130c] border-[#30d158]"
                       : "bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75"
@@ -1616,7 +2304,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     setRatioIdx((idx) => (idx + 1) % RATIOS.length);
                   }}
                   title="Aspect Ratio"
-                  className="h-9 sm:h-10 px-2.5 sm:px-3 rounded-full border bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75 text-[11px] font-extrabold tracking-wide cursor-pointer tabular-nums shrink-0"
+                  className="h-9 px-2.5 rounded-full border bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75 text-[11px] font-extrabold tracking-wide cursor-pointer tabular-nums shrink-0"
                 >
                   {RATIOS[ratioIdx][0]}
                 </button>
@@ -1628,7 +2316,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     uploadInputRef.current?.click();
                   }}
                   title="Import Photo"
-                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                  className="w-9 h-9 rounded-full border bg-black/55 text-white border-white/15 backdrop-blur-md hover:bg-black/75 flex items-center justify-center transition-colors cursor-pointer shrink-0"
                 >
                   <Upload size={15} />
                 </button>
@@ -1639,21 +2327,21 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
             {cameraBlockedReason && (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute inset-0 z-[4] bg-[#07110c]/92 backdrop-blur-md flex flex-col items-center justify-center text-center p-6 gap-3"
+                className="absolute inset-0 z-[4] bg-[#07110c]/92 backdrop-blur-md flex flex-col items-center justify-center text-center p-5 gap-3"
               >
-                <div className="w-16 h-16 rounded-2xl bg-[#10261b] border border-white/10 flex items-center justify-center text-[#30d158]">
-                  <Camera size={30} />
+                <div className="w-14 h-14 rounded-2xl bg-[#10261b] border border-white/10 flex items-center justify-center text-[#30d158]">
+                  <Camera size={28} />
                 </div>
-                <h2 className="text-lg font-bold text-white">Camera Preview Ready</h2>
+                <h2 className="text-base sm:text-lg font-bold text-white">Camera Preview Ready</h2>
                 <p className="text-xs sm:text-sm text-zinc-300 max-w-md leading-relaxed">
                   {cameraBlockedReason}
                 </p>
-                <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                   {!loadUniversePreferences().allowAccess.camera && (
                     <button
                       type="button"
                       onClick={enableCameraPermissionPreference}
-                      className="px-4 py-2.5 rounded-full bg-[#30d158] hover:bg-[#28b84c] text-[#04130c] text-xs font-bold cursor-pointer transition-colors"
+                      className="px-4 py-2 rounded-full bg-[#30d158] hover:bg-[#28b84c] text-[#04130c] text-xs font-bold cursor-pointer transition-colors"
                     >
                       Turn Camera Access On
                     </button>
@@ -1661,23 +2349,30 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                   <button
                     type="button"
                     onClick={startCamera}
-                    className="px-4 py-2.5 rounded-full bg-[#30d158] hover:bg-[#28b84c] text-[#04130c] text-xs font-bold cursor-pointer transition-colors"
+                    className="px-4 py-2 rounded-full bg-[#30d158] hover:bg-[#28b84c] text-[#04130c] text-xs font-bold cursor-pointer transition-colors"
                   >
                     Try Camera Again
                   </button>
                   <button
                     type="button"
+                    onClick={startDemoStudioFeed}
+                    className="px-4 py-2 rounded-full bg-white text-[#04130c] hover:bg-zinc-200 text-xs font-bold cursor-pointer transition-colors"
+                  >
+                    Use Live Studio Demo
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => nativeCamInputRef.current?.click()}
-                    className="px-4 py-2.5 rounded-full bg-[#1c1c1e] hover:bg-[#2c2c2e] border border-white/15 text-white text-xs font-semibold cursor-pointer transition-colors"
+                    className="px-4 py-2 rounded-full bg-[#1c1c1e] hover:bg-[#2c2c2e] border border-white/15 text-white text-xs font-semibold cursor-pointer transition-colors"
                   >
                     Open Phone Camera
                   </button>
                   <button
                     type="button"
                     onClick={() => uploadInputRef.current?.click()}
-                    className="px-4 py-2.5 rounded-full bg-[#1c1c1e] hover:bg-[#2c2c2e] border border-white/15 text-white text-xs font-semibold cursor-pointer transition-colors"
+                    className="px-4 py-2 rounded-full bg-[#1c1c1e] hover:bg-[#2c2c2e] border border-white/15 text-white text-xs font-semibold cursor-pointer transition-colors"
                   >
-                    Import Photo to Edit
+                    Import Photo
                   </button>
                 </div>
               </div>
@@ -1688,7 +2383,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               onClick={(e) => e.stopPropagation()}
               className="absolute bottom-3 left-0 right-0 flex justify-center items-center gap-2 z-[5]"
             >
-              {[1, 2, 3].map((z) => {
+              {[0.5, 1, 2, 3].map((z) => {
                 const active = Math.abs(zoom - z) < 0.2;
                 return (
                   <button
@@ -1701,18 +2396,41 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                         : "w-8 h-8 text-white/85 hover:text-white"
                     }`}
                   >
-                    {z === 1 ? "1×" : `${z}×`}
+                    {z}×
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Shutter & Live Filter Deck — Perfectly Aligned Apple Camera Dock */}
-          <div className="bg-[#0b1812] border border-white/[0.08] rounded-3xl p-2.5 sm:p-4 space-y-2.5 sm:space-y-3 shrink-0">
-            {/* Real-Time CSS Filter Strip */}
+          {/* Shutter & Live CSS Filter Dock */}
+          <div className="bg-[#0b1812] border border-white/[0.08] rounded-3xl p-2.5 sm:p-3.5 space-y-2.5 shrink-0">
+            {/* CSS Filter Dropdown Menu + Live Quick-Filter Strip */}
             <div className="flex items-center gap-2">
-              <div className="flex-1 flex gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-0.5">
+              <div className="relative shrink-0">
+                <select
+                  aria-label="Select CSS Filter"
+                  value={liveFilterIdx}
+                  onChange={(e) => {
+                    const nextIdx = Number(e.target.value);
+                    setLiveFilterIdx(nextIdx);
+                    showToast(`Filter: ${PRESET_FILTERS[nextIdx]?.[0] || "Normal"}`);
+                  }}
+                  className="appearance-none min-h-[34px] pl-3 pr-8 rounded-full bg-[#30d158] text-[#04130c] text-xs font-bold outline-none cursor-pointer"
+                >
+                  {PRESET_FILTERS.map(([name], i) => (
+                    <option key={name} value={i} className="bg-[#0b1812] text-white">
+                      Filter: {name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={13}
+                  className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[#04130c]"
+                />
+              </div>
+
+              <div className="flex-1 flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
                 {PRESET_FILTERS.map(([name], i) => {
                   const active = i === liveFilterIdx;
                   return (
@@ -1723,9 +2441,9 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                         setLiveFilterIdx(i);
                         showToast(`Filter: ${name}`);
                       }}
-                      className={`shrink-0 min-h-[32px] px-3 sm:px-3.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold border transition-colors cursor-pointer whitespace-nowrap ${
+                      className={`shrink-0 min-h-[32px] px-3 py-1 rounded-full text-[11px] sm:text-xs font-semibold border transition-colors cursor-pointer whitespace-nowrap ${
                         active
-                          ? "bg-[#30d158] text-[#04130c] border-[#30d158] font-bold"
+                          ? "bg-[#30d158]/20 text-[#30d158] border-[#30d158] font-bold"
                           : "bg-[#11231a] text-zinc-200 border-white/10 hover:bg-[#173024]"
                       }`}
                     >
@@ -1737,7 +2455,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
             </div>
 
             {/* Camera Mode Strip */}
-            <div className="flex items-center justify-center gap-4 sm:gap-6 overflow-x-auto no-scrollbar border-b border-white/[0.06] pb-1.5">
+            <div className="flex items-center justify-center gap-4 sm:gap-5 overflow-x-auto no-scrollbar border-b border-white/[0.06] pb-1.5">
               {MODES.map((m) => {
                 const active = mode === m;
                 return (
@@ -1745,11 +2463,13 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                     key={m}
                     type="button"
                     onClick={() => handleModeSwitch(m)}
-                    className={`relative text-[11px] sm:text-xs font-bold tracking-wider py-1 transition-colors cursor-pointer whitespace-nowrap ${
+                    className={`relative text-[11px] sm:text-xs font-bold tracking-wider py-0.5 transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1 ${
                       active ? "text-[#ffd60a]" : "text-zinc-400 hover:text-white"
                     }`}
                   >
-                    {m}
+                    {m === "BOOMERANG" && <Repeat size={11} />}
+                    {m === "BURST 3×" && <Layers size={11} />}
+                    <span>{m}</span>
                   </button>
                 );
               })}
@@ -1757,7 +2477,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
 
             {/* 3-Column Balanced Shutter Row */}
             <div className="grid grid-cols-3 items-center gap-2 pt-0.5">
-              {/* Left Column: Gallery Preview & Browser Storage Quick-Snap */}
+              {/* Left Column: Gallery Preview & Quick Save */}
               <div className="flex items-center gap-2 justify-self-start">
                 <button
                   type="button"
@@ -1781,45 +2501,38 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                   )}
                 </button>
 
-                {mode !== "VIDEO" && (
+                {mode !== "VIDEO" && mode !== "BOOMERANG" && (
                   <button
                     type="button"
                     onClick={() => {
-                      const v = videoRef.current;
-                      if (!streamRef.current || !v || !v.videoWidth) {
+                      const captured = captureSingleFrameFromVideo();
+                      if (!captured) {
+                        triggerVisualShutterFlash(0.75);
                         nativeCamInputRef.current?.click();
                         return;
                       }
-                      const w = v.videoWidth;
-                      const h = v.videoHeight;
-                      const c = document.createElement("canvas");
-                      c.width = w;
-                      c.height = h;
-                      const ctx = c.getContext("2d")!;
-                      if (facing === "user") {
-                        ctx.translate(c.width, 0);
-                        ctx.scale(-1, 1);
-                      }
-                      ctx.drawImage(v, 0, 0, w, h);
+                      triggerVisualShutterFlash(0.92);
                       playShutterSound();
-                      addPhotoAndOpenEditor(c, liveFilterIdx, true, hdrOn, false);
+                      addPhotoAndOpenEditor(captured, liveFilterIdx, true, hdrOn || beautyOn, false);
                     }}
-                    title="Quick Snap & Save to Browser Storage"
-                    className="hidden sm:inline-flex min-h-[38px] px-3 py-1.5 rounded-xl bg-[#11231a] hover:bg-[#173024] border border-white/12 text-[11px] font-semibold text-zinc-100 items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
+                    title="Quick Capture & Save to Browser Storage"
+                    className="inline-flex min-h-[36px] sm:min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#11231a] hover:bg-[#173024] border border-white/12 text-[11px] font-semibold text-zinc-100 items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0"
                   >
                     <HardDrive size={13} className="text-[#30d158]" />
-                    <span>Quick Save</span>
+                    <span className="hidden sm:inline">Capture &amp; Save</span>
+                    <span className="sm:hidden">Save</span>
                   </button>
                 )}
               </div>
 
-              {/* Center Column: Primary Concentric Shutter Button */}
-              <div className="justify-self-center">
+              {/* Center Column: Primary Concentric Capture Button */}
+              <div className="justify-self-center flex flex-col items-center gap-1">
                 <button
                   type="button"
                   onClick={handleShutter}
-                  aria-label={mode === "VIDEO" ? "Record video" : "Capture still photo and save"}
-                  className="w-[66px] h-[66px] sm:w-[74px] sm:h-[74px] rounded-full border-4 border-white flex items-center justify-center cursor-pointer active:scale-95 transition-transform shadow-lg"
+                  aria-label={mode === "VIDEO" ? "Record video" : "Capture"}
+                  title="Capture"
+                  className="w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] rounded-full border-4 border-white flex items-center justify-center cursor-pointer active:scale-95 transition-transform shadow-lg"
                 >
                   <span
                     className={`block transition-all ${
@@ -1827,14 +2540,35 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                         ? isRecording
                           ? "w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[#ff453a]"
                           : "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#ff453a]"
-                        : "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white"
+                        : mode === "BOOMERANG"
+                          ? "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]"
+                          : "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white"
                     }`}
                   />
                 </button>
               </div>
 
-              {/* Right Column: Apple Front/Back Camera Visual On/Off Switch */}
-              <div className="flex items-center justify-end justify-self-end gap-2">
+              {/* Right Column: Front/Back Switch & Gyro Stabilize */}
+              <div className="flex items-center justify-end justify-self-end gap-1.5 sm:gap-2">
+                {gyroTelemetry.hasSensor && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGyroStabilize((s) => !s);
+                      showToast(!gyroStabilize ? "Gyro Leveling ON" : "Gyro Leveling OFF");
+                    }}
+                    title="Auto Horizon Leveling"
+                    className={`hidden md:inline-flex min-h-[36px] px-2.5 rounded-xl border text-[11px] font-semibold items-center gap-1 cursor-pointer transition-colors whitespace-nowrap ${
+                      gyroStabilize
+                        ? "bg-[#ffd60a]/20 text-[#ffd60a] border-[#ffd60a]/45"
+                        : "bg-[#141f19] text-zinc-300 border-white/12 hover:text-white"
+                    }`}
+                  >
+                    <Compass size={12} />
+                    <span>Level</span>
+                  </button>
+                )}
+
                 <div
                   className="flex items-center gap-2 bg-[#141f19] border border-white/12 rounded-2xl px-2.5 py-1.5"
                   title={
@@ -2329,15 +3063,17 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                           {PRESET_FILTERS[p.pi]?.[0] || "Normal"}
                         </span>
                         <div className="flex items-center gap-1 shrink-0">
-                          <a
-                            href={p.thumb}
-                            download={`CGPIC_${p.id}.jpg`}
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label="Download photo"
-                            className="w-7 h-7 rounded-full bg-white/15 hover:bg-[#30d158] hover:text-[#04130c] text-white flex items-center justify-center transition-colors"
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadGalleryPhoto(p);
+                            }}
+                            aria-label="Download full-resolution photo"
+                            className="w-7 h-7 rounded-full bg-white/15 hover:bg-[#30d158] hover:text-[#04130c] text-white flex items-center justify-center transition-colors cursor-pointer"
                           >
                             <Download size={12} />
-                          </a>
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => {

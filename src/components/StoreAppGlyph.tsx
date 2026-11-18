@@ -11,6 +11,8 @@ import {
   StickyNote,
   User,
   Camera,
+  Hash,
+  FolderOpen,
 } from "lucide-react";
 import type { StoreAppItem } from "../utils/gamuraStoreApps";
 
@@ -121,6 +123,12 @@ export default function StoreAppGlyph({
         return <User size={iconPx} strokeWidth={2.2} className="text-white" />;
       case "camera":
         return <Camera size={iconPx} strokeWidth={2.2} className="text-white" />;
+      case "numbers":
+        return <Hash size={iconPx} strokeWidth={2.4} className="text-white" />;
+      case "gfiles":
+        return (
+          <FolderOpen size={iconPx} strokeWidth={2.1} className="text-white" />
+        );
       case "messenger":
         return (
           <svg

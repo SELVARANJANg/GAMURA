@@ -210,6 +210,7 @@ import GamuraClipPage from "./components/GamuraClipPage";
 import GamuraCalcPage from "./components/GamuraCalcPage";
 import GamuraCameraPage from "./components/GamuraCameraPage";
 import GamuraMessengerPage from "./components/GamuraMessengerPage";
+import GfilesPage from "./components/GfilesPage";
 import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
@@ -8991,6 +8992,7 @@ export default function App() {
     | "calculator"
     | "camera"
     | "messenger"
+    | "gfiles"
     | "privacy"
     | "terms"
     | "delete-account";
@@ -9015,6 +9017,8 @@ export default function App() {
     "gamura-camera",
     "messenger",
     "gamura-messenger",
+    "gfiles",
+    "gms",
     "cgpic",
     "cg-pic",
     "claim",
@@ -9095,6 +9099,9 @@ export default function App() {
     }
     if (lower === "messenger" || lower === "gamura-messenger") {
       return { page: "messenger", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (lower === "gfiles" || lower === "gms") {
+      return { page: "gfiles", claimed: null, shortSlug: null, prefillHandle: "" };
     }
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13465,6 +13472,17 @@ ${targetContext}`;
   if (currentPage === "messenger") {
     return (
       <GamuraMessengerPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "gfiles") {
+    return (
+      <GfilesPage
         onBackHome={() => {
           window.history.pushState({}, "", "/");
           setCurrentPage("home");
