@@ -13,6 +13,7 @@ import {
   Camera,
   Hash,
   FolderOpen,
+  ShoppingBag,
 } from "lucide-react";
 import type { StoreAppItem } from "../utils/gamuraStoreApps";
 
@@ -36,9 +37,11 @@ export default function StoreAppGlyph({
         : undefined;
 
   if (activeImgSrc) {
+    const isCover = app.logoFit === "cover";
     return (
       <div
-        className={`${sizeClass} rounded-[22%] bg-white border border-black/[0.08] p-1 flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.08)] shrink-0 select-none overflow-hidden`}
+        style={app.logoBg ? { backgroundColor: app.logoBg } : undefined}
+        className={`${sizeClass} rounded-[22%] ${app.logoBg ? "" : "bg-white"} border border-black/[0.08] ${isCover ? "p-0" : "p-1"} flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.08)] shrink-0 select-none overflow-hidden`}
       >
         <img
           src={activeImgSrc}
@@ -52,7 +55,7 @@ export default function StoreAppGlyph({
               setImgStage(2);
             }
           }}
-          className="w-full h-full object-contain rounded-[16%]"
+          className={`w-full h-full ${isCover ? "object-cover scale-[1.06]" : "object-contain rounded-[16%]"}`}
         />
       </div>
     );
@@ -128,6 +131,10 @@ export default function StoreAppGlyph({
       case "gfiles":
         return (
           <FolderOpen size={iconPx} strokeWidth={2.1} className="text-white" />
+        );
+      case "buysell":
+        return (
+          <ShoppingBag size={iconPx} strokeWidth={2.1} className="text-white" />
         );
       case "messenger":
         return (

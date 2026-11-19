@@ -18,6 +18,7 @@ export type StoreIconKind =
   | "messenger"
   | "numbers"
   | "gfiles"
+  | "buysell"
   | "letter";
 
 export interface StoreAppItem {
@@ -32,6 +33,8 @@ export interface StoreAppItem {
   iconKind?: StoreIconKind;
   logoUrl?: string;
   logoFallbackUrl?: string;
+  logoBg?: string;
+  logoFit?: "contain" | "cover";
   rating: number;
   version?: string;
   age?: string;
@@ -60,6 +63,10 @@ export const GAMURA_CAMERA_LOGO_URL =
   "/assets/aistudio/1794885573140_43c1db18.png";
 export const GAMURA_CAMERA_LOGO_FALLBACK =
   "https://lh3.googleusercontent.com/d/1joiKBbYSqZSH-rcuixhuHd5lWWxqisW6=w512";
+export const GAMURA_BUYSELL_LOGO_URL =
+  "/assets/aistudio/1795024263692_cd59eb3c.png";
+export const GAMURA_BUYSELL_LOGO_FALLBACK =
+  "https://lh3.googleusercontent.com/d/1mVAD61FkOS6C6rUiOLTLnDEgfeLI9qaR=w512";
 
 const driveLogo = (id: string) => ({
   logoUrl: `https://lh3.googleusercontent.com/d/${id}=w512`,
@@ -503,6 +510,28 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     chart: "No. 1 Files",
     dl: "Featured",
     size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "buysell",
+    name: "BUYSELL",
+    cat: "Marketplace",
+    tag: "Buy, sell & trade seamlessly in the Gamura marketplace",
+    desc: "BUYSELL (GS Marketplace) lets you discover curated listings, post items for sale, connect with buyers and sellers, and manage deals fast inside an Apple-clean marketplace web experience.",
+    url: "https://gbuysell.vercel.app/",
+    c1: "#27272a",
+    c2: "#09090b",
+    iconKind: "buysell",
+    logoUrl: GAMURA_BUYSELL_LOGO_URL,
+    logoFallbackUrl: GAMURA_BUYSELL_LOGO_FALLBACK,
+    logoBg: "#0a0b0e",
+    logoFit: "cover",
+    rating: 4.9,
+    version: "1.0",
+    age: "12+",
+    chart: "No. 1 Shopping",
+    dl: "Featured",
+    size: "Web · 2 MB",
     isBuiltin: true,
   },
 ];

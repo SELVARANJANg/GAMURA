@@ -215,7 +215,7 @@ const MODES = [
   "SQUARE",
   "PORTRAIT",
   "BOOMERANG",
-  "BURST 3×",
+  "BURST 5×",
   "B&W",
   "VIDEO",
 ] as const;
@@ -516,8 +516,9 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
   const [liveFilterIdx, setLiveFilterIdx] = useState(0);
   const [flashOn, setFlashOn] = useState(false);
   const [screenFlashOpacity, setScreenFlashOpacity] = useState(0);
-  const [timerSec, setTimerSec] = useState<0 | 3 | 5 | 10>(0);
+  const [timerSec, setTimerSec] = useState<0 | 3 | 10>(0);
   const [countdownVal, setCountdownVal] = useState<number | null>(null);
+  const [burstProgress, setBurstProgress] = useState<number | null>(null);
   const [gridOn, setGridOn] = useState(false);
   const [hdrOn, setHdrOn] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -528,6 +529,10 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
   const [streamReady, setStreamReady] = useState(false);
   const [isDemoFeed, setIsDemoFeed] = useState(false);
   const [busyCapture, setBusyCapture] = useState(false);
+
+  const holdBurstTimeoutRef = useRef<number | null>(null);
+  const burstTriggeredOnHoldRef = useRef(false);
+  const countdownAbortRef = useRef(false);
 
   // Focus reticle + exposure
   const [focusBox, setFocusBox] = useState<{ x: number; y: number } | null>(null);
@@ -561,6 +566,10 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
 
   // Photos & Videos session state
   const [photos, setPhotos] = useState<CameraPhotoItem[]>([]);
+  const latestPhotosRef = useRef<CameraPhotoItem[]>([]);
+  useEffect(() => {
+    latestPhotosRef.current = photos;
+  }, [photos]);
   const [videos, setVideos] = useState<RecordedVideoItem[]>([]);
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
   const [cameraDeviceCount, setCameraDeviceCount] = useState<number>(0);
@@ -593,9 +602,11 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      countdownAbortRef.current = true;
       if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
       if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
       if (shutterFlashTimerRef.current) window.clearTimeout(shutterFlashTimerRef.current);
+      if (holdBurstTimeoutRef.current) window.clearTimeout(holdBurstTimeoutRef.current);
       if (demoFeedRafRef.current) cancelAnimationFrame(demoFeedRafRef.current);
     };
   }, []);
@@ -1138,14 +1149,13 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     return () => window.clearInterval(iv);
   }, [view, showHistogram, streamReady]);
 
-  const addPhotoAndOpenEditor = useCallback(
+  const buildPhotoItemFromCanvas = useCallback(
     (
       srcCanvas: HTMLCanvasElement,
       filterIdx: number,
       isCamera: boolean,
       withHdr: boolean,
-      openEditorImmediately = true,
-    ) => {
+    ): CameraPhotoItem => {
       const thumbCanvas = document.createElement("canvas");
       const ts = 260 / Math.max(srcCanvas.width, srcCanvas.height);
       thumbCanvas.width = Math.max(1, Math.round(srcCanvas.width * ts));
@@ -1156,7 +1166,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
       tCtx.filter = "none";
 
       const id = `cam_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-      const item: CameraPhotoItem = {
+      return {
         id,
         src: srcCanvas,
         pi: filterIdx,
@@ -1177,22 +1187,34 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
         thumb: thumbCanvas.toDataURL("image/jpeg", 0.82),
         createdAt: Date.now(),
       };
+    },
+    [expo],
+  );
 
+  const addPhotoAndOpenEditor = useCallback(
+    (
+      srcCanvas: HTMLCanvasElement,
+      filterIdx: number,
+      isCamera: boolean,
+      withHdr: boolean,
+      openEditorImmediately = true,
+    ) => {
+      const item = buildPhotoItemFromCanvas(srcCanvas, filterIdx, isCamera, withHdr);
       setPhotos((prev) => {
         const next = [item, ...prev];
         persistPhotosToBrowser(next);
         return next;
       });
-      setActivePhotoId(id);
+      setActivePhotoId(item.id);
       baseGeoRef.current = null;
       setShowOriginal(false);
       if (openEditorImmediately) {
         setView("edit");
       } else {
-        showToast("Captured & saved to browser storage ✓");
+        showToast("Captured & added to Recent Captures ✓");
       }
     },
-    [expo, persistPhotosToBrowser, showToast],
+    [buildPhotoItemFromCanvas, persistPhotosToBrowser, showToast],
   );
 
   const loadImageFile = (file?: File | null) => {
@@ -1508,6 +1530,116 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     }
   };
 
+  const runCountdownTimer = useCallback(async (seconds: 0 | 3 | 10): Promise<boolean> => {
+    if (seconds <= 0) return true;
+    countdownAbortRef.current = false;
+    for (let i = seconds; i > 0; i--) {
+      if (!isMountedRef.current || countdownAbortRef.current) {
+        setCountdownVal(null);
+        return false;
+      }
+      setCountdownVal(i);
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    setCountdownVal(null);
+    return isMountedRef.current && !countdownAbortRef.current;
+  }, []);
+
+  const captureBurstSeries = useCallback(
+    async (count = 5, withTimer = false) => {
+      if (busyCapture) return;
+      const stream = streamRef.current;
+      const v = videoRef.current;
+      if (!stream || !v || !v.videoWidth) {
+        triggerVisualShutterFlash(0.75);
+        nativeCamInputRef.current?.click();
+        return;
+      }
+
+      setBusyCapture(true);
+      try {
+        if (withTimer && timerSec > 0) {
+          const ok = await runCountdownTimer(timerSec);
+          if (!ok) return;
+        }
+
+        const baseline = latestPhotosRef.current;
+        const capturedItems: CameraPhotoItem[] = [];
+        for (let b = 0; b < count; b++) {
+          if (!isMountedRef.current) break;
+          setBurstProgress(b + 1);
+          const snap = captureSingleFrameFromVideo();
+          if (snap) {
+            triggerVisualShutterFlash(0.92);
+            playShutterSound();
+            const item = buildPhotoItemFromCanvas(
+              snap,
+              liveFilterIdx,
+              true,
+              hdrOn || beautyOn,
+            );
+            capturedItems.unshift(item);
+            const liveNext = [...capturedItems, ...baseline];
+            latestPhotosRef.current = liveNext;
+            setPhotos(liveNext);
+            setActivePhotoId(item.id);
+          }
+          if (b < count - 1) {
+            await new Promise((r) => setTimeout(r, 165));
+          }
+        }
+        setBurstProgress(null);
+
+        if (capturedItems.length > 0) {
+          persistPhotosToBrowser([...capturedItems, ...baseline]);
+          showToast(
+            `Burst ${capturedItems.length}× captured · Download in Recent Captures below ✓`,
+          );
+        }
+      } finally {
+        setBurstProgress(null);
+        setBusyCapture(false);
+      }
+    },
+    [
+      beautyOn,
+      buildPhotoItemFromCanvas,
+      busyCapture,
+      hdrOn,
+      liveFilterIdx,
+      persistPhotosToBrowser,
+      runCountdownTimer,
+      showToast,
+      timerSec,
+      triggerVisualShutterFlash,
+    ],
+  );
+
+  const handleQuickCaptureToReel = async () => {
+    if (busyCapture) return;
+    const stream = streamRef.current;
+    const v = videoRef.current;
+    if (!stream || !v || !v.videoWidth) {
+      triggerVisualShutterFlash(0.75);
+      nativeCamInputRef.current?.click();
+      return;
+    }
+    setBusyCapture(true);
+    try {
+      if (timerSec > 0) {
+        const ok = await runCountdownTimer(timerSec);
+        if (!ok) return;
+      }
+      const captured = captureSingleFrameFromVideo();
+      if (!captured) return;
+      triggerVisualShutterFlash(0.94);
+      playShutterSound();
+      addPhotoAndOpenEditor(captured, liveFilterIdx, true, hdrOn || beautyOn, false);
+    } finally {
+      setBusyCapture(false);
+    }
+  };
+
   const handleShutter = async () => {
     if (mode === "VIDEO") {
       toggleVideoRecording();
@@ -1515,6 +1647,10 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     }
     if (mode === "BOOMERANG") {
       await captureBoomerangLoop();
+      return;
+    }
+    if (mode === "BURST 5×") {
+      await captureBurstSeries(5, timerSec > 0);
       return;
     }
     if (busyCapture) return;
@@ -1528,11 +1664,11 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     setBusyCapture(true);
     try {
       if (timerSec > 0) {
-        for (let i = timerSec; i > 0; i--) {
-          setCountdownVal(i);
-          await new Promise((r) => setTimeout(r, 1000));
+        const ok = await runCountdownTimer(timerSec);
+        if (!ok) {
+          showToast("Timer cancelled");
+          return;
         }
-        setCountdownVal(null);
       }
 
       let torchUsed = false;
@@ -1553,33 +1689,20 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
         }
       }
 
-      if (mode === "BURST 3×") {
-        for (let b = 0; b < 3; b++) {
-          const snap = captureSingleFrameFromVideo();
-          if (snap) {
-            triggerVisualShutterFlash(0.92);
-            playShutterSound();
-            addPhotoAndOpenEditor(snap, liveFilterIdx, true, hdrOn, b === 2);
-          }
-          await new Promise((r) => setTimeout(r, 180));
-        }
-        showToast("Burst 3× captured & saved ✓");
-      } else {
-        const captured = captureSingleFrameFromVideo();
-        if (torchUsed && track?.applyConstraints) {
-          track.applyConstraints({ advanced: [{ torch: false } as any] }).catch(() => null);
-        }
-        // Guaranteed crisp visual flash confirmation on Capture click
-        triggerVisualShutterFlash(0.95);
-        playShutterSound();
-        if (captured) {
-          addPhotoAndOpenEditor(
-            captured,
-            liveFilterIdx,
-            true,
-            hdrOn || beautyOn,
-          );
-        }
+      const captured = captureSingleFrameFromVideo();
+      if (torchUsed && track?.applyConstraints) {
+        track.applyConstraints({ advanced: [{ torch: false } as any] }).catch(() => null);
+      }
+      // Guaranteed crisp visual flash confirmation on Capture click
+      triggerVisualShutterFlash(0.95);
+      playShutterSound();
+      if (captured) {
+        addPhotoAndOpenEditor(
+          captured,
+          liveFilterIdx,
+          true,
+          hdrOn || beautyOn,
+        );
       }
     } finally {
       setBusyCapture(false);
@@ -1853,7 +1976,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
     <div
       style={APPLE_FONT_STYLE}
       className={`bg-[#050b08] text-[#f5f5f7] flex flex-col select-none ${
-        view === "cam" ? "h-[100dvh] overflow-hidden" : "min-h-screen"
+        view === "cam" ? "min-h-[100dvh]" : "min-h-screen"
       }`}
     >
       {/* Top Apple Studio Header Bar */}
@@ -1967,7 +2090,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
 
       {/* VIEW 1: LIVE CAMERA */}
       {view === "cam" && (
-        <main className="flex-1 min-h-0 flex flex-col max-w-6xl w-full mx-auto px-2 sm:px-5 py-2 sm:py-2.5 gap-2 shrink overflow-hidden">
+        <main className="flex-1 flex flex-col max-w-6xl w-full mx-auto px-2 sm:px-5 py-2 sm:py-3 gap-2">
           {/* Camera Engine Bar: iPhone · Instagram · Facebook · CG Pro */}
           <div className="flex items-center justify-between gap-2 bg-[#0b1812] border border-white/[0.08] rounded-2xl px-2.5 py-1.5 shrink-0">
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
@@ -2052,7 +2175,7 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
               focusTimerRef.current = window.setTimeout(() => setFocusBox(null), 3500);
             }}
-            className="relative flex-1 min-h-[190px] sm:min-h-[380px] rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl"
+            className="relative flex-1 min-h-[250px] sm:min-h-[340px] rounded-3xl overflow-hidden bg-black border border-white/10 shadow-2xl"
           >
             {/* Live Camera <video> Stream with Applied CSS Filter & Zoom/Gyro Transform */}
             <video
@@ -2176,8 +2299,27 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
 
             {/* Countdown Overlay */}
             {countdownVal !== null && (
-              <div className="pointer-events-none absolute inset-0 grid place-items-center text-[112px] font-black text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.9)] z-[7] tabular-nums">
-                {countdownVal}
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-[7] bg-black/25 backdrop-blur-[1px]">
+                <div className="text-[112px] font-black text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.9)] tabular-nums leading-none">
+                  {countdownVal}
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    countdownAbortRef.current = true;
+                  }}
+                  className="px-4 py-1.5 rounded-full bg-black/70 hover:bg-black text-white border border-white/25 text-xs font-bold cursor-pointer"
+                >
+                  Cancel Timer
+                </button>
+              </div>
+            )}
+
+            {/* Burst 5× Live Counter Pill */}
+            {burstProgress !== null && (
+              <div className="pointer-events-none absolute top-16 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full bg-[#ffd60a] text-[#04130c] text-xs font-extrabold tracking-wide tabular-nums z-[7] shadow-lg">
+                BURST {burstProgress} / 5
               </div>
             )}
 
@@ -2224,17 +2366,12 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    const nextMap: Record<number, 0 | 3 | 5 | 10> = {
-                      0: 3,
-                      3: 5,
-                      5: 10,
-                      10: 0,
-                    };
-                    const next = nextMap[timerSec];
+                    const next: 0 | 3 | 10 =
+                      timerSec === 0 ? 3 : timerSec === 3 ? 10 : 0;
                     setTimerSec(next);
                     showToast(next ? `Timer ${next}s` : "Timer off");
                   }}
-                  title="Timer"
+                  title="Countdown Timer (Off / 3s / 10s)"
                   className={`min-w-[36px] h-9 px-2 rounded-full border text-xs font-bold flex items-center justify-center transition-colors cursor-pointer tabular-nums shrink-0 ${
                     timerSec > 0
                       ? "bg-[#30d158] text-[#04130c] border-[#30d158]"
@@ -2454,25 +2591,54 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               </div>
             </div>
 
-            {/* Camera Mode Strip */}
-            <div className="flex items-center justify-center gap-4 sm:gap-5 overflow-x-auto no-scrollbar border-b border-white/[0.06] pb-1.5">
-              {MODES.map((m) => {
-                const active = mode === m;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => handleModeSwitch(m)}
-                    className={`relative text-[11px] sm:text-xs font-bold tracking-wider py-0.5 transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1 ${
-                      active ? "text-[#ffd60a]" : "text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    {m === "BOOMERANG" && <Repeat size={11} />}
-                    {m === "BURST 3×" && <Layers size={11} />}
-                    <span>{m}</span>
-                  </button>
-                );
-              })}
+            {/* Camera Mode Strip + Explicit 3s / 10s Countdown Selector */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] pb-1.5">
+              <div className="flex items-center gap-4 sm:gap-5 overflow-x-auto no-scrollbar">
+                {MODES.map((m) => {
+                  const active = mode === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => handleModeSwitch(m)}
+                      className={`relative text-[11px] sm:text-xs font-bold tracking-wider py-0.5 transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-1 ${
+                        active ? "text-[#ffd60a]" : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {m === "BOOMERANG" && <Repeat size={11} />}
+                      {m === "BURST 5×" && <Layers size={11} />}
+                      <span>{m}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-1 bg-[#11231a] border border-white/10 rounded-full p-0.5 shrink-0">
+                <span className="pl-2 pr-1 text-[10px] font-semibold text-zinc-400 inline-flex items-center gap-1">
+                  <Timer size={11} />
+                  <span className="hidden sm:inline">Timer</span>
+                </span>
+                {([0, 3, 10] as const).map((sec) => {
+                  const active = timerSec === sec;
+                  return (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => {
+                        setTimerSec(sec);
+                        showToast(sec ? `Countdown Timer: ${sec}s` : "Timer Off");
+                      }}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-bold cursor-pointer transition-colors tabular-nums ${
+                        active
+                          ? "bg-[#30d158] text-[#04130c]"
+                          : "text-zinc-300 hover:text-white"
+                      }`}
+                    >
+                      {sec === 0 ? "Off" : `${sec}s`}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* 3-Column Balanced Shutter Row */}
@@ -2504,18 +2670,8 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                 {mode !== "VIDEO" && mode !== "BOOMERANG" && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const captured = captureSingleFrameFromVideo();
-                      if (!captured) {
-                        triggerVisualShutterFlash(0.75);
-                        nativeCamInputRef.current?.click();
-                        return;
-                      }
-                      triggerVisualShutterFlash(0.92);
-                      playShutterSound();
-                      addPhotoAndOpenEditor(captured, liveFilterIdx, true, hdrOn || beautyOn, false);
-                    }}
-                    title="Quick Capture & Save to Browser Storage"
+                    onClick={handleQuickCaptureToReel}
+                    title="Quick Capture to Temporary Gallery"
                     className="inline-flex min-h-[36px] sm:min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-xl bg-[#11231a] hover:bg-[#173024] border border-white/12 text-[11px] font-semibold text-zinc-100 items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap shrink-0"
                   >
                     <HardDrive size={13} className="text-[#30d158]" />
@@ -2525,14 +2681,54 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                 )}
               </div>
 
-              {/* Center Column: Primary Concentric Capture Button */}
+              {/* Center Column: Primary Concentric Capture Button (Tap for Photo · Hold for 5× Burst) */}
               <div className="justify-self-center flex flex-col items-center gap-1">
                 <button
                   type="button"
-                  onClick={handleShutter}
-                  aria-label={mode === "VIDEO" ? "Record video" : "Capture"}
-                  title="Capture"
-                  className="w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] rounded-full border-4 border-white flex items-center justify-center cursor-pointer active:scale-95 transition-transform shadow-lg"
+                  onContextMenu={(e) => e.preventDefault()}
+                  onPointerDown={() => {
+                    if (mode === "VIDEO" || mode === "BOOMERANG" || busyCapture) return;
+                    burstTriggeredOnHoldRef.current = false;
+                    if (holdBurstTimeoutRef.current) {
+                      window.clearTimeout(holdBurstTimeoutRef.current);
+                    }
+                    holdBurstTimeoutRef.current = window.setTimeout(() => {
+                      burstTriggeredOnHoldRef.current = true;
+                      captureBurstSeries(5, false);
+                    }, 340);
+                  }}
+                  onPointerUp={() => {
+                    if (holdBurstTimeoutRef.current) {
+                      window.clearTimeout(holdBurstTimeoutRef.current);
+                      holdBurstTimeoutRef.current = null;
+                    }
+                  }}
+                  onPointerLeave={() => {
+                    if (holdBurstTimeoutRef.current) {
+                      window.clearTimeout(holdBurstTimeoutRef.current);
+                      holdBurstTimeoutRef.current = null;
+                    }
+                  }}
+                  onPointerCancel={() => {
+                    if (holdBurstTimeoutRef.current) {
+                      window.clearTimeout(holdBurstTimeoutRef.current);
+                      holdBurstTimeoutRef.current = null;
+                    }
+                  }}
+                  onClick={() => {
+                    if (burstTriggeredOnHoldRef.current) {
+                      burstTriggeredOnHoldRef.current = false;
+                      return;
+                    }
+                    handleShutter();
+                  }}
+                  aria-label={mode === "VIDEO" ? "Record video" : "Capture (Hold for 5x Burst)"}
+                  title={
+                    mode === "VIDEO"
+                      ? "Record video"
+                      : "Tap to Capture · Hold for 5-photo Burst"
+                  }
+                  className="w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] rounded-full border-4 border-white flex items-center justify-center cursor-pointer active:scale-95 transition-transform shadow-lg touch-none"
                 >
                   <span
                     className={`block transition-all ${
@@ -2542,10 +2738,21 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
                           : "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#ff453a]"
                         : mode === "BOOMERANG"
                           ? "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]"
-                          : "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white"
+                          : mode === "BURST 5×" || burstProgress !== null
+                            ? "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#ffd60a]"
+                            : "w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white"
                     }`}
                   />
                 </button>
+                <span className="text-[9px] font-medium text-zinc-400 tracking-wide whitespace-nowrap">
+                  {mode === "VIDEO"
+                    ? isRecording
+                      ? "Tap to Stop"
+                      : "Tap to Record"
+                    : mode === "BURST 5×"
+                      ? "Tap for 5× Burst"
+                      : "Tap Photo · Hold 5× Burst"}
+                </span>
               </div>
 
               {/* Right Column: Front/Back Switch & Gyro Stabilize */}
@@ -2616,6 +2823,91 @@ export default function GamuraCameraPage({ onBackHome }: GamuraCameraPageProps) 
               </div>
             </div>
           </div>
+
+          {/* Temporary Gallery Strip: Last 5 Captured Photos + Direct Download */}
+          <section
+            aria-label="Temporary Recent Captures Gallery"
+            className="bg-[#0b1812] border border-white/[0.08] rounded-3xl px-3 py-2.5 sm:px-4 sm:py-3 shrink-0 space-y-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs font-bold text-white tracking-tight whitespace-nowrap">
+                  Temporary Gallery · Last 5 Photos
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-[#30d158]/15 text-[#30d158] border border-[#30d158]/30 text-[10px] font-bold tabular-nums">
+                  {Math.min(5, photos.length)} / 5
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {photos.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setView("gal")}
+                    className="text-[11px] font-semibold text-[#30d158] hover:underline cursor-pointer whitespace-nowrap"
+                  >
+                    Full Gallery ({photos.length})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {photos.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-black/30 py-3 px-4 text-center text-xs text-zinc-400">
+                Your last 5 captured photos will appear here with instant full-resolution download.
+              </div>
+            ) : (
+              <div className="grid grid-cols-5 gap-2">
+                {photos.slice(0, 5).map((p, idx) => (
+                  <div
+                    key={p.id}
+                    onClick={() => {
+                      setActivePhotoId(p.id);
+                      baseGeoRef.current = null;
+                      setShowOriginal(false);
+                      setView("edit");
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setActivePhotoId(p.id);
+                        baseGeoRef.current = null;
+                        setShowOriginal(false);
+                        setView("edit");
+                      }
+                    }}
+                    title={`Edit or Download Capture #${idx + 1}`}
+                    className="group relative aspect-[4/3] rounded-xl overflow-hidden bg-black border border-white/12 hover:border-[#30d158] transition-colors cursor-pointer"
+                  >
+                    <img
+                      src={p.thumb}
+                      alt={`Recent capture ${idx + 1}`}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 p-1 bg-gradient-to-t from-black/85 via-black/45 to-transparent flex items-center justify-between gap-1">
+                      <span className="hidden sm:inline text-[9px] font-semibold text-zinc-200 truncate pl-1">
+                        {PRESET_FILTERS[p.pi]?.[0] || "Normal"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadGalleryPhoto(p);
+                        }}
+                        aria-label={`Download recent photo ${idx + 1}`}
+                        title="Download full-resolution photo"
+                        className="ml-auto px-1.5 py-1 rounded-full bg-[#30d158] hover:bg-[#28b84c] text-[#04130c] text-[10px] font-bold inline-flex items-center gap-0.5 cursor-pointer shrink-0 shadow"
+                      >
+                        <Download size={10} />
+                        <span className="hidden md:inline">Save</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </main>
       )}
 

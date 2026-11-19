@@ -16,7 +16,11 @@ import {
   Smartphone,
   Layers,
   ChevronDown,
+  QrCode,
+  Copy,
+  Download,
 } from "lucide-react";
+import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import StoreAppGlyph from "./StoreAppGlyph";
 import {
   type StoreAppItem,
@@ -72,6 +76,13 @@ export default function GamuraStoreLaunch({
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [installPct, setInstallPct] = useState(0);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // QR Code Generator Modal State
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrSelectedAppId, setQrSelectedAppId] = useState<string>("__store__");
+  const [qrUrlInput, setQrUrlInput] = useState<string>("");
+  const [qrLabel, setQrLabel] = useState<string>("Gamura Launch Store");
+  const [qrColor, setQrColor] = useState<string>("#1D1D1F");
 
   // Developer publish form state
   const [fName, setFName] = useState("");
@@ -215,10 +226,92 @@ export default function GamuraStoreLaunch({
     }
   };
 
+  const resolveFullUrl = (rawUrl: string) => {
+    if (typeof window === "undefined") return rawUrl;
+    if (!rawUrl.trim()) return `${window.location.origin}/launch`;
+    if (rawUrl.startsWith("/")) return `${window.location.origin}${rawUrl}`;
+    return rawUrl;
+  };
+
+  const openQrForStore = () => {
+    setQrSelectedAppId("__store__");
+    setQrLabel("Gamura Launch Store");
+    setQrUrlInput(resolveFullUrl("/launch"));
+    setQrModalOpen(true);
+  };
+
+  const openQrForApp = (
+    app: StoreAppItem,
+    e?: React.MouseEvent<HTMLElement>,
+  ) => {
+    if (e) e.stopPropagation();
+    setQrSelectedAppId(app.id);
+    setQrLabel(app.name);
+    setQrUrlInput(resolveFullUrl(app.url));
+    setQrModalOpen(true);
+  };
+
+  const handleQrPresetChange = (id: string) => {
+    setQrSelectedAppId(id);
+    if (id === "__store__") {
+      setQrLabel("Gamura Launch Store");
+      setQrUrlInput(resolveFullUrl("/launch"));
+      return;
+    }
+    const found = allApps.find((a) => a.id === id);
+    if (found) {
+      setQrLabel(found.name);
+      setQrUrlInput(resolveFullUrl(found.url));
+    }
+  };
+
+  const handleDownloadQrPng = () => {
+    const canvas = document.getElementById(
+      "gamura-store-qr-canvas",
+    ) as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const pad = 44;
+    const footerH = 72;
+    const out = document.createElement("canvas");
+    out.width = canvas.width + pad * 2;
+    out.height = canvas.height + pad * 2 + footerH;
+    const ctx = out.getContext("2d");
+    if (!ctx) return;
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(canvas, pad, pad);
+
+    ctx.fillStyle = "#1D1D1F";
+    ctx.font =
+      '700 22px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
+    ctx.textAlign = "center";
+    ctx.fillText(qrLabel || "Gamura Store", out.width / 2, canvas.height + pad + 34);
+
+    ctx.fillStyle = "#6E6E73";
+    ctx.font =
+      '500 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
+    const shortUrl =
+      qrUrlInput.length > 48 ? `${qrUrlInput.slice(0, 45)}…` : qrUrlInput;
+    ctx.fillText(shortUrl, out.width / 2, canvas.height + pad + 58);
+
+    const safeSlug =
+      (qrLabel || "gamura-store")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "") || "gamura-store";
+    const dataUrl = out.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `${safeSlug}-qr.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast("QR code PNG downloaded ✓");
+  };
+
   const handleShareApp = async (app: StoreAppItem) => {
-    const fullUrl = app.url.startsWith("/")
-      ? `${window.location.origin}${app.url}`
-      : app.url;
+    const fullUrl = resolveFullUrl(app.url);
     try {
       if (navigator.share) {
         await navigator.share({
@@ -342,48 +435,60 @@ export default function GamuraStoreLaunch({
           </div>
         </div>
 
-        {isInstalling ? (
-          <div className="px-4 py-1.5 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums shrink-0">
-            {installPct}%
-          </div>
-        ) : isInstalled ? (
-          <a
-            href={app.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="px-5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide shrink-0 whitespace-nowrap transition-colors"
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={(e) => openQrForApp(app, e)}
+            aria-label={`Generate QR code for ${app.name}`}
+            title={`Share ${app.name} QR Code`}
+            className="hidden sm:inline-flex w-8 h-8 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] items-center justify-center transition-colors cursor-pointer shrink-0"
           >
-            OPEN
-          </a>
-        ) : isDirectLaunchApp ? (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={(e) => handleGetClick(app, e)}
-              className="px-4 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide whitespace-nowrap cursor-pointer transition-colors"
-            >
-              GET
-            </button>
+            <QrCode size={15} />
+          </button>
+
+          {isInstalling ? (
+            <div className="px-4 py-1.5 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums shrink-0">
+              {installPct}%
+            </div>
+          ) : isInstalled ? (
             <a
               href={app.url}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide whitespace-nowrap transition-colors"
+              className="px-5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide shrink-0 whitespace-nowrap transition-colors"
             >
               OPEN
             </a>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={(e) => handleGetClick(app, e)}
-            className="px-5 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide shrink-0 whitespace-nowrap cursor-pointer transition-colors"
-          >
-            GET
-          </button>
-        )}
+          ) : isDirectLaunchApp ? (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={(e) => handleGetClick(app, e)}
+                className="px-4 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide whitespace-nowrap cursor-pointer transition-colors"
+              >
+                GET
+              </button>
+              <a
+                href={app.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide whitespace-nowrap transition-colors"
+              >
+                OPEN
+              </a>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => handleGetClick(app, e)}
+              className="px-5 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide shrink-0 whitespace-nowrap cursor-pointer transition-colors"
+            >
+              GET
+            </button>
+          )}
+        </div>
       </div>
     );
   };
@@ -487,6 +592,16 @@ export default function GamuraStoreLaunch({
             )}
           </div>
 
+          <button
+            type="button"
+            onClick={openQrForStore}
+            title="Generate QR Code for Store Links"
+            className="min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 border border-zinc-200/80 text-[#1D1D1F] text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <QrCode size={14} className="text-[#059669]" />
+            <span className="hidden sm:inline">QR Share</span>
+          </button>
+
           <a
             href="/gpdf"
             target="_blank"
@@ -543,10 +658,18 @@ export default function GamuraStoreLaunch({
                 Gamura Launch Store
               </h1>
               <p className="text-xs sm:text-sm text-[#6E6E73]">
-                Download apps directly into your Universe Apps dock or save to
-                your mobile device.
+                Download apps directly into your Universe Apps dock, save to
+                your mobile device, or share any store link via scannable QR code.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={openQrForStore}
+              className="px-4 py-2 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <QrCode size={14} />
+              <span>Generate Store &amp; App QR Code</span>
+            </button>
           </div>
         )}
 
@@ -1059,6 +1182,7 @@ export default function GamuraStoreLaunch({
                     >
                       {[
                         "Platform",
+                        "Marketplace",
                         "Communication",
                         "AI",
                         "Games",
@@ -1140,14 +1264,24 @@ export default function GamuraStoreLaunch({
                         </div>
                         <div className="text-xs text-[#6E6E73]">{app.cat}</div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteCustom(app.id)}
-                        className="px-3.5 py-1.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold cursor-pointer inline-flex items-center gap-1"
-                      >
-                        <Trash2 size={12} />
-                        <span>Remove</span>
-                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => openQrForApp(app, e)}
+                          className="px-3 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-zinc-200 text-[#1D1D1F] text-xs font-semibold cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <QrCode size={12} />
+                          <span>QR</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCustom(app.id)}
+                          className="px-3.5 py-1.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <Trash2 size={12} />
+                          <span>Remove</span>
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1290,14 +1424,26 @@ export default function GamuraStoreLaunch({
                       )}
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleShareApp(selectedApp)}
-                      aria-label="Share app"
-                      className="w-9 h-9 rounded-full hover:bg-zinc-100 text-[#059669] flex items-center justify-center cursor-pointer transition-colors shrink-0"
-                    >
-                      <Share size={18} />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openQrForApp(selectedApp)}
+                        aria-label="Show QR code"
+                        title="Generate QR Code for this app"
+                        className="w-9 h-9 rounded-full hover:bg-zinc-100 text-[#059669] flex items-center justify-center cursor-pointer transition-colors"
+                      >
+                        <QrCode size={18} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleShareApp(selectedApp)}
+                        aria-label="Share app"
+                        title="Share app link"
+                        className="w-9 h-9 rounded-full hover:bg-zinc-100 text-[#059669] flex items-center justify-center cursor-pointer transition-colors"
+                      >
+                        <Share size={18} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1561,6 +1707,185 @@ export default function GamuraStoreLaunch({
                   </div>
                 </div>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Generator Modal for Gamura Store & App Links */}
+      {qrModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setQrModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-white rounded-t-[28px] sm:rounded-[28px] p-5 sm:p-6 shadow-2xl border border-zinc-200/80 space-y-4 max-h-[92vh] overflow-y-auto"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-[#E2F5ED] text-[#059669] flex items-center justify-center shrink-0">
+                  <QrCode size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-[#1D1D1F] truncate">
+                    Scan &amp; Share QR Code
+                  </h3>
+                  <p className="text-xs text-[#6E6E73] truncate">
+                    Instant scannable QR for any Gamura Store link
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQrModalOpen(false)}
+                aria-label="Close QR Generator"
+                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 flex items-center justify-center text-[#6E6E73] cursor-pointer shrink-0"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Select Store Page or App */}
+            <div className="space-y-2">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-[#6E6E73]">
+                Store App or Link Preset
+              </label>
+              <div className="relative">
+                <select
+                  aria-label="Select Store Link for QR Code"
+                  value={qrSelectedAppId}
+                  onChange={(e) => handleQrPresetChange(e.target.value)}
+                  className="w-full appearance-none pl-3.5 pr-9 py-2.5 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-sm font-medium text-[#1D1D1F] outline-none focus:bg-white focus:border-[#059669] cursor-pointer"
+                >
+                  <option value="__store__">
+                    Gamura Launch Store (/launch)
+                  </option>
+                  {qrSelectedAppId === "__custom__" && (
+                    <option value="__custom__">Custom Store Link</option>
+                  )}
+                  {allApps.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} — {a.cat}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={15}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6E6E73]"
+                />
+              </div>
+
+              <input
+                type="url"
+                value={qrUrlInput}
+                onChange={(e) => {
+                  setQrUrlInput(e.target.value);
+                  setQrSelectedAppId("__custom__");
+                  setQrLabel("Custom Store Link");
+                }}
+                placeholder="https://…"
+                aria-label="Custom URL for QR Code"
+                className="w-full px-3.5 py-2 rounded-xl bg-[#F5F5F7] border border-zinc-200/80 text-xs font-mono text-[#1D1D1F] outline-none focus:bg-white focus:border-[#059669]"
+              />
+            </div>
+
+            {/* Scannable QR Preview Card */}
+            <div className="rounded-3xl bg-[#F5F5F7] border border-zinc-200/80 p-5 flex flex-col items-center gap-3">
+              <div className="p-4 rounded-2xl bg-white shadow-sm border border-black/[0.05]">
+                <QRCodeSVG
+                  value={qrUrlInput.trim() || resolveFullUrl("/launch")}
+                  size={196}
+                  bgColor="#FFFFFF"
+                  fgColor={qrColor}
+                  level="M"
+                  includeMargin={false}
+                />
+                <div className="hidden" aria-hidden="true">
+                  <QRCodeCanvas
+                    id="gamura-store-qr-canvas"
+                    value={qrUrlInput.trim() || resolveFullUrl("/launch")}
+                    size={512}
+                    bgColor="#FFFFFF"
+                    fgColor={qrColor}
+                    level="M"
+                  />
+                </div>
+              </div>
+
+              <div className="text-center space-y-0.5 max-w-full">
+                <div className="text-sm font-bold text-[#1D1D1F] truncate">
+                  {qrLabel || "Gamura Store Link"}
+                </div>
+                <div className="text-[11px] text-[#6E6E73] break-all line-clamp-2">
+                  {qrUrlInput.trim() || resolveFullUrl("/launch")}
+                </div>
+              </div>
+
+              {/* Ink Accent Swatches */}
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-[11px] font-semibold text-[#6E6E73]">
+                  Style:
+                </span>
+                {[
+                  { label: "Obsidian", color: "#1D1D1F" },
+                  { label: "Emerald", color: "#059669" },
+                  { label: "Cobalt", color: "#0071E3" },
+                ].map((sw) => (
+                  <button
+                    key={sw.color}
+                    type="button"
+                    onClick={() => setQrColor(sw.color)}
+                    title={sw.label}
+                    aria-label={`${sw.label} QR color`}
+                    style={{ backgroundColor: sw.color }}
+                    className={`w-6 h-6 rounded-full cursor-pointer transition-transform ${
+                      qrColor === sw.color
+                        ? "ring-2 ring-offset-2 ring-[#059669] scale-110"
+                        : "opacity-80 hover:opacity-100"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Copy / Download / Open Actions */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  const target = qrUrlInput.trim() || resolveFullUrl("/launch");
+                  try {
+                    await navigator.clipboard.writeText(target);
+                    showToast("Store link copied ✓");
+                  } catch {
+                    showToast(target);
+                  }
+                }}
+                className="py-2.5 px-3 rounded-2xl bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
+              >
+                <Copy size={14} />
+                <span>Copy Link</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadQrPng}
+                className="py-2.5 px-3 rounded-2xl bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
+              >
+                <Download size={14} />
+                <span>Save PNG</span>
+              </button>
+
+              <a
+                href={qrUrlInput.trim() || resolveFullUrl("/launch")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2.5 px-3 rounded-2xl bg-[#1D1D1F] hover:bg-black text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap"
+              >
+                <span>Open</span>
+                <ExternalLink size={13} />
+              </a>
             </div>
           </div>
         </div>
