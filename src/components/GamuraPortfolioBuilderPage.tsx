@@ -2,18 +2,22 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
+  Copy,
   Download,
   ExternalLink,
   Image as ImageIcon,
   MapPin,
   Moon,
   Plus,
+  QrCode,
   RotateCcw,
+  Share2,
   Sun,
   Trash2,
   Video,
   X,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   BUILTIN_STORE_APPS,
   UNIVERSE_APPS_EVENT,
@@ -72,6 +76,7 @@ interface PortfolioState {
 }
 
 export const GAMURA_PORTFOLIO_V1_KEY = "gamura_portfolio_v1";
+const PB1_CHANNEL_NAME = "gamura-pb1-realtime";
 
 const ACCENT_COLORS = [
   "#0071e3",
@@ -204,15 +209,28 @@ export default function GamuraPortfolioBuilderPage({
       ? window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false
       : false,
   );
-  const [mode, setMode] = useState<"edit" | "preview">("edit");
+  const [mode, setMode] = useState<"edit" | "preview">(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const sp = new URLSearchParams(window.location.search);
+        if (sp.get("preview") === "1") return "preview";
+      } catch {
+        // ignore
+      }
+    }
+    return "edit";
+  });
   const [videoUrlDraft, setVideoUrlDraft] = useState("");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [pendingTarget, setPendingTarget] = useState<PendingUploadTarget>(null);
 
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const skipBroadcastRef = useRef(false);
+  const channelRef = useRef<BroadcastChannel | null>(null);
 
   const [installedInUniverse, setInstalledInUniverse] = useState<boolean>(() =>
     readStoreJson<StoreAppItem[]>(UNIVERSE_APPS_KEY, []).some(
@@ -241,14 +259,77 @@ export default function GamuraPortfolioBuilderPage({
     };
   }, []);
 
-  // Persist to localStorage filtering temporary blob: video URLs
+  // Real-time cross-tab synchronization via BroadcastChannel & localStorage events
   useEffect(() => {
-    try {
-      const copy: PortfolioState = {
-        ...state,
-        media: state.media.filter((m) => !m.src.startsWith("blob:")),
+    if (typeof BroadcastChannel !== "undefined") {
+      const ch = new BroadcastChannel(PB1_CHANNEL_NAME);
+      channelRef.current = ch;
+      ch.onmessage = (ev: MessageEvent) => {
+        const incoming = ev.data?.payload;
+        if (incoming && typeof incoming === "object") {
+          skipBroadcastRef.current = true;
+          setState({
+            ...DEFAULT_PORTFOLIO_STATE,
+            ...incoming,
+            links: Array.isArray(incoming.links)
+              ? incoming.links
+              : DEFAULT_PORTFOLIO_STATE.links,
+            projects: Array.isArray(incoming.projects)
+              ? incoming.projects
+              : DEFAULT_PORTFOLIO_STATE.projects,
+            certs: Array.isArray(incoming.certs)
+              ? incoming.certs
+              : DEFAULT_PORTFOLIO_STATE.certs,
+            media: Array.isArray(incoming.media) ? incoming.media : [],
+          });
+        }
       };
+    }
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== GAMURA_PORTFOLIO_V1_KEY || !e.newValue) return;
+      try {
+        const parsed = JSON.parse(e.newValue);
+        skipBroadcastRef.current = true;
+        setState({
+          ...DEFAULT_PORTFOLIO_STATE,
+          ...parsed,
+          links: Array.isArray(parsed.links)
+            ? parsed.links
+            : DEFAULT_PORTFOLIO_STATE.links,
+          projects: Array.isArray(parsed.projects)
+            ? parsed.projects
+            : DEFAULT_PORTFOLIO_STATE.projects,
+          certs: Array.isArray(parsed.certs)
+            ? parsed.certs
+            : DEFAULT_PORTFOLIO_STATE.certs,
+          media: Array.isArray(parsed.media) ? parsed.media : [],
+        });
+      } catch {
+        // ignore invalid json
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      channelRef.current?.close();
+      channelRef.current = null;
+    };
+  }, []);
+
+  // Persist to localStorage filtering temporary blob: video URLs + real-time broadcast
+  useEffect(() => {
+    const copy: PortfolioState = {
+      ...state,
+      media: state.media.filter((m) => !m.src.startsWith("blob:")),
+    };
+    if (skipBroadcastRef.current) {
+      skipBroadcastRef.current = false;
+      return;
+    }
+    try {
       localStorage.setItem(GAMURA_PORTFOLIO_V1_KEY, JSON.stringify(copy));
+      channelRef.current?.postMessage({ payload: copy });
     } catch {
       setToastMsg("Storage is full. Remove some images.");
     }
@@ -265,6 +346,7 @@ export default function GamuraPortfolioBuilderPage({
       if (e.key === "Escape") {
         setLightboxSrc(null);
         setConfirmResetOpen(false);
+        setShareOpen(false);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -679,8 +761,19 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
             </button>
           </div>
 
-          {/* Right: Export, Theme & Universe Install */}
+          {/* Right: Share, Export, Theme & Universe Install */}
           <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              title="Share QR & Export HTML"
+              aria-label="Share or export portfolio"
+              className={`w-[34px] h-[34px] rounded-full flex items-center justify-center transition-colors cursor-pointer ${fillBg}`}
+              style={{ color: state.ac || "#0071e3" }}
+            >
+              <Share2 size={15} />
+            </button>
+
             <button
               type="button"
               onClick={handleExportStandaloneHtml}
@@ -705,7 +798,8 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
             <button
               type="button"
               onClick={handleToggleUniverse}
-              className={`min-h-[34px] px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
+              aria-label={installedInUniverse ? "In Universe" : "Add to Universe"}
+              className={`min-h-[34px] px-2.5 sm:px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
                 installedInUniverse
                   ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"
                   : fillBg
@@ -946,25 +1040,43 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
                 className={`rounded-[14px] overflow-hidden ${cardCls}`}
               >
                 <div
-                  className={`flex items-center gap-3 px-3.5 py-2.5 border-b ${borderLine}`}
+                  className={`flex items-center justify-between gap-3 px-3.5 py-2.5 border-b ${borderLine}`}
                 >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      triggerImagePick({ kind: "project", index: idx })
-                    }
-                    className={`w-16 h-16 rounded-xl flex items-center justify-center shrink-0 overflow-hidden cursor-pointer ${fillBg} ${tx2} text-xl bg-cover bg-center`}
-                    style={
-                      proj.img
-                        ? { backgroundImage: `url('${proj.img}')` }
-                        : undefined
-                    }
-                  >
-                    {!proj.img && "＋"}
-                  </button>
-                  <span className={`text-sm ${tx2}`}>
-                    Tap to add a cover image
-                  </span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        triggerImagePick({ kind: "project", index: idx })
+                      }
+                      className={`w-16 h-16 rounded-xl flex items-center justify-center shrink-0 overflow-hidden cursor-pointer ${fillBg} ${tx2} text-xl bg-cover bg-center`}
+                      style={
+                        proj.img
+                          ? { backgroundImage: `url('${proj.img}')` }
+                          : undefined
+                      }
+                    >
+                      {!proj.img && "＋"}
+                    </button>
+                    <span className={`text-sm ${tx2}`}>
+                      {proj.img ? "Cover added" : "Tap to add a cover image"}
+                    </span>
+                  </div>
+                  {proj.img && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setState((prev) => ({
+                          ...prev,
+                          projects: prev.projects.map((item, i) =>
+                            i === idx ? { ...item, img: "" } : item,
+                          ),
+                        }))
+                      }
+                      className="text-xs font-semibold text-[#ff3b30] cursor-pointer shrink-0"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
 
                 <div
@@ -1071,25 +1183,45 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
                 className={`rounded-[14px] overflow-hidden ${cardCls}`}
               >
                 <div
-                  className={`flex items-center gap-3 px-3.5 py-2.5 border-b ${borderLine}`}
+                  className={`flex items-center justify-between gap-3 px-3.5 py-2.5 border-b ${borderLine}`}
                 >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      triggerImagePick({ kind: "cert", index: idx })
-                    }
-                    className={`w-16 h-16 rounded-xl flex items-center justify-center shrink-0 overflow-hidden cursor-pointer ${fillBg} ${tx2} text-xl bg-cover bg-center`}
-                    style={
-                      cert.img
-                        ? { backgroundImage: `url('${cert.img}')` }
-                        : undefined
-                    }
-                  >
-                    {!cert.img && "＋"}
-                  </button>
-                  <span className={`text-sm ${tx2}`}>
-                    Tap to add certificate image
-                  </span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        triggerImagePick({ kind: "cert", index: idx })
+                      }
+                      className={`w-16 h-16 rounded-xl flex items-center justify-center shrink-0 overflow-hidden cursor-pointer ${fillBg} ${tx2} text-xl bg-cover bg-center`}
+                      style={
+                        cert.img
+                          ? { backgroundImage: `url('${cert.img}')` }
+                          : undefined
+                      }
+                    >
+                      {!cert.img && "＋"}
+                    </button>
+                    <span className={`text-sm ${tx2}`}>
+                      {cert.img
+                        ? "Certificate image added"
+                        : "Tap to add certificate image"}
+                    </span>
+                  </div>
+                  {cert.img && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setState((prev) => ({
+                          ...prev,
+                          certs: prev.certs.map((item, i) =>
+                            i === idx ? { ...item, img: "" } : item,
+                          ),
+                        }))
+                      }
+                      className="text-xs font-semibold text-[#ff3b30] cursor-pointer shrink-0"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
 
                 <div
@@ -1699,6 +1831,84 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
             onClick={(e) => e.stopPropagation()}
             className="max-w-full max-h-full rounded-xl shadow-2xl object-contain"
           />
+        </div>
+      )}
+
+      {/* Share QR & Export Dialog */}
+      {shareOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setShareOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Share & Export Portfolio"
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 ${cardCls}`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <QrCode size={18} style={{ color: state.ac || "#0071e3" }} />
+                <h3 className="text-lg font-bold">Share &amp; Export PB¹</h3>
+              </div>
+              <button
+                type="button"
+                aria-label="Close share dialog"
+                onClick={() => setShareOpen(false)}
+                className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer ${fillBg}`}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="flex justify-center py-2">
+              <div className="p-3.5 rounded-2xl bg-white shadow-sm border border-black/10">
+                <QRCodeSVG
+                  value={
+                    typeof window !== "undefined"
+                      ? `${window.location.origin}/pb1?preview=1`
+                      : "/pb1?preview=1"
+                  }
+                  size={156}
+                  fgColor={state.ac || "#0071e3"}
+                  bgColor="#ffffff"
+                  level="M"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const url =
+                    typeof window !== "undefined"
+                      ? `${window.location.origin}/pb1?preview=1`
+                      : "/pb1?preview=1";
+                  navigator.clipboard?.writeText(url).catch(() => {});
+                  showToast("Preview URL copied");
+                }}
+                className={`w-full py-2.5 px-4 rounded-full text-sm font-semibold inline-flex items-center justify-center gap-2 cursor-pointer ${fillBg}`}
+              >
+                <Copy size={14} />
+                <span>Copy Preview Link</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShareOpen(false);
+                  handleExportStandaloneHtml();
+                }}
+                style={{ backgroundColor: state.ac || "#0071e3" }}
+                className="w-full py-2.5 px-4 rounded-full text-sm font-semibold text-white inline-flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Download size={14} />
+                <span>Download Standalone HTML</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -6,10 +6,12 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Download,
   ExternalLink,
   FileText,
   Image as ImageIcon,
+  Layers,
   Lock,
   MapPin,
   Menu,
@@ -17,12 +19,17 @@ import {
   Palette,
   Pencil,
   Plus,
+  QrCode,
+  Redo2,
   RotateCcw,
+  Share2,
   Sun,
   Trash2,
+  Undo2,
   Video,
   X,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   BUILTIN_STORE_APPS,
   UNIVERSE_APPS_EVENT,
@@ -150,7 +157,7 @@ interface PortfolioV2State {
   pages: PortfolioPageEntry[];
 }
 
-type SheetKind = "menu" | "pages" | "style" | "add" | "edit" | null;
+type SheetKind = "menu" | "pages" | "style" | "add" | "edit" | "share" | null;
 
 type PendingUpload =
   | { blockId: string; kind: "av" }
@@ -159,6 +166,7 @@ type PendingUpload =
   | null;
 
 export const GAMURA_PF_V2_KEY = "gamura_pf_v2";
+const PB2_CHANNEL_NAME = "gamura-pb2-realtime";
 
 const ACCENT_SWATCHES = [
   "#0071e3",
@@ -414,6 +422,12 @@ export default function GamuraPortfolioBuilder2Page({
     return createDefaultState();
   });
 
+  // Undo / Redo history stacks
+  const [undoStack, setUndoStack] = useState<PortfolioV2State[]>([]);
+  const [redoStack, setRedoStack] = useState<PortfolioV2State[]>([]);
+  const skipBroadcastRef = useRef(false);
+  const channelRef = useRef<BroadcastChannel | null>(null);
+
   const [currentSlug, setCurrentSlug] = useState<string>(() => {
     if (typeof window !== "undefined") {
       const h = (window.location.hash || "").slice(1);
@@ -422,7 +436,14 @@ export default function GamuraPortfolioBuilder2Page({
     return "home";
   });
 
-  const [editMode, setEditMode] = useState<boolean>(true);
+  const [editMode, setEditMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("preview") === "1") return false;
+    }
+    return true;
+  });
+
   const [sheet, setSheet] = useState<{ kind: SheetKind; blockId?: string }>({
     kind: null,
   });
@@ -448,6 +469,53 @@ export default function GamuraPortfolioBuilder2Page({
     ),
   );
 
+  const commitState = useCallback(
+    (
+      updater:
+        | PortfolioV2State
+        | ((prev: PortfolioV2State) => PortfolioV2State),
+      recordHistory = true,
+    ) => {
+      setState((prev) => {
+        const next =
+          typeof updater === "function" ? updater(prev) : updater;
+        if (next === prev) return prev;
+        if (recordHistory) {
+          setUndoStack((u) => [...u.slice(-24), prev]);
+          setRedoStack([]);
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleUndo = useCallback(() => {
+    setUndoStack((prevUndo) => {
+      if (prevUndo.length === 0) return prevUndo;
+      const last = prevUndo[prevUndo.length - 1];
+      setState((cur) => {
+        setRedoStack((r) => [...r.slice(-24), cur]);
+        return last;
+      });
+      setToastMsg("Undid last change");
+      return prevUndo.slice(0, -1);
+    });
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    setRedoStack((prevRedo) => {
+      if (prevRedo.length === 0) return prevRedo;
+      const next = prevRedo[prevRedo.length - 1];
+      setState((cur) => {
+        setUndoStack((u) => [...u.slice(-24), cur]);
+        return next;
+      });
+      setToastMsg("Redid change");
+      return prevRedo.slice(0, -1);
+    });
+  }, []);
+
   useEffect(() => {
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
     if (!mq) return;
@@ -469,6 +537,42 @@ export default function GamuraPortfolioBuilder2Page({
     };
   }, []);
 
+  // Real-time multi-tab synchronization via BroadcastChannel + storage event
+  useEffect(() => {
+    if (typeof BroadcastChannel !== "undefined") {
+      const bc = new BroadcastChannel(PB2_CHANNEL_NAME);
+      channelRef.current = bc;
+      bc.onmessage = (event) => {
+        const incoming = event.data as PortfolioV2State | undefined;
+        if (incoming && incoming.site && Array.isArray(incoming.pages)) {
+          skipBroadcastRef.current = true;
+          setState(incoming);
+        }
+      };
+    }
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === GAMURA_PF_V2_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue) as PortfolioV2State;
+          if (parsed && parsed.site && Array.isArray(parsed.pages)) {
+            skipBroadcastRef.current = true;
+            setState(parsed);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      channelRef.current?.close();
+      channelRef.current = null;
+    };
+  }, []);
+
+  // Persist to localStorage + broadcast live updates
   useEffect(() => {
     try {
       const sanitized: PortfolioV2State = {
@@ -486,6 +590,10 @@ export default function GamuraPortfolioBuilder2Page({
         })),
       };
       localStorage.setItem(GAMURA_PF_V2_KEY, JSON.stringify(sanitized));
+      if (!skipBroadcastRef.current) {
+        channelRef.current?.postMessage(sanitized);
+      }
+      skipBroadcastRef.current = false;
     } catch {
       setToastMsg("Storage is full. Remove some images.");
     }
@@ -493,7 +601,7 @@ export default function GamuraPortfolioBuilder2Page({
 
   useEffect(() => {
     if (!toastMsg) return;
-    const id = window.setTimeout(() => setToastMsg(null), 2600);
+    const id = window.setTimeout(() => setToastMsg(null), 2400);
     return () => window.clearTimeout(id);
   }, [toastMsg]);
 
@@ -513,6 +621,13 @@ export default function GamuraPortfolioBuilder2Page({
         if (lightboxSrc) setLightboxSrc(null);
         else if (sheet.kind) closeSheet();
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+        const tag = (document.activeElement as HTMLElement | null)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        e.preventDefault();
+        if (e.shiftKey) handleRedo();
+        else handleUndo();
+      }
     };
     window.addEventListener("hashchange", onHash);
     window.addEventListener("keydown", onKey);
@@ -520,7 +635,7 @@ export default function GamuraPortfolioBuilder2Page({
       window.removeEventListener("hashchange", onHash);
       window.removeEventListener("keydown", onKey);
     };
-  }, [lightboxSrc, sheet.kind]);
+  }, [lightboxSrc, sheet.kind, handleUndo, handleRedo]);
 
   const currentPage = useMemo(
     () =>
@@ -584,7 +699,7 @@ export default function GamuraPortfolioBuilder2Page({
     blockId: string,
     updater: (block: PortfolioBlock) => PortfolioBlock,
   ) => {
-    setState((prev) => ({
+    commitState((prev) => ({
       ...prev,
       pages: prev.pages.map((p) => ({
         ...p,
@@ -594,7 +709,7 @@ export default function GamuraPortfolioBuilder2Page({
   };
 
   const moveBlock = (blockId: string, dir: -1 | 1) => {
-    setState((prev) => ({
+    commitState((prev) => ({
       ...prev,
       pages: prev.pages.map((p) => {
         const idx = p.b.findIndex((b) => b.id === blockId);
@@ -610,8 +725,24 @@ export default function GamuraPortfolioBuilder2Page({
     }));
   };
 
+  const duplicateBlock = (blockId: string) => {
+    commitState((prev) => ({
+      ...prev,
+      pages: prev.pages.map((p) => {
+        const idx = p.b.findIndex((b) => b.id === blockId);
+        if (idx < 0) return p;
+        const clone = JSON.parse(JSON.stringify(p.b[idx])) as PortfolioBlock;
+        clone.id = genUid();
+        const copy = [...p.b];
+        copy.splice(idx + 1, 0, clone);
+        return { ...p, b: copy };
+      }),
+    }));
+    showToast("Section duplicated");
+  };
+
   const removeBlock = (blockId: string) => {
-    setState((prev) => ({
+    commitState((prev) => ({
       ...prev,
       pages: prev.pages.map((p) => ({
         ...p,
@@ -621,11 +752,12 @@ export default function GamuraPortfolioBuilder2Page({
     if (sheet.kind === "edit" && sheet.blockId === blockId) {
       closeSheet();
     }
+    showToast("Section removed (Undo available)");
   };
 
   const addBlockToCurrentPage = (type: BlockType) => {
     const created = createBlock(type);
-    setState((prev) => ({
+    commitState((prev) => ({
       ...prev,
       pages: prev.pages.map((p) =>
         p.id === currentPage.id ? { ...p, b: [...p.b, created] } : p,
@@ -701,14 +833,14 @@ export default function GamuraPortfolioBuilder2Page({
 
   // Multi-page management
   const updatePageName = (pageId: string, name: string) => {
-    setState((prev) => ({
+    commitState((prev) => ({
       ...prev,
       pages: prev.pages.map((p) => (p.id === pageId ? { ...p, n: name } : p)),
     }));
   };
 
   const updatePageSlug = (pageId: string, rawSlug: string) => {
-    setState((prev) => {
+    commitState((prev) => {
       const target = prev.pages.find((p) => p.id === pageId);
       if (!target) return prev;
       const oldSlug = target.s;
@@ -731,7 +863,7 @@ export default function GamuraPortfolioBuilder2Page({
   };
 
   const movePageOrder = (pageId: string, dir: -1 | 1) => {
-    setState((prev) => {
+    commitState((prev) => {
       const idx = prev.pages.findIndex((p) => p.id === pageId);
       const nextIdx = idx + dir;
       if (idx < 0 || nextIdx < 0 || nextIdx >= prev.pages.length) return prev;
@@ -744,7 +876,7 @@ export default function GamuraPortfolioBuilder2Page({
   };
 
   const deletePageById = (pageId: string) => {
-    setState((prev) => {
+    commitState((prev) => {
       if (prev.pages.length < 2) return prev;
       const remaining = prev.pages.filter((p) => p.id !== pageId);
       if (!remaining.some((p) => p.s === currentSlug)) {
@@ -755,7 +887,7 @@ export default function GamuraPortfolioBuilder2Page({
   };
 
   const createNewPage = () => {
-    setState((prev) => {
+    commitState((prev) => {
       const id = genUid();
       const s = sanitizeSlug("new-page", id, prev.pages);
       return {
@@ -771,6 +903,7 @@ export default function GamuraPortfolioBuilder2Page({
         ],
       };
     });
+    showToast("New page created");
   };
 
   const handleResetAllTap = () => {
@@ -780,11 +913,17 @@ export default function GamuraPortfolioBuilder2Page({
     }
     setResetArmed(false);
     const fresh = createDefaultState();
-    setState(fresh);
+    commitState(fresh);
     setCurrentSlug(fresh.pages[0].s);
     closeSheet();
     showToast("Portfolio builder reset to defaults");
   };
+
+  // Shareable Live Preview URL
+  const livePreviewUrl = useMemo(() => {
+    if (typeof window === "undefined") return `/pb2?preview=1#${currentPage.s}`;
+    return `${window.location.origin}/pb2?preview=1#${currentPage.s}`;
+  }, [currentPage.s]);
 
   // Export multi-page static site HTML
   const handleExportSiteHtml = () => {
@@ -978,7 +1117,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
     switch (block.t) {
       case "hero":
         return (
-          <section className="text-center pt-14 pb-10">
+          <section className="text-center pt-10 pb-10 px-4">
             <div
               className="w-[136px] h-[136px] rounded-full mx-auto mb-6 shadow-[0_12px_44px_rgba(0,0,0,0.2)] bg-cover bg-center"
               style={{
@@ -987,11 +1126,11 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                   : `linear-gradient(135deg, ${accent}, #bf5af2)`,
               }}
             />
-            <h1 className="text-[clamp(38px,9vw,76px)] leading-[1.04] tracking-[-0.035em] font-bold mb-2.5">
-              {block.name}
+            <h1 className="text-[clamp(36px,8vw,74px)] leading-[1.05] tracking-[-0.035em] font-bold mb-2.5 text-balance">
+              {block.name || "Your Name"}
             </h1>
             {block.title && (
-              <p className={`text-[clamp(19px,4vw,28px)] font-medium mb-3.5 ${tx2}`}>
+              <p className={`text-[clamp(18px,3.6vw,28px)] font-medium mb-3.5 ${tx2}`}>
                 {block.title}
               </p>
             )}
@@ -1019,11 +1158,11 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
 
       case "text":
         return (
-          <section className="py-10">
-            <h3 className="text-[clamp(28px,6vw,46px)] tracking-[-0.03em] font-bold mb-5">
+          <section className="py-8 px-4 sm:px-6">
+            <h3 className="text-[clamp(26px,5.5vw,44px)] tracking-[-0.03em] font-bold mb-4 text-balance">
               {block.h}
             </h3>
-            <div className="text-[clamp(18px,3.4vw,24px)] leading-[1.55] max-w-[760px] whitespace-pre-wrap">
+            <div className="text-[clamp(17px,3.2vw,23px)] leading-[1.55] max-w-[760px] whitespace-pre-wrap">
               {block.body}
             </div>
           </section>
@@ -1035,8 +1174,8 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
           .map((s) => s.trim())
           .filter(Boolean);
         return (
-          <section className="py-10">
-            <h3 className="text-[clamp(28px,6vw,46px)] tracking-[-0.03em] font-bold mb-5">
+          <section className="py-8 px-4 sm:px-6">
+            <h3 className="text-[clamp(26px,5.5vw,44px)] tracking-[-0.03em] font-bold mb-4 text-balance">
               {block.h}
             </h3>
             <div className="flex flex-wrap gap-2.5">
@@ -1055,8 +1194,8 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
 
       case "cards":
         return (
-          <section className="py-10">
-            <h3 className="text-[clamp(28px,6vw,46px)] tracking-[-0.03em] font-bold mb-5">
+          <section className="py-8 px-4 sm:px-6">
+            <h3 className="text-[clamp(26px,5.5vw,44px)] tracking-[-0.03em] font-bold mb-5 text-balance">
               {block.h}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[18px]">
@@ -1064,27 +1203,34 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                 <div
                   key={`${block.id}-card-${idx}`}
                   style={{ borderRadius: `${radius}px` }}
-                  className={`overflow-hidden shadow-[0_2px_14px_rgba(0,0,0,0.07)] hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(0,0,0,0.14)] transition-all duration-300 ${cardBg}`}
+                  className={`overflow-hidden shadow-[0_2px_14px_rgba(0,0,0,0.07)] hover:-translate-y-1 hover:shadow-[0_12px_32px_rgba(0,0,0,0.14)] transition-all duration-300 flex flex-col ${cardBg}`}
                 >
                   <button
                     type="button"
                     disabled={!item.img}
                     onClick={() => item.img && setLightboxSrc(item.img)}
                     aria-label={item.img ? `Zoom ${item.t}` : item.t}
-                    className={`w-full aspect-[16/10] bg-cover bg-center border-0 block ${
+                    className={`w-full aspect-[16/10] bg-cover bg-center border-0 block overflow-hidden ${
                       item.img ? "cursor-zoom-in" : "cursor-default"
                     }`}
                     style={{
-                      backgroundImage: item.img
-                        ? `url('${item.img}')`
-                        : `linear-gradient(135deg, ${accent}, #5e5ce6)`,
+                      background: `linear-gradient(135deg, ${accent}, #5e5ce6)`,
                     }}
-                  />
-                  <div className="p-5 pb-[22px]">
-                    <h4 className="text-[21px] font-bold tracking-[-0.01em] mb-1.5">
-                      {item.t}
+                  >
+                    {item.img && (
+                      <img
+                        src={item.img}
+                        alt={item.t || "Card visual"}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover block"
+                      />
+                    )}
+                  </button>
+                  <div className="p-5 pb-[22px] flex-1 flex flex-col">
+                    <h4 className="text-[20px] font-bold tracking-[-0.01em] mb-1.5">
+                      {item.t || "Untitled Card"}
                     </h4>
-                    <p className={`text-[15px] whitespace-pre-wrap ${tx2}`}>
+                    <p className={`text-[15px] whitespace-pre-wrap flex-1 ${tx2}`}>
                       {item.d}
                     </p>
                     {item.u.trim() && (
@@ -1107,8 +1253,8 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
 
       case "gallery":
         return (
-          <section className="py-10">
-            <h3 className="text-[clamp(28px,6vw,46px)] tracking-[-0.03em] font-bold mb-5">
+          <section className="py-8 px-4 sm:px-6">
+            <h3 className="text-[clamp(26px,5.5vw,44px)] tracking-[-0.03em] font-bold mb-5 text-balance">
               {block.h}
             </h3>
             {block.items.length === 0 ? (
@@ -1127,6 +1273,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                       <img
                         src={media.src}
                         alt={media.cap || "Gallery item"}
+                        referrerPolicy="no-referrer"
                         onClick={() => setLightboxSrc(media.src)}
                         className="w-full block cursor-zoom-in"
                       />
@@ -1152,8 +1299,8 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
 
       case "links":
         return (
-          <section className="py-10">
-            <h3 className="text-[clamp(28px,6vw,46px)] tracking-[-0.03em] font-bold mb-5">
+          <section className="py-8 px-4 sm:px-6">
+            <h3 className="text-[clamp(26px,5.5vw,44px)] tracking-[-0.03em] font-bold mb-5 text-balance">
               {block.h}
             </h3>
             <div className="flex flex-wrap gap-2.5">
@@ -1171,6 +1318,15 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                     {x.l}
                   </a>
                 ))}
+              {block.items.filter((x) => x.l.trim() && x.u.trim()).length ===
+                0 && (
+                <p className={`text-sm ${tx2}`}>
+                  No links filled yet. Tap Edit to add URLs for{" "}
+                  {block.items.map((i) => i.l).filter(Boolean).join(", ") ||
+                    "your links"}
+                  .
+                </p>
+              )}
             </div>
           </section>
         );
@@ -1179,12 +1335,14 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
         return (
           <section
             style={{ borderRadius: `${radius}px` }}
-            className={`text-center py-11 px-6 my-10 shadow-[0_2px_14px_rgba(0,0,0,0.07)] ${cardBg}`}
+            className={`text-center py-10 px-6 mx-4 sm:mx-6 my-4 shadow-[0_2px_14px_rgba(0,0,0,0.07)] ${cardBg}`}
           >
-            <h3 className="text-[clamp(28px,6vw,46px)] tracking-[-0.03em] font-bold mb-3">
+            <h3 className="text-[clamp(26px,5.5vw,44px)] tracking-[-0.03em] font-bold mb-3 text-balance">
               {block.h}
             </h3>
-            <p className={`text-lg mb-5 ${tx2}`}>{block.note}</p>
+            <p className={`text-lg mb-5 max-w-xl mx-auto ${tx2}`}>
+              {block.note}
+            </p>
             {block.email.trim() && (
               <div className="flex justify-center">
                 <a
@@ -1225,10 +1383,10 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
       {/* Apple Sticky Top Bar */}
       <header
         className={`sticky top-0 z-20 backdrop-blur-xl backdrop-saturate-[1.8] border-b ${lineCls} ${
-          isDark ? "bg-black/75" : "bg-[#fbfbfd]/75"
+          isDark ? "bg-black/78" : "bg-[#fbfbfd]/78"
         }`}
       >
-        <div className="max-w-6xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-3">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
           {/* Left: Home, Store & Brand */}
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink-0">
             <button
@@ -1261,16 +1419,16 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
               >
                 PB<sup className="text-[7px] ml-0.5">2</sup>
               </span>
-              <span className="font-bold text-[15px] tracking-[-0.2px] truncate max-w-[140px] sm:max-w-[200px]">
+              <span className="font-bold text-[15px] tracking-[-0.2px] truncate max-w-[120px] sm:max-w-[190px]">
                 {state.site.brand || "Portfolio"}
               </span>
             </button>
           </div>
 
-          {/* Center: Multi-Page Nav Pills */}
+          {/* Center: Multi-Page Nav Pills (Desktop) */}
           <nav
             aria-label="Portfolio pages"
-            className="hidden md:flex flex-1 items-center justify-center gap-1 overflow-x-auto no-scrollbar"
+            className="hidden md:flex flex-1 items-center justify-center gap-1 overflow-x-auto no-scrollbar px-2"
           >
             {state.pages.map((p) => {
               const active = p.id === currentPage.id;
@@ -1293,10 +1451,33 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
             })}
           </nav>
 
-          <div className="flex-1 md:hidden" />
-
-          {/* Right Controls: Edit/Done, Universe Sync, Theme, Export, Menu Sheet */}
+          {/* Right Controls */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {editMode && (
+              <div className="hidden sm:flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={undoStack.length === 0}
+                  onClick={handleUndo}
+                  title="Undo (Ctrl+Z)"
+                  aria-label="Undo"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer disabled:opacity-35 ${fillBg}`}
+                >
+                  <Undo2 size={14} />
+                </button>
+                <button
+                  type="button"
+                  disabled={redoStack.length === 0}
+                  onClick={handleRedo}
+                  title="Redo (Ctrl+Shift+Z)"
+                  aria-label="Redo"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer disabled:opacity-35 ${fillBg}`}
+                >
+                  <Redo2 size={14} />
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -1305,9 +1486,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
               }}
               style={editMode ? { backgroundColor: accent } : undefined}
               className={`min-h-[34px] px-3.5 rounded-full text-xs font-semibold cursor-pointer whitespace-nowrap transition-colors ${
-                editMode
-                  ? "text-white shadow-xs"
-                  : `${fillBg}`
+                editMode ? "text-white shadow-xs" : `${fillBg}`
               }`}
             >
               {editMode ? "Done" : "Edit"}
@@ -1315,19 +1494,19 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
 
             <button
               type="button"
-              onClick={handleExportSiteHtml}
-              title="Export Multi-Page Site HTML"
-              aria-label="Export multi-page HTML"
-              className={`hidden sm:inline-flex w-9 h-9 rounded-full items-center justify-center cursor-pointer ${fillBg}`}
+              onClick={() => openSheet("share")}
+              title="Share QR & Export HTML"
+              aria-label="Share or export site"
+              className={`w-9 h-9 rounded-full flex items-center justify-center cursor-pointer ${fillBg}`}
               style={{ color: accent }}
             >
-              <Download size={15} />
+              <Share2 size={15} />
             </button>
 
             <button
               type="button"
               onClick={() =>
-                setState((prev) => ({
+                commitState((prev) => ({
                   ...prev,
                   site: { ...prev.site, theme: isDark ? "light" : "dark" },
                 }))
@@ -1341,7 +1520,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
             <button
               type="button"
               onClick={handleToggleUniverse}
-              className={`min-h-[34px] px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1 cursor-pointer whitespace-nowrap ${
+              className={`hidden sm:inline-flex min-h-[34px] px-3 rounded-full text-xs font-semibold items-center gap-1 cursor-pointer whitespace-nowrap ${
                 installedInUniverse
                   ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"
                   : fillBg
@@ -1363,20 +1542,47 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
             </button>
           </div>
         </div>
+
+        {/* Mobile Multi-Page Navigation Strip */}
+        <div
+          className={`md:hidden border-t ${lineCls} px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar`}
+        >
+          {state.pages.map((p) => {
+            const active = p.id === currentPage.id;
+            return (
+              <button
+                key={`mob-${p.id}`}
+                type="button"
+                onClick={() => navigatePage(p.s)}
+                style={active ? { backgroundColor: accent } : undefined}
+                className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                  active ? "text-white" : `${fillBg} ${tx2}`
+                }`}
+              >
+                {p.n}
+              </button>
+            );
+          })}
+        </div>
       </header>
 
       {/* Main Canvas */}
       <main className="flex-1 w-full">
         {editMode && (
-          <div
-            className={`w-max max-w-[90%] mx-auto mt-3.5 px-4 py-1.5 rounded-full text-[13px] flex items-center gap-1.5 ${fillBg} ${tx2}`}
-          >
-            <Lock size={12} />
-            <span>yoursite.com/{currentPage.s}</span>
+          <div className="flex items-center justify-center px-4 mt-3.5">
+            <button
+              type="button"
+              onClick={() => openSheet("pages")}
+              title="Manage page URLs"
+              className={`max-w-full px-4 py-1.5 rounded-full text-[13px] inline-flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity ${fillBg} ${tx2}`}
+            >
+              <Lock size={12} />
+              <span className="truncate">yoursite.com/{currentPage.s}</span>
+            </button>
           </div>
         )}
 
-        <div className="max-w-[980px] mx-auto px-5">
+        <div className="max-w-[980px] mx-auto px-3 sm:px-5 pt-2">
           {currentPage.b.length === 0 ? (
             <div className={`text-center py-24 ${tx2}`}>
               This page is empty.
@@ -1384,70 +1590,105 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
               Tap &ldquo;Add section&rdquo; to start.
             </div>
           ) : (
-            currentPage.b.map((block, bIdx) =>
-              editMode ? (
-                <div
-                  key={block.id}
-                  className="relative my-3 rounded-[14px] outline-2 outline-dashed"
-                  style={{
-                    outlineColor: `${accent}80`,
-                    outlineOffset: "4px",
-                  }}
-                >
-                  {/* Floating Block Toolbar */}
-                  <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => openSheet("edit", block.id)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold shadow-md backdrop-blur-md cursor-pointer inline-flex items-center gap-1 ${
-                        isDark ? "bg-[#1c1c1e]/90 text-white" : "bg-white/90 text-[#1d1d1f]"
+            <div className="space-y-4">
+              {currentPage.b.map((block, bIdx) =>
+                editMode ? (
+                  <div
+                    key={block.id}
+                    className="rounded-[18px] border-2 border-dashed overflow-hidden transition-colors"
+                    style={{
+                      borderColor: `${accent}66`,
+                    }}
+                  >
+                    {/* Non-Overlapping Section Control Bar */}
+                    <div
+                      className={`flex items-center justify-between gap-2 px-3 py-2 border-b ${lineCls} ${
+                        isDark ? "bg-white/[0.03]" : "bg-black/[0.02]"
                       }`}
                     >
-                      <Pencil size={11} />
-                      <span>Edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={bIdx === 0}
-                      onClick={() => moveBlock(block.id, -1)}
-                      aria-label="Move section up"
-                      className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-md cursor-pointer disabled:opacity-40 ${
-                        isDark ? "bg-[#1c1c1e]/90 text-white" : "bg-white/90 text-[#1d1d1f]"
-                      }`}
-                    >
-                      <ArrowUp size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={bIdx === currentPage.b.length - 1}
-                      onClick={() => moveBlock(block.id, 1)}
-                      aria-label="Move section down"
-                      className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-md cursor-pointer disabled:opacity-40 ${
-                        isDark ? "bg-[#1c1c1e]/90 text-white" : "bg-white/90 text-[#1d1d1f]"
-                      }`}
-                    >
-                      <ArrowDown size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeBlock(block.id)}
-                      aria-label="Remove section"
-                      className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md backdrop-blur-md cursor-pointer text-[#ff3b30] ${
-                        isDark ? "bg-[#1c1c1e]/90" : "bg-white/90"
-                      }`}
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
+                      <span
+                        className={`text-[11px] font-bold uppercase tracking-wider truncate ${tx2}`}
+                      >
+                        {BLOCK_TYPE_LABELS.find((x) => x.type === block.t)
+                          ?.label.split(" ")[0] || block.t}
+                      </span>
 
-                  {renderBlockContent(block)}
-                </div>
-              ) : (
-                <React.Fragment key={block.id}>
-                  {renderBlockContent(block)}
-                </React.Fragment>
-              ),
-            )
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openSheet("edit", block.id)}
+                          className={`px-3 py-1 rounded-full text-xs font-semibold shadow-xs cursor-pointer inline-flex items-center gap-1 ${
+                            isDark
+                              ? "bg-[#2c2c2e] hover:bg-[#3a3a3c] text-white"
+                              : "bg-white hover:bg-zinc-100 text-[#1d1d1f]"
+                          }`}
+                        >
+                          <Pencil size={11} />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => duplicateBlock(block.id)}
+                          title="Duplicate section"
+                          aria-label="Duplicate section"
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shadow-xs cursor-pointer ${
+                            isDark
+                              ? "bg-[#2c2c2e] hover:bg-[#3a3a3c] text-white"
+                              : "bg-white hover:bg-zinc-100 text-[#1d1d1f]"
+                          }`}
+                        >
+                          <Layers size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={bIdx === 0}
+                          onClick={() => moveBlock(block.id, -1)}
+                          aria-label="Move section up"
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shadow-xs cursor-pointer disabled:opacity-35 ${
+                            isDark
+                              ? "bg-[#2c2c2e] hover:bg-[#3a3a3c] text-white"
+                              : "bg-white hover:bg-zinc-100 text-[#1d1d1f]"
+                          }`}
+                        >
+                          <ArrowUp size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={bIdx === currentPage.b.length - 1}
+                          onClick={() => moveBlock(block.id, 1)}
+                          aria-label="Move section down"
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shadow-xs cursor-pointer disabled:opacity-35 ${
+                            isDark
+                              ? "bg-[#2c2c2e] hover:bg-[#3a3a3c] text-white"
+                              : "bg-white hover:bg-zinc-100 text-[#1d1d1f]"
+                          }`}
+                        >
+                          <ArrowDown size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeBlock(block.id)}
+                          aria-label="Remove section"
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shadow-xs cursor-pointer text-[#ff3b30] ${
+                            isDark
+                              ? "bg-[#2c2c2e] hover:bg-red-950/50"
+                              : "bg-white hover:bg-red-50"
+                          }`}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {renderBlockContent(block)}
+                  </div>
+                ) : (
+                  <React.Fragment key={block.id}>
+                    {renderBlockContent(block)}
+                  </React.Fragment>
+                ),
+              )}
+            </div>
           )}
 
           {editMode && (
@@ -1487,7 +1728,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
             aria-label="Portfolio Builder Inspector"
             onClick={(e) => e.stopPropagation()}
             className={`fixed left-0 right-0 bottom-0 mx-auto max-w-[640px] ${
-              sheetFull ? "h-[92vh]" : "h-[60vh] sm:h-[64vh]"
+              sheetFull ? "h-[92vh]" : "h-[64vh] sm:h-[68vh]"
             } rounded-t-[26px] flex flex-col shadow-2xl transition-all duration-300 ${sheetBg}`}
           >
             {/* Grab Handle */}
@@ -1515,7 +1756,9 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
 
             {/* Sheet Header */}
             <div className="flex items-center justify-between px-4 pb-2.5 gap-2">
-              {sheet.kind === "pages" || sheet.kind === "style" ? (
+              {sheet.kind === "pages" ||
+              sheet.kind === "style" ||
+              sheet.kind === "share" ? (
                 <button
                   type="button"
                   onClick={() => openSheet("menu")}
@@ -1538,13 +1781,15 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                       ? "Site style"
                       : sheet.kind === "add"
                         ? "Add section"
-                        : editingBlock
-                          ? `Edit ${
-                              BLOCK_TYPE_LABELS.find(
-                                (b) => b.type === editingBlock.t,
-                              )?.label.split(" ")[0] || "Section"
-                            }`
-                          : "Edit"}
+                        : sheet.kind === "share"
+                          ? "Share & Export"
+                          : editingBlock
+                            ? `Edit ${
+                                BLOCK_TYPE_LABELS.find(
+                                  (b) => b.type === editingBlock.t,
+                                )?.label.split(" ")[0] || "Section"
+                              }`
+                            : "Edit"}
               </b>
 
               <button
@@ -1567,7 +1812,9 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                   >
                     Pages
                   </h2>
-                  <div className={`rounded-[14px] overflow-hidden ${sheetCardBg}`}>
+                  <div
+                    className={`rounded-[14px] overflow-hidden ${sheetCardBg}`}
+                  >
                     {state.pages.map((p) => (
                       <button
                         key={p.id}
@@ -1592,7 +1839,9 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                   >
                     Customize
                   </h2>
-                  <div className={`rounded-[14px] overflow-hidden ${sheetCardBg}`}>
+                  <div
+                    className={`rounded-[14px] overflow-hidden ${sheetCardBg}`}
+                  >
                     <button
                       type="button"
                       onClick={() => openSheet("pages")}
@@ -1619,6 +1868,18 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
 
                     <button
                       type="button"
+                      onClick={() => openSheet("share")}
+                      className={`w-full flex items-center justify-between px-3.5 py-3 border-b ${lineCls} cursor-pointer text-left`}
+                    >
+                      <span className="text-[15px] inline-flex items-center gap-2">
+                        <QrCode size={16} />
+                        <span>Share QR &amp; Export HTML</span>
+                      </span>
+                      <ChevronRight size={16} className={tx2} />
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => {
                         closeSheet();
                         setEditMode((v) => !v);
@@ -1636,12 +1897,20 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
 
                     <button
                       type="button"
-                      onClick={handleExportSiteHtml}
+                      onClick={handleToggleUniverse}
                       className={`w-full flex items-center justify-between px-3.5 py-3 border-b ${lineCls} cursor-pointer text-left`}
                     >
                       <span className="text-[15px] inline-flex items-center gap-2">
-                        <Download size={15} />
-                        <span>Export multi-page HTML</span>
+                        {installedInUniverse ? (
+                          <Check size={15} className="text-emerald-500" />
+                        ) : (
+                          <Plus size={15} />
+                        )}
+                        <span>
+                          {installedInUniverse
+                            ? "Remove from Universe Apps"
+                            : "Add to Universe Apps"}
+                        </span>
                       </span>
                       <ChevronRight size={16} className={tx2} />
                     </button>
@@ -1662,6 +1931,61 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                     </button>
                   </div>
                 </>
+              )}
+
+              {/* SHEET: SHARE & EXPORT */}
+              {sheet.kind === "share" && (
+                <div className="space-y-4 pt-1 text-center">
+                  <div
+                    className={`rounded-[20px] p-5 flex flex-col items-center gap-3 ${sheetCardBg}`}
+                  >
+                    <div className="bg-white p-3.5 rounded-2xl shadow-sm">
+                      <QRCodeSVG
+                        value={livePreviewUrl}
+                        size={168}
+                        fgColor="#1d1d1f"
+                        bgColor="#ffffff"
+                        level="M"
+                      />
+                    </div>
+                    <div className="space-y-0.5 max-w-full">
+                      <div className="text-sm font-bold truncate">
+                        {state.site.brand || "My Portfolio"} — {currentPage.n}
+                      </div>
+                      <div className={`text-xs break-all ${tx2}`}>
+                        {livePreviewUrl}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 w-full pt-1">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(livePreviewUrl);
+                            showToast("Live preview URL copied ✓");
+                          } catch {
+                            showToast(livePreviewUrl);
+                          }
+                        }}
+                        className={`py-2.5 px-3 rounded-full text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer ${fillBg}`}
+                        style={{ color: accent }}
+                      >
+                        <Copy size={14} />
+                        <span>Copy Preview Link</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleExportSiteHtml}
+                        style={{ backgroundColor: accent }}
+                        className="py-2.5 px-3 rounded-full text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Download size={14} />
+                        <span>Export Site HTML</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {/* SHEET: PAGES & URLS */}
@@ -1690,6 +2014,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                       >
                         <label className="w-20 shrink-0 text-[15px]">URL</label>
                         <input
+                          key={`${p.id}-${p.s}`}
                           type="text"
                           defaultValue={p.s}
                           onBlur={(e) => updatePageSlug(p.id, e.target.value)}
@@ -1761,7 +2086,9 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
 
               {/* SHEET: SITE STYLE */}
               {sheet.kind === "style" && (
-                <div className={`rounded-[14px] overflow-hidden mt-1 ${sheetCardBg}`}>
+                <div
+                  className={`rounded-[14px] overflow-hidden mt-1 ${sheetCardBg}`}
+                >
                   <div
                     className={`flex items-center gap-3 px-3.5 py-3 border-b ${lineCls}`}
                   >
@@ -1772,7 +2099,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                       type="text"
                       value={state.site.brand}
                       onChange={(e) =>
-                        setState((prev) => ({
+                        commitState((prev) => ({
                           ...prev,
                           site: { ...prev.site, brand: e.target.value },
                         }))
@@ -1792,7 +2119,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                           type="button"
                           aria-label={`Accent ${c}`}
                           onClick={() =>
-                            setState((prev) => ({
+                            commitState((prev) => ({
                               ...prev,
                               site: { ...prev.site, ac: c },
                             }))
@@ -1814,7 +2141,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                         aria-label="Custom accent color"
                         value={state.site.ac}
                         onChange={(e) =>
-                          setState((prev) => ({
+                          commitState((prev) => ({
                             ...prev,
                             site: { ...prev.site, ac: e.target.value },
                           }))
@@ -1831,7 +2158,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                     <select
                       value={state.site.theme}
                       onChange={(e) =>
-                        setState((prev) => ({
+                        commitState((prev) => ({
                           ...prev,
                           site: {
                             ...prev.site,
@@ -1854,7 +2181,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                     <select
                       value={state.site.font}
                       onChange={(e) =>
-                        setState((prev) => ({
+                        commitState((prev) => ({
                           ...prev,
                           site: {
                             ...prev.site,
@@ -1875,7 +2202,7 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                     <select
                       value={state.site.r}
                       onChange={(e) =>
-                        setState((prev) => ({
+                        commitState((prev) => ({
                           ...prev,
                           site: { ...prev.site, r: Number(e.target.value) },
                         }))
@@ -1894,7 +2221,9 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
 
               {/* SHEET: ADD SECTION */}
               {sheet.kind === "add" && (
-                <div className={`rounded-[14px] overflow-hidden mt-1 ${sheetCardBg}`}>
+                <div
+                  className={`rounded-[14px] overflow-hidden mt-1 ${sheetCardBg}`}
+                >
                   {BLOCK_TYPE_LABELS.map((item) => (
                     <button
                       key={item.type}
@@ -1915,7 +2244,9 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
               {sheet.kind === "edit" && editingBlock && (
                 <div className="space-y-3 pt-1">
                   {editingBlock.t === "hero" && (
-                    <div className={`rounded-[14px] overflow-hidden ${sheetCardBg}`}>
+                    <div
+                      className={`rounded-[14px] overflow-hidden ${sheetCardBg}`}
+                    >
                       <div
                         className={`flex items-center gap-3 px-3.5 py-3 border-b ${lineCls}`}
                       >
@@ -2000,7 +2331,9 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                   )}
 
                   {editingBlock.t === "text" && (
-                    <div className={`rounded-[14px] overflow-hidden ${sheetCardBg}`}>
+                    <div
+                      className={`rounded-[14px] overflow-hidden ${sheetCardBg}`}
+                    >
                       <div
                         className={`flex items-center gap-3 px-3.5 py-2.5 border-b ${lineCls}`}
                       >
@@ -2081,7 +2414,9 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                   )}
 
                   {editingBlock.t === "contact" && (
-                    <div className={`rounded-[14px] overflow-hidden ${sheetCardBg}`}>
+                    <div
+                      className={`rounded-[14px] overflow-hidden ${sheetCardBg}`}
+                    >
                       <div
                         className={`flex items-center gap-3 px-3.5 py-2.5 border-b ${lineCls}`}
                       >
@@ -2206,9 +2541,31 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                             >
                               {!item.img && "＋"}
                             </button>
-                            <span className={`text-sm ${tx2}`}>
-                              Tap to add an image
-                            </span>
+                            <div className="flex-1 min-w-0">
+                              <span className={`text-sm block ${tx2}`}>
+                                Tap thumbnail to upload image
+                              </span>
+                              {item.img && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateBlock(editingBlock.id, (b) =>
+                                      b.t === "cards"
+                                        ? {
+                                            ...b,
+                                            items: b.items.map((x, i) =>
+                                              i === idx ? { ...x, img: "" } : x,
+                                            ),
+                                          }
+                                        : b,
+                                    )
+                                  }
+                                  className="text-xs text-[#ff3b30] font-semibold cursor-pointer mt-0.5"
+                                >
+                                  Remove image
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <div
                             className={`flex items-center gap-3 px-3.5 py-2.5 border-b ${lineCls}`}
