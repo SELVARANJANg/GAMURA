@@ -146,6 +146,22 @@ export default function StoreAppGlyph({
         return (
           <FileCheck2 size={iconPx} strokeWidth={2.1} className="text-white" />
         );
+      case "pb1":
+        return (
+          <div className="flex flex-col items-center justify-center leading-none text-white select-none">
+            <span className="font-extrabold tracking-tighter text-[0.95em]">
+              PB<sup className="text-[0.6em] font-bold ml-0.5">1</sup>
+            </span>
+          </div>
+        );
+      case "pb2":
+        return (
+          <div className="flex flex-col items-center justify-center leading-none text-white select-none">
+            <span className="font-extrabold tracking-tighter text-[0.95em]">
+              PB<sup className="text-[0.6em] font-bold ml-0.5">2</sup>
+            </span>
+          </div>
+        );
       case "messenger":
         return (
           <svg

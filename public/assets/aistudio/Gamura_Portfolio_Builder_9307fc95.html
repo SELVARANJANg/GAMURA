@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gamura Portfolio Builder</title>
+<style>
+:root{--bg:#f5f5f7;--card:#fff;--tx:#1d1d1f;--tx2:#6e6e73;--line:#d2d2d7;--fill:#f2f2f7;--ac:#0071e3;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--card:#1c1c1e;--tx:#f5f5f7;--tx2:#98989d;--line:#38383a;--fill:#2c2c2e}}
+:root[data-theme="dark"]{--bg:#000;--card:#1c1c1e;--tx:#f5f5f7;--tx2:#98989d;--line:#38383a;--fill:#2c2c2e}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:30}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
+.brand{font-weight:700;font-size:15px;letter-spacing:-.2px;white-space:nowrap}
+.seg{display:flex;background:var(--fill);border-radius:9px;padding:2px}
+.seg button{border:0;background:none;color:var(--tx);font:600 13px inherit;font-family:inherit;padding:6px 16px;border-radius:7px;cursor:pointer}
+.seg button.on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.ib{border:0;background:var(--fill);color:var(--tx);width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:15px}
+.wrap{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+h2.sh{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--tx2);margin:26px 14px 8px;font-weight:600}
+.card{background:var(--card);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row label{width:96px;flex:none;font-size:15px}
+.row input,.row textarea,.row select{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--tx);font:inherit;font-size:16px;text-align:right}
+.row textarea{text-align:left;resize:vertical;min-height:84px}
+.row.col{flex-direction:column;align-items:stretch}
+.row input::placeholder,.row textarea::placeholder{color:var(--tx2);opacity:.7}
+.item{margin-bottom:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;background:var(--ac);color:#fff;font:600 15px inherit;font-family:inherit;padding:10px 18px;border-radius:980px;cursor:pointer;text-decoration:none}
+.btn.g{background:var(--fill);color:var(--ac)}
+.btn.r{background:none;color:#ff3b30;padding:6px 10px;font-size:14px}
+.full{width:100%;margin-top:10px}
+.thumb{width:64px;height:64px;border-radius:12px;background:var(--fill) center/cover;flex:none;display:flex;align-items:center;justify-content:center;color:var(--tx2);font-size:22px}
+.thumb.round{border-radius:50%;width:76px;height:76px}
+.sw{display:flex;gap:10px;flex-wrap:wrap}
+.sw i{width:30px;height:30px;border-radius:50%;cursor:pointer;border:3px solid var(--card);box-shadow:0 0 0 1px var(--line)}
+.sw i.on{box-shadow:0 0 0 2px var(--tx)}
+.hint{font-size:13px;color:var(--tx2);margin:8px 14px}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:#1d1d1fe6;color:#fff;padding:10px 18px;border-radius:980px;font-size:14px;opacity:0;transition:.3s;z-index:50;pointer-events:none;max-width:90%}
+#toast.s{opacity:1;transform:translate(-50%,0)}
+/* portfolio */
+.pf{max-width:980px;margin:0 auto;padding:0 20px}
+.hero{text-align:center;padding:64px 0 48px}
+.av{width:132px;height:132px;border-radius:50%;margin:0 auto 24px;background:linear-gradient(135deg,var(--ac),#bf5af2) center/cover;box-shadow:0 10px 40px rgba(0,0,0,.18)}
+.hero h1{font-size:clamp(38px,9vw,72px);line-height:1.05;letter-spacing:-.03em;margin:0 0 10px;font-weight:700}
+.hero p.t{font-size:clamp(19px,4vw,28px);color:var(--tx2);margin:0 0 18px;font-weight:500}
+.hero .loc{color:var(--tx2);font-size:15px;margin-bottom:22px}
+.acts{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.pf section{padding:44px 0}
+.pf h3{font-size:clamp(28px,6vw,44px);letter-spacing:-.025em;margin:0 0 22px;font-weight:700}
+.about{font-size:clamp(18px,3.4vw,24px);line-height:1.5;color:var(--tx);max-width:760px;white-space:pre-wrap}
+.chips{display:flex;flex-wrap:wrap;gap:10px}
+.chips span{background:var(--card);padding:9px 18px;border-radius:980px;font-weight:500;font-size:16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:18px}
+.pc{background:var(--card);border-radius:22px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);display:flex;flex-direction:column}
+.pc .im{aspect-ratio:16/10;background:linear-gradient(135deg,var(--ac),#5e5ce6) center/cover;cursor:zoom-in}
+.pc .bd{padding:18px 20px 22px}
+.pc h4{margin:0 0 6px;font-size:21px;letter-spacing:-.01em}
+.pc p{margin:0;color:var(--tx2);font-size:15px}
+.pc a{display:inline-block;margin-top:12px;color:var(--ac);font-weight:600;text-decoration:none}
+.gal{columns:2 220px;column-gap:14px}
+.gal figure{margin:0 0 14px;break-inside:avoid;border-radius:18px;overflow:hidden;background:var(--card)}
+.gal img,.gal video{width:100%;display:block;cursor:zoom-in}
+.gal figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
+.foot{text-align:center;padding:50px 0 34px;color:var(--tx2);font-size:12px;letter-spacing:.18em;text-transform:uppercase}
+.foot b{color:var(--tx);font-weight:700}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:60;padding:20px}
+#lb.on{display:flex}#lb img{max-width:100%;max-height:100%;border-radius:12px}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="brand">Gamura Portfolio</div>
+  <div class="seg"><button id="tE" class="on">Edit</button><button id="tP">Preview</button></div>
+  <button class="ib" id="th" aria-label="Toggle theme">◐</button>
+</div>
+<div id="app"></div>
+<div id="lb"></div>
+<div id="toast"></div>
+<input type="file" id="fi" accept="image/*" hidden>
+<input type="file" id="fv" accept="video/*" hidden>
+<script>
+var KEY="gamura_portfolio_v1";
+var COL=["#0071e3","#30d158","#ff375f","#bf5af2","#ff9f0a","#1d1d1f"];
+var D={name:"Alex Morgan",title:"Designer & Developer",loc:"Chennai, India",email:"",bio:"Hi, I’m Alex. I design and build clean, thoughtful digital products. Tap Edit to make this portfolio yours.",avatar:"",skills:"Design, Web Development, Photography",links:[{l:"GitHub",u:""},{l:"LinkedIn",u:""}],projects:[{t:"First Project",d:"A short description of what you built and why it matters.",img:"",u:""}],certs:[{t:"Certificate Name",i:"Issuer",y:"2026",img:""}],media:[],ac:COL[0],theme:"auto"};
+var S=load(),mode="edit",pend=null;
+function load(){try{var r=localStorage.getItem(KEY);if(r)return Object.assign({},D,JSON.parse(r))}catch(e){}return JSON.parse(JSON.stringify(D))}
+function save(){try{var c=JSON.parse(JSON.stringify(S));c.media=c.media.filter(function(m){return m.src.indexOf("blob:")!==0});localStorage.setItem(KEY,JSON.stringify(c))}catch(e){toast("Storage is full. Remove some images.")}}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function $(i){return document.getElementById(i)}
+function toast(m){var t=$("toast");t.textContent=m;t.className="s";clearTimeout(toast.h);toast.h=setTimeout(function(){t.className=""},2400)}
+function url(u){u=(u||"").trim();if(!u)return"";return/^(https?:|mailto:)/i.test(u)?u:"https://"+u}
+function applyTheme(){var r=document.documentElement;if(S.theme==="auto")r.removeAttribute("data-theme");else r.setAttribute("data-theme",S.theme);r.style.setProperty("--ac",S.ac)}
+function set(k,i,f,v){if(i===null)S[k]=v;else if(f===null)S[k][i]=v;else S[k][i][f]=v;save()}
+function add(k){var n={links:{l:"",u:""},projects:{t:"",d:"",img:"",u:""},certs:{t:"",i:"",y:"",img:""}}[k];S[k].push(n);save();render()}
+function del(k,i){S[k].splice(i,1);save();render()}
+function pick(k,i,f){pend={k:k,i:i,f:f};$("fi").value="";$("fi").click()}
+function fit(file,max,cb){var fr=new FileReader();fr.onload=function(){var im=new Image();im.onload=function(){var s=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);c.getContext("2d").drawImage(im,0,0,c.width,c.height);cb(c.toDataURL("image/jpeg",.82))};im.onerror=function(){toast("Could not read that image.")};im.src=fr.result};fr.readAsDataURL(file)}
+$("fi").onchange=function(){var f=this.files[0];if(!f||!pend)return;var p=pend;fit(f,p.k==="media"?1200:1000,function(d){if(p.k==="media"){S.media.push({type:"image",src:d,cap:""})}else if(p.i===null){S[p.f]=d}else{S[p.k][p.i][p.f]=d}save();render()})};
+$("fv").onchange=function(){var f=this.files[0];if(!f)return;S.media.push({type:"video",src:URL.createObjectURL(f),cap:""});toast("Video added for this session. Use a video link to keep it.");render()};
+function addVidUrl(){var u=url($("vu").value);if(!u)return toast("Paste a video link first.");S.media.push({type:"video",src:u,cap:""});save();render()}
+function thumb(src,cls){return '<div class="thumb '+(cls||"")+'" style="'+(src?"background-image:url('"+src+"')":"")+'">'+(src?"":"＋")+'</div>'}
+function inp(k,i,f,lab,ph,val,tp){return '<div class="row"><label>'+lab+'</label><input type="'+(tp||"text")+'" placeholder="'+ph+'" value="'+esc(val)+'" oninput="set(\''+k+'\','+i+',\''+f+'\',this.value)"></div>'}
+function editor(){
+  var h='<div class="wrap">';
+  h+='<h2 class="sh" style="margin-top:6px">Profile</h2><div class="card"><div class="row"><div onclick="pick(\'avatar\',null,\'avatar\')" style="cursor:pointer">'+thumb(S.avatar,"round")+'</div><div style="flex:1"><button class="btn g" onclick="pick(\'avatar\',null,\'avatar\')">Choose photo</button>'+(S.avatar?' <button class="btn r" onclick="S.avatar=\'\';save();render()">Remove</button>':'')+'</div></div>'
+  +inp("name",null,"","Name","Your name",S.name).replace("set('name',null,'',","set('name',null,null,")
+  +inp("title",null,"","Title","What you do",S.title).replace("set('title',null,'',","set('title',null,null,")
+  +inp("loc",null,"","Location","City, Country",S.loc).replace("set('loc',null,'',","set('loc',null,null,")
+  +inp("email",null,"","Email","you@example.com",S.email,"email").replace("set('email',null,'',","set('email',null,null,")
+  +'<div class="row col"><label>About</label><textarea placeholder="Tell your story" oninput="set(\'bio\',null,null,this.value)">'+esc(S.bio)+'</textarea></div></div>';
+  h+='<h2 class="sh">Skills</h2><div class="card"><div class="row"><input style="text-align:left" placeholder="Separate with commas" value="'+esc(S.skills)+'" oninput="set(\'skills\',null,null,this.value)"></div></div>';
+  h+='<h2 class="sh">Links</h2>';
+  S.links.forEach(function(x,i){h+='<div class="card item">'+inp("links",i,"l","Label","GitHub",x.l)+inp("links",i,"u","URL","github.com/you",x.u,"url")+'<div class="row"><button class="btn r" onclick="del(\'links\','+i+')">Delete</button></div></div>'});
+  h+='<button class="btn g full" onclick="add(\'links\')">＋ Add link</button>';
+  h+='<h2 class="sh">Projects</h2>';
+  S.projects.forEach(function(x,i){h+='<div class="card item"><div class="row"><div onclick="pick(\'projects\','+i+',\'img\')" style="cursor:pointer">'+thumb(x.img)+'</div><span style="color:var(--tx2);font-size:14px">Tap to add a cover image</span></div>'+inp("projects",i,"t","Title","Project name",x.t)+'<div class="row col"><textarea style="min-height:64px" placeholder="Description" oninput="set(\'projects\','+i+',\'d\',this.value)">'+esc(x.d)+'</textarea></div>'+inp("projects",i,"u","Link","Optional",x.u,"url")+'<div class="row"><button class="btn r" onclick="del(\'projects\','+i+')">Delete</button></div></div>'});
+  h+='<button class="btn g full" onclick="add(\'projects\')">＋ Add project</button>';
+  h+='<h2 class="sh">Certificates</h2>';
+  S.certs.forEach(function(x,i){h+='<div class="card item"><div class="row"><div onclick="pick(\'certs\','+i+',\'img\')" style="cursor:pointer">'+thumb(x.img)+'</div><span style="color:var(--tx2);font-size:14px">Tap to add certificate image</span></div>'+inp("certs",i,"t","Name","Certificate",x.t)+inp("certs",i,"i","Issuer","Organisation",x.i)+inp("certs",i,"y","Year","2026",x.y)+'<div class="row"><button class="btn r" onclick="del(\'certs\','+i+')">Delete</button></div></div>'});
+  h+='<button class="btn g full" onclick="add(\'certs\')">＋ Add certificate</button>';
+  h+='<h2 class="sh">Gallery: images &amp; videos</h2>';
+  S.media.forEach(function(m,i){h+='<div class="card item"><div class="row">'+(m.type==="image"?thumb(m.src):'<div class="thumb">▶</div>')+'<input style="text-align:left" placeholder="Caption" value="'+esc(m.cap)+'" oninput="set(\'media\','+i+',\'cap\',this.value)"><button class="btn r" onclick="del(\'media\','+i+')">Delete</button></div></div>'});
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn g" style="flex:1" onclick="pick(\'media\',null,null)">＋ Image</button><button class="btn g" style="flex:1" onclick="$(\'fv\').value=\'\';$(\'fv\').click()">＋ Video file</button></div>'
+  +'<div class="card" style="margin-top:12px"><div class="row"><input style="text-align:left" id="vu" placeholder="Or paste a direct video link (.mp4)"><button class="btn" onclick="addVidUrl()">Add</button></div></div><p class="hint">Video files play during this session. Use a video link to keep a video saved.</p>';
+  h+='<h2 class="sh">Style</h2><div class="card"><div class="row"><label>Accent</label><div class="sw" style="flex:1;justify-content:flex-end">'+COL.map(function(c){return '<i class="'+(c===S.ac?"on":"")+'" style="background:'+c+'" onclick="S.ac=\''+c+'\';save();applyTheme();render()"></i>'}).join("")+'</div></div><div class="row"><label>Appearance</label><select onchange="S.theme=this.value;save();applyTheme()"><option value="auto"'+(S.theme==="auto"?" selected":"")+'>Automatic</option><option value="light"'+(S.theme==="light"?" selected":"")+'>Light</option><option value="dark"'+(S.theme==="dark"?" selected":"")+'>Dark</option></select></div></div>';
+  h+='<button class="btn full" style="padding:14px" onclick="go(\'preview\')">Preview portfolio</button><button class="btn r full" onclick="if(confirm(\'Reset everything?\')){S=JSON.parse(JSON.stringify(D));save();applyTheme();render()}">Reset all</button></div>';
+  return h}
+function preview(){
+  var sk=S.skills.split(",").map(function(s){return s.trim()}).filter(Boolean),h='<div class="pf"><div class="hero"><div class="av" style="'+(S.avatar?"background-image:url('"+S.avatar+"')":"")+'"></div><h1>'+esc(S.name||"Your Name")+'</h1>'+(S.title?'<p class="t">'+esc(S.title)+'</p>':"")+(S.loc?'<div class="loc">📍 '+esc(S.loc)+'</div>':"")+'<div class="acts">'+(S.email?'<a class="btn" href="mailto:'+esc(S.email)+'">Contact</a>':"")+S.links.filter(function(x){return x.u&&x.l}).map(function(x){return '<a class="btn g" target="_blank" rel="noopener" href="'+esc(url(x.u))+'">'+esc(x.l)+'</a>'}).join("")+'</div></div>';
+  if(S.bio)h+='<section><h3>About</h3><div class="about">'+esc(S.bio)+'</div></section>';
+  if(sk.length)h+='<section><h3>Skills</h3><div class="chips">'+sk.map(function(s){return '<span>'+esc(s)+'</span>'}).join("")+'</div></section>';
+  var P=S.projects.filter(function(x){return x.t||x.d||x.img});
+  if(P.length)h+='<section><h3>Projects</h3><div class="grid">'+P.map(function(x){return '<div class="pc"><div class="im" data-z="'+esc(x.img)+'" style="'+(x.img?"background-image:url('"+x.img+"')":"")+'"></div><div class="bd"><h4>'+esc(x.t)+'</h4><p>'+esc(x.d)+'</p>'+(x.u?'<a target="_blank" rel="noopener" href="'+esc(url(x.u))+'">View project ›</a>':"")+'</div></div>'}).join("")+'</div></section>';
+  var C=S.certs.filter(function(x){return x.t||x.img});
+  if(C.length)h+='<section><h3>Certificates</h3><div class="grid">'+C.map(function(x){return '<div class="pc"><div class="im" data-z="'+esc(x.img)+'" style="'+(x.img?"background-image:url('"+x.img+"')":"")+'"></div><div class="bd"><h4>'+esc(x.t)+'</h4><p>'+esc([x.i,x.y].filter(Boolean).join(" · "))+'</p></div></div>'}).join("")+'</div></section>';
+  if(S.media.length)h+='<section><h3>Gallery</h3><div class="gal">'+S.media.map(function(m){return '<figure>'+(m.type==="image"?'<img data-z="'+esc(m.src)+'" src="'+esc(m.src)+'" alt="'+esc(m.cap)+'">':'<video controls playsinline src="'+esc(m.src)+'"></video>')+(m.cap?'<figcaption>'+esc(m.cap)+'</figcaption>':"")+'</figure>'}).join("")+'</div></section>';
+  h+='<div class="foot">Made with <b>GAMURA</b></div></div>';return h}
+function render(){var y=window.scrollY;$("app").innerHTML=mode==="edit"?editor():preview();$("tE").className=mode==="edit"?"on":"";$("tP").className=mode==="preview"?"on":"";window.scrollTo(0,y)}
+function go(m){mode=m;render();window.scrollTo(0,0)}
+$("tE").onclick=function(){go("edit")};$("tP").onclick=function(){go("preview")};
+$("th").onclick=function(){S.theme=(S.theme==="dark"||(S.theme==="auto"&&matchMedia("(prefers-color-scheme:dark)").matches))?"light":"dark";save();applyTheme();render()};
+document.addEventListener("click",function(e){var z=e.target.getAttribute&&e.target.getAttribute("data-z");if(z){$("lb").innerHTML='<img src="'+z+'" alt="">';$("lb").className="on"}else if(e.target.id==="lb"||e.target.parentNode.id==="lb"){$("lb").className=""}});
+applyTheme();render();
+</script>
+</body>
+</html>

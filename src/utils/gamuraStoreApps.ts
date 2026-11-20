@@ -21,6 +21,8 @@ export type StoreIconKind =
   | "buysell"
   | "links"
   | "resume"
+  | "pb1"
+  | "pb2"
   | "letter";
 
 export interface StoreAppItem {
@@ -568,6 +570,42 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     version: "1.0",
     age: "3+",
     chart: "No. 1 Career",
+    dl: "Featured",
+    size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-pb1",
+    name: "PORTFOLIO BUILDER ¹ (PB¹)",
+    cat: "Portfolio",
+    tag: "Apple-style personal portfolio, showcase & gallery builder",
+    desc: "PORTFOLIO BUILDER ¹ (PB¹) lets you create an Apple-grade personal portfolio with live Edit & Preview modes, custom accent colors, photo compression for projects & certificates, an image/video masonry gallery with lightbox zoom, automatic/light/dark appearance, and one-click HTML export.",
+    url: "/pb1",
+    c1: "#0071e3",
+    c2: "#bf5af2",
+    iconKind: "pb1",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Portfolio",
+    dl: "Featured",
+    size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-pb2",
+    name: "PORTFOLIO BUILDER²(PB²)",
+    cat: "Portfolio",
+    tag: "Multi-page visual block portfolio & modular site studio",
+    desc: "PORTFOLIO BUILDER²(PB²) lets you build multi-page Apple-style portfolio websites right on the canvas: add/reorder/edit modular Hero, Text, Skills, Cards, Gallery, Links & Contact sections, manage custom pages and URL slugs, customize fonts, radius corners, accent colors & themes, and export a full multi-page site.",
+    url: "/pb2",
+    c1: "#5e5ce6",
+    c2: "#bf5af2",
+    iconKind: "pb2",
+    rating: 4.9,
+    version: "2.0",
+    age: "3+",
+    chart: "No. 2 Portfolio",
     dl: "Featured",
     size: "Web · 1 MB",
     isBuiltin: true,

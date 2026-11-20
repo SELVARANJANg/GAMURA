@@ -213,6 +213,8 @@ import GamuraMessengerPage from "./components/GamuraMessengerPage";
 import GfilesPage from "./components/GfilesPage";
 import GamuraLinksPage from "./components/GamuraLinksPage";
 import GamuraResumePage from "./components/GamuraResumePage";
+import GamuraPortfolioBuilderPage from "./components/GamuraPortfolioBuilderPage";
+import GamuraPortfolioBuilder2Page from "./components/GamuraPortfolioBuilder2Page";
 import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
@@ -8997,6 +8999,8 @@ export default function App() {
   | "gfiles"
   | "links"
   | "resume"
+  | "pb1"
+  | "pb2"
   | "privacy"
   | "terms"
   | "delete-account";
@@ -9028,6 +9032,13 @@ export default function App() {
     "resume",
     "gamura-resume",
     "resume-maker",
+    "pb1",
+    "portfolio-builder",
+    "gamura-pb1",
+    "gamura-portfolio",
+    "pb2",
+    "portfolio-builder-2",
+    "gamura-pb2",
     "cgpic",
     "cg-pic",
     "claim",
@@ -9123,6 +9134,21 @@ export default function App() {
     }
     if (lower === "resume" || lower === "gamura-resume" || lower === "resume-maker") {
       return { page: "resume", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "pb1" ||
+      lower === "portfolio-builder" ||
+      lower === "gamura-pb1" ||
+      lower === "gamura-portfolio"
+    ) {
+      return { page: "pb1", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "pb2" ||
+      lower === "portfolio-builder-2" ||
+      lower === "gamura-pb2"
+    ) {
+      return { page: "pb2", claimed: null, shortSlug: null, prefillHandle: "" };
     }
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13527,6 +13553,28 @@ ${targetContext}`;
   if (currentPage === "resume") {
     return (
       <GamuraResumePage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "pb1") {
+    return (
+      <GamuraPortfolioBuilderPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "pb2") {
+    return (
+      <GamuraPortfolioBuilder2Page
         onBackHome={() => {
           window.history.pushState({}, "", "/");
           setCurrentPage("home");
