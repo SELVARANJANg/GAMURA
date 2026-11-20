@@ -19,6 +19,8 @@ export type StoreIconKind =
   | "numbers"
   | "gfiles"
   | "buysell"
+  | "links"
+  | "resume"
   | "letter";
 
 export interface StoreAppItem {
@@ -532,6 +534,42 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     chart: "No. 1 Shopping",
     dl: "Featured",
     size: "Web · 2 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-links",
+    name: "LINKS (GAMURA LINKS)",
+    cat: "Utilities",
+    tag: "Short links, QR codes & live click insights",
+    desc: "LINKS (GAMURA LINKS) creates clean short links (gamura.vercel.app/x/...), scannable QR codes with PNG export, and real-time analytics showing weekly clicks, devices, and countries.",
+    url: "/links",
+    c1: "#0fa874",
+    c2: "#0a7d57",
+    iconKind: "links",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Links",
+    dl: "Featured",
+    size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-resume",
+    name: "RESUME MAKER (GAMURA RESUME)",
+    cat: "Productivity",
+    tag: "Live A4 resume builder, templates & PDF export",
+    desc: "RESUME MAKER (GAMURA RESUME) gives you live A4 preview as you type across Aurora, Clean, and Classic serif templates, accent color swatches, AI-style bullet sharpening, resume strength scoring, and clean PDF export.",
+    url: "/resume",
+    c1: "#10b981",
+    c2: "#047857",
+    iconKind: "resume",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Career",
+    dl: "Featured",
+    size: "Web · 1 MB",
     isBuiltin: true,
   },
 ];

@@ -19,6 +19,7 @@ import {
   QrCode,
   Copy,
   Download,
+  ImagePlus,
 } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
 import StoreAppGlyph from "./StoreAppGlyph";
@@ -83,6 +84,11 @@ export default function GamuraStoreLaunch({
   const [qrUrlInput, setQrUrlInput] = useState<string>("");
   const [qrLabel, setQrLabel] = useState<string>("Gamura Launch Store");
   const [qrColor, setQrColor] = useState<string>("#1D1D1F");
+  const [qrBgColor, setQrBgColor] = useState<string>("#FFFFFF");
+  const [qrLogoMode, setQrLogoMode] = useState<
+    "none" | "gamura" | "app" | "store" | "custom"
+  >("gamura");
+  const [qrCustomLogoUrl, setQrCustomLogoUrl] = useState<string>("");
 
   // Developer publish form state
   const [fName, setFName] = useState("");
@@ -265,6 +271,57 @@ export default function GamuraStoreLaunch({
     }
   };
 
+  const qrCenterLogoSrc = useMemo(() => {
+    if (qrLogoMode === "none") return undefined;
+    if (qrLogoMode === "custom") return qrCustomLogoUrl || undefined;
+
+    const svgToDataUrl = (svg: string) =>
+      `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+
+    if (qrLogoMode === "app") {
+      const appObj = allApps.find((a) => a.id === qrSelectedAppId);
+      if (appObj?.logoUrl && appObj.logoUrl.startsWith("/")) {
+        return appObj.logoUrl;
+      }
+      const c1 = appObj?.c1 || "#059669";
+      const c2 = appObj?.c2 || "#047857";
+      const letter = (appObj?.name || qrLabel || "G")
+        .trim()
+        .charAt(0)
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, "G");
+      return svgToDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/></linearGradient></defs><rect width="64" height="64" rx="16" fill="url(#g)"/><text x="32" y="42" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="30" font-weight="800" fill="#ffffff">${letter}</text></svg>`,
+      );
+    }
+
+    if (qrLogoMode === "store") {
+      return svgToDataUrl(
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#059669"/><path d="M22 25v-3a10 10 0 0 1 20 0v3h5a2 2 0 0 1 2 2l-2 22a3 3 0 0 1-3 3H20a3 3 0 0 1-3-3l-2-22a2 2 0 0 1 2-2h5zm4 0h12v-3a6 6 0 0 0-12 0v3z" fill="#ffffff"/></svg>`,
+      );
+    }
+
+    // Default "gamura" emblem
+    return svgToDataUrl(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="${qrColor}"/><circle cx="32" cy="32" r="20" fill="none" stroke="#ffffff" stroke-width="3.5"/><text x="32" y="41" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="26" font-weight="800" fill="#ffffff">G</text></svg>`,
+    );
+  }, [qrLogoMode, qrCustomLogoUrl, allApps, qrSelectedAppId, qrLabel, qrColor]);
+
+  const handleQrCustomLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setQrCustomLogoUrl(reader.result);
+        setQrLogoMode("custom");
+        showToast("Center logo added ✓");
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   const handleDownloadQrPng = () => {
     const canvas = document.getElementById(
       "gamura-store-qr-canvas",
@@ -278,17 +335,26 @@ export default function GamuraStoreLaunch({
     const ctx = out.getContext("2d");
     if (!ctx) return;
 
-    ctx.fillStyle = "#FFFFFF";
+    ctx.fillStyle = qrBgColor || "#FFFFFF";
     ctx.fillRect(0, 0, out.width, out.height);
     ctx.drawImage(canvas, pad, pad);
 
-    ctx.fillStyle = "#1D1D1F";
+    const isDarkBg = (() => {
+      const hex = (qrBgColor || "#FFFFFF").replace("#", "");
+      if (hex.length !== 6) return false;
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return 0.299 * r + 0.587 * g + 0.114 * b < 130;
+    })();
+
+    ctx.fillStyle = isDarkBg ? "#FFFFFF" : "#1D1D1F";
     ctx.font =
       '700 22px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif';
     ctx.textAlign = "center";
     ctx.fillText(qrLabel || "Gamura Store", out.width / 2, canvas.height + pad + 34);
 
-    ctx.fillStyle = "#6E6E73";
+    ctx.fillStyle = isDarkBg ? "rgba(255,255,255,0.72)" : "#6E6E73";
     ctx.font =
       '500 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
     const shortUrl =
@@ -1791,24 +1857,47 @@ export default function GamuraStoreLaunch({
             </div>
 
             {/* Scannable QR Preview Card */}
-            <div className="rounded-3xl bg-[#F5F5F7] border border-zinc-200/80 p-5 flex flex-col items-center gap-3">
-              <div className="p-4 rounded-2xl bg-white shadow-sm border border-black/[0.05]">
+            <div className="rounded-3xl bg-[#F5F5F7] border border-zinc-200/80 p-4 sm:p-5 flex flex-col items-center gap-3">
+              <div
+                style={{ backgroundColor: qrBgColor }}
+                className="p-4 rounded-2xl shadow-sm border border-black/[0.06] transition-colors"
+              >
                 <QRCodeSVG
                   value={qrUrlInput.trim() || resolveFullUrl("/launch")}
                   size={196}
-                  bgColor="#FFFFFF"
+                  bgColor={qrBgColor}
                   fgColor={qrColor}
-                  level="M"
+                  level={qrCenterLogoSrc ? "H" : "M"}
                   includeMargin={false}
+                  imageSettings={
+                    qrCenterLogoSrc
+                      ? {
+                          src: qrCenterLogoSrc,
+                          height: 44,
+                          width: 44,
+                          excavate: true,
+                        }
+                      : undefined
+                  }
                 />
                 <div className="hidden" aria-hidden="true">
                   <QRCodeCanvas
                     id="gamura-store-qr-canvas"
                     value={qrUrlInput.trim() || resolveFullUrl("/launch")}
                     size={512}
-                    bgColor="#FFFFFF"
+                    bgColor={qrBgColor}
                     fgColor={qrColor}
-                    level="M"
+                    level={qrCenterLogoSrc ? "H" : "M"}
+                    imageSettings={
+                      qrCenterLogoSrc
+                        ? {
+                            src: qrCenterLogoSrc,
+                            height: 112,
+                            width: 112,
+                            excavate: true,
+                          }
+                        : undefined
+                    }
                   />
                 </div>
               </div>
@@ -1822,30 +1911,156 @@ export default function GamuraStoreLaunch({
                 </div>
               </div>
 
-              {/* Ink Accent Swatches */}
-              <div className="flex items-center gap-2 pt-1">
-                <span className="text-[11px] font-semibold text-[#6E6E73]">
-                  Style:
-                </span>
-                {[
-                  { label: "Obsidian", color: "#1D1D1F" },
-                  { label: "Emerald", color: "#059669" },
-                  { label: "Cobalt", color: "#0071E3" },
-                ].map((sw) => (
-                  <button
-                    key={sw.color}
-                    type="button"
-                    onClick={() => setQrColor(sw.color)}
-                    title={sw.label}
-                    aria-label={`${sw.label} QR color`}
-                    style={{ backgroundColor: sw.color }}
-                    className={`w-6 h-6 rounded-full cursor-pointer transition-transform ${
-                      qrColor === sw.color
-                        ? "ring-2 ring-offset-2 ring-[#059669] scale-110"
-                        : "opacity-80 hover:opacity-100"
-                    }`}
-                  />
-                ))}
+              {/* QR Customization Controls: QR Color, Background Color, and Central Logo/Icon */}
+              <div className="w-full space-y-3 pt-2 border-t border-zinc-200/80 text-left">
+                {/* 1. QR Foreground Color */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E6E73]">
+                    QR Color
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { label: "Obsidian", color: "#1D1D1F" },
+                      { label: "Emerald", color: "#059669" },
+                      { label: "Cobalt", color: "#0071E3" },
+                      { label: "Violet", color: "#7C3AED" },
+                      { label: "Crimson", color: "#E11D48" },
+                    ].map((sw) => (
+                      <button
+                        key={sw.color}
+                        type="button"
+                        onClick={() => setQrColor(sw.color)}
+                        title={sw.label}
+                        aria-label={`${sw.label} QR color`}
+                        style={{ backgroundColor: sw.color }}
+                        className={`w-6 h-6 rounded-full cursor-pointer transition-transform ${
+                          qrColor.toLowerCase() === sw.color.toLowerCase()
+                            ? "ring-2 ring-offset-2 ring-[#059669] scale-110"
+                            : "opacity-85 hover:opacity-100"
+                        }`}
+                      />
+                    ))}
+                    <label
+                      title="Pick custom QR color"
+                      className="relative w-6 h-6 rounded-full border border-zinc-300 overflow-hidden cursor-pointer bg-white flex items-center justify-center"
+                    >
+                      <input
+                        type="color"
+                        value={qrColor}
+                        onChange={(e) => setQrColor(e.target.value)}
+                        aria-label="Custom QR foreground color"
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      />
+                      <span
+                        style={{ backgroundColor: qrColor }}
+                        className="w-4 h-4 rounded-full border border-black/10"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* 2. Background Color */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E6E73]">
+                    Background
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { label: "White", color: "#FFFFFF" },
+                      { label: "Silver", color: "#F5F5F7" },
+                      { label: "Mint", color: "#E2F5ED" },
+                      { label: "Ice Blue", color: "#EFF6FF" },
+                      { label: "Charcoal", color: "#111827" },
+                    ].map((bg) => (
+                      <button
+                        key={bg.color}
+                        type="button"
+                        onClick={() => setQrBgColor(bg.color)}
+                        title={bg.label}
+                        aria-label={`${bg.label} QR background color`}
+                        style={{ backgroundColor: bg.color }}
+                        className={`w-6 h-6 rounded-full border border-zinc-300 cursor-pointer transition-transform ${
+                          qrBgColor.toLowerCase() === bg.color.toLowerCase()
+                            ? "ring-2 ring-offset-2 ring-[#059669] scale-110"
+                            : "opacity-90 hover:opacity-100"
+                        }`}
+                      />
+                    ))}
+                    <label
+                      title="Pick custom QR background color"
+                      className="relative w-6 h-6 rounded-full border border-zinc-300 overflow-hidden cursor-pointer bg-white flex items-center justify-center"
+                    >
+                      <input
+                        type="color"
+                        value={qrBgColor}
+                        onChange={(e) => setQrBgColor(e.target.value)}
+                        aria-label="Custom QR background color"
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      />
+                      <span
+                        style={{ backgroundColor: qrBgColor }}
+                        className="w-4 h-4 rounded-full border border-black/15"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* 3. Central Logo / Icon */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#6E6E73]">
+                      Center Logo / Icon
+                    </span>
+                    <label className="text-[11px] font-semibold text-[#059669] hover:underline cursor-pointer inline-flex items-center gap-1">
+                      <ImagePlus size={12} />
+                      <span>Upload Logo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleQrCustomLogoFile}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {(
+                      [
+                        { id: "none", label: "None" },
+                        { id: "gamura", label: "Gamura G" },
+                        { id: "app", label: "App Icon" },
+                        { id: "store", label: "Store" },
+                      ] as const
+                    ).map((opt) => {
+                      const active = qrLogoMode === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setQrLogoMode(opt.id)}
+                          className={`py-1.5 px-2 rounded-xl text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap border ${
+                            active
+                              ? "bg-[#059669] text-white border-[#059669]"
+                              : "bg-white text-[#1D1D1F] border-zinc-200 hover:bg-zinc-100"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {qrLogoMode === "custom" && qrCustomLogoUrl && (
+                    <div className="flex items-center justify-between text-[11px] text-[#059669] font-medium pt-0.5">
+                      <span>Using custom center image ✓</span>
+                      <button
+                        type="button"
+                        onClick={() => setQrLogoMode("gamura")}
+                        className="text-[#6E6E73] hover:text-[#1D1D1F] underline cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -211,6 +211,8 @@ import GamuraCalcPage from "./components/GamuraCalcPage";
 import GamuraCameraPage from "./components/GamuraCameraPage";
 import GamuraMessengerPage from "./components/GamuraMessengerPage";
 import GfilesPage from "./components/GfilesPage";
+import GamuraLinksPage from "./components/GamuraLinksPage";
+import GamuraResumePage from "./components/GamuraResumePage";
 import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
@@ -8991,11 +8993,13 @@ export default function App() {
     | "clip"
     | "calculator"
     | "camera"
-    | "messenger"
-    | "gfiles"
-    | "privacy"
-    | "terms"
-    | "delete-account";
+  | "messenger"
+  | "gfiles"
+  | "links"
+  | "resume"
+  | "privacy"
+  | "terms"
+  | "delete-account";
 
   const reservedRouteSet = new Set([
     "",
@@ -9019,6 +9023,11 @@ export default function App() {
     "gamura-messenger",
     "gfiles",
     "gms",
+    "links",
+    "gamura-links",
+    "resume",
+    "gamura-resume",
+    "resume-maker",
     "cgpic",
     "cg-pic",
     "claim",
@@ -9102,6 +9111,18 @@ export default function App() {
     }
     if (lower === "gfiles" || lower === "gms") {
       return { page: "gfiles", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (lower === "links" || lower === "gamura-links") {
+      return { page: "links", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (lower.startsWith("x/")) {
+      const xSlug = cleanedPath.substring(2).trim();
+      if (xSlug) {
+        return { page: "links", claimed: null, shortSlug: xSlug, prefillHandle: "" };
+      }
+    }
+    if (lower === "resume" || lower === "gamura-resume" || lower === "resume-maker") {
+      return { page: "resume", claimed: null, shortSlug: null, prefillHandle: "" };
     }
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13483,6 +13504,29 @@ ${targetContext}`;
   if (currentPage === "gfiles") {
     return (
       <GfilesPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "links") {
+    return (
+      <GamuraLinksPage
+        initialSlug={shortLinkTarget}
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "resume") {
+    return (
+      <GamuraResumePage
         onBackHome={() => {
           window.history.pushState({}, "", "/");
           setCurrentPage("home");

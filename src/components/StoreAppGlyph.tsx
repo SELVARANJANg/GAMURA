@@ -14,6 +14,8 @@ import {
   Hash,
   FolderOpen,
   ShoppingBag,
+  Link2,
+  FileCheck2,
 } from "lucide-react";
 import type { StoreAppItem } from "../utils/gamuraStoreApps";
 
@@ -135,6 +137,14 @@ export default function StoreAppGlyph({
       case "buysell":
         return (
           <ShoppingBag size={iconPx} strokeWidth={2.1} className="text-white" />
+        );
+      case "links":
+        return (
+          <Link2 size={iconPx} strokeWidth={2.3} className="text-white" />
+        );
+      case "resume":
+        return (
+          <FileCheck2 size={iconPx} strokeWidth={2.1} className="text-white" />
         );
       case "messenger":
         return (
