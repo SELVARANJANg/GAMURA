@@ -6,6 +6,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Columns2,
   Copy,
   Download,
   ExternalLink,
@@ -15,6 +16,7 @@ import {
   Lock,
   MapPin,
   Menu,
+  Monitor,
   Moon,
   Palette,
   Pencil,
@@ -23,6 +25,7 @@ import {
   Redo2,
   RotateCcw,
   Share2,
+  Smartphone,
   Sun,
   Trash2,
   Undo2,
@@ -436,13 +439,18 @@ export default function GamuraPortfolioBuilder2Page({
     return "home";
   });
 
-  const [editMode, setEditMode] = useState<boolean>(() => {
+  const [viewMode, setViewMode] = useState<"edit" | "split" | "preview">(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("preview") === "1") return false;
+      if (params.get("preview") === "1") return "preview";
+      if (params.get("split") === "1") return "split";
     }
-    return true;
+    return "edit";
   });
+  const [splitDevice, setSplitDevice] = useState<"desktop" | "mobile">(
+    "desktop",
+  );
+  const editMode = viewMode !== "preview";
 
   const [sheet, setSheet] = useState<{ kind: SheetKind; blockId?: string }>({
     kind: null,
@@ -1478,19 +1486,61 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => {
-                setEditMode((v) => !v);
-                if (editMode) closeSheet();
-              }}
-              style={editMode ? { backgroundColor: accent } : undefined}
-              className={`min-h-[34px] px-3.5 rounded-full text-xs font-semibold cursor-pointer whitespace-nowrap transition-colors ${
-                editMode ? "text-white shadow-xs" : `${fillBg}`
-              }`}
+            <div
+              role="tablist"
+              aria-label="PB2 Editor View Mode"
+              className={`flex items-center p-0.5 rounded-[10px] ${fillBg}`}
             >
-              {editMode ? "Done" : "Edit"}
-            </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "edit"}
+                onClick={() => setViewMode("edit")}
+                className={`px-2.5 sm:px-3 py-1 rounded-[8px] text-xs font-semibold cursor-pointer whitespace-nowrap transition-colors ${
+                  viewMode === "edit"
+                    ? isDark
+                      ? "bg-[#1c1c1e] text-white shadow-xs"
+                      : "bg-white text-[#1d1d1f] shadow-xs"
+                    : `${tx2} hover:opacity-85`
+                }`}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "split"}
+                onClick={() => setViewMode("split")}
+                className={`px-2.5 sm:px-3 py-1 rounded-[8px] text-xs font-semibold cursor-pointer whitespace-nowrap inline-flex items-center gap-1 transition-colors ${
+                  viewMode === "split"
+                    ? isDark
+                      ? "bg-[#1c1c1e] text-white shadow-xs"
+                      : "bg-white text-[#1d1d1f] shadow-xs"
+                    : `${tx2} hover:opacity-85`
+                }`}
+              >
+                <Columns2 size={12} />
+                <span>Split</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={viewMode === "preview"}
+                onClick={() => {
+                  setViewMode("preview");
+                  closeSheet();
+                }}
+                className={`px-2.5 sm:px-3 py-1 rounded-[8px] text-xs font-semibold cursor-pointer whitespace-nowrap transition-colors ${
+                  viewMode === "preview"
+                    ? isDark
+                      ? "bg-[#1c1c1e] text-white shadow-xs"
+                      : "bg-white text-[#1d1d1f] shadow-xs"
+                    : `${tx2} hover:opacity-85`
+                }`}
+              >
+                Preview
+              </button>
+            </div>
 
             <button
               type="button"
@@ -1566,23 +1616,42 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
         </div>
       </header>
 
-      {/* Main Canvas */}
-      <main className="flex-1 w-full">
-        {editMode && (
-          <div className="flex items-center justify-center px-4 mt-3.5">
-            <button
-              type="button"
-              onClick={() => openSheet("pages")}
-              title="Manage page URLs"
-              className={`max-w-full px-4 py-1.5 rounded-full text-[13px] inline-flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity ${fillBg} ${tx2}`}
-            >
-              <Lock size={12} />
-              <span className="truncate">yoursite.com/{currentPage.s}</span>
-            </button>
-          </div>
-        )}
+      {/* Main Canvas (Single or Side-by-Side Split View) */}
+      <div
+        className={
+          viewMode === "split"
+            ? "flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-[1480px] w-full mx-auto px-3 sm:px-5 pt-4 pb-6 lg:h-[calc(100vh-56px)] lg:overflow-hidden"
+            : "flex-1 w-full"
+        }
+      >
+        <main
+          className={
+            viewMode === "split"
+              ? "w-full overflow-y-auto pr-1 pb-10 lg:h-full"
+              : "flex-1 w-full"
+          }
+        >
+          {editMode && (
+            <div className="flex items-center justify-center px-4 mt-3.5">
+              <button
+                type="button"
+                onClick={() => openSheet("pages")}
+                title="Manage page URLs"
+                className={`max-w-full px-4 py-1.5 rounded-full text-[13px] inline-flex items-center gap-1.5 cursor-pointer hover:opacity-85 transition-opacity ${fillBg} ${tx2}`}
+              >
+                <Lock size={12} />
+                <span className="truncate">yoursite.com/{currentPage.s}</span>
+              </button>
+            </div>
+          )}
 
-        <div className="max-w-[980px] mx-auto px-3 sm:px-5 pt-2">
+          <div
+            className={
+              viewMode === "split"
+                ? "w-full px-1 sm:px-2 pt-2"
+                : "max-w-[980px] mx-auto px-3 sm:px-5 pt-2"
+            }
+          >
           {currentPage.b.length === 0 ? (
             <div className={`text-center py-24 ${tx2}`}>
               This page is empty.
@@ -1715,6 +1784,111 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
           </footer>
         </div>
       </main>
+
+      {viewMode === "split" && (
+        <section
+          aria-label="Live Portfolio Preview"
+          className={`flex flex-col rounded-[22px] border ${lineCls} overflow-hidden shadow-sm min-h-[540px] lg:h-full ${bgCls}`}
+        >
+          <div
+            className={`h-11 px-3.5 border-b ${lineCls} flex items-center justify-between gap-2 shrink-0 ${
+              isDark ? "bg-[#1c1c1e]" : "bg-white"
+            }`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: accent }}
+              />
+              <span className="text-xs font-semibold truncate">
+                Live Preview · {currentPage.n} (/{currentPage.s})
+              </span>
+            </div>
+
+            <div className={`flex items-center p-0.5 rounded-lg ${fillBg}`}>
+              <button
+                type="button"
+                onClick={() => setSplitDevice("desktop")}
+                aria-label="Desktop preview width"
+                className={`px-2 py-1 rounded-md text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer ${
+                  splitDevice === "desktop"
+                    ? isDark
+                      ? "bg-[#1c1c1e] text-white shadow-xs"
+                      : "bg-white text-[#1d1d1f] shadow-xs"
+                    : tx2
+                }`}
+              >
+                <Monitor size={12} />
+                <span className="hidden sm:inline">Desktop</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSplitDevice("mobile")}
+                aria-label="Mobile preview width"
+                className={`px-2 py-1 rounded-md text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer ${
+                  splitDevice === "mobile"
+                    ? isDark
+                      ? "bg-[#1c1c1e] text-white shadow-xs"
+                      : "bg-white text-[#1d1d1f] shadow-xs"
+                    : tx2
+                }`}
+              >
+                <Smartphone size={12} />
+                <span className="hidden sm:inline">Mobile</span>
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={`flex-1 overflow-y-auto px-3 sm:px-5 py-4 mx-auto w-full transition-all ${
+              splitDevice === "mobile"
+                ? `max-w-[400px] my-3 rounded-[28px] border ${lineCls} shadow-md`
+                : "max-w-[920px]"
+            }`}
+          >
+            {/* Preview Site Top Navbar */}
+            <div
+              className={`flex items-center justify-between gap-2 pb-3 mb-4 border-b ${lineCls}`}
+            >
+              <span className="font-bold text-sm truncate">
+                {state.site.brand || "Portfolio"}
+              </span>
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                {state.pages.map((p) => (
+                  <button
+                    key={`split-nav-${p.id}`}
+                    type="button"
+                    onClick={() => navigatePage(p.s)}
+                    className={`px-2.5 py-1 rounded-full text-xs whitespace-nowrap shrink-0 cursor-pointer ${
+                      p.id === currentPage.id
+                        ? `${fillBg} font-semibold`
+                        : tx2
+                    }`}
+                  >
+                    {p.n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {currentPage.b.map((block) => (
+              <React.Fragment key={`pv-${block.id}`}>
+                {renderBlockContent(block)}
+              </React.Fragment>
+            ))}
+
+            <footer className="text-center pt-10 pb-8">
+              <div className={`text-[11px] tracking-[0.2em] uppercase ${tx2}`}>
+                Made with{" "}
+                <strong className={isDark ? "text-white" : "text-[#1d1d1f]"}>
+                  GAMURA
+                </strong>
+              </div>
+            </footer>
+          </div>
+        </section>
+      )}
+      </div>
 
       {/* Slide-Up Inspector Sheet (#sheet) */}
       {sheet.kind && (
@@ -1882,7 +2056,9 @@ function go(s,btn){document.querySelectorAll('.pg').forEach(function(e){e.classL
                       type="button"
                       onClick={() => {
                         closeSheet();
-                        setEditMode((v) => !v);
+                        setViewMode((v) =>
+                          v === "preview" ? "edit" : "preview",
+                        );
                       }}
                       className={`w-full flex items-center justify-between px-3.5 py-3 border-b ${lineCls} cursor-pointer text-left`}
                     >

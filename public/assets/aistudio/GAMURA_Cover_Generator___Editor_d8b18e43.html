@@ -1,0 +1,144 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>GAMURA Cover Generator & Editor</title>
+<style>
+:root{--bg:#e9ecf3;--pn:rgba(255,255,255,.72);--tx:#1d1d1f;--mu:#6e6e73;--ln:rgba(0,0,0,.1);--ac:#0a84ff;--in:rgba(0,0,0,.06);--sh:0 10px 40px rgba(0,0,0,.12)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#050508;--pn:rgba(30,30,34,.72);--tx:#f5f5f7;--mu:#98989d;--ln:rgba(255,255,255,.12);--in:rgba(255,255,255,.09);--sh:0 10px 40px rgba(0,0,0,.5)}}
+:root[data-theme="dark"]{--bg:#050508;--pn:rgba(30,30,34,.72);--tx:#f5f5f7;--mu:#98989d;--ln:rgba(255,255,255,.12);--in:rgba(255,255,255,.09);--sh:0 10px 40px rgba(0,0,0,.5)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{font:14px -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;color:var(--tx);background:var(--bg);overflow:hidden;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+body::before{content:"";position:fixed;inset:-20%;z-index:0;background:radial-gradient(40% 40% at 15% 25%,rgba(10,132,255,.35),transparent),radial-gradient(40% 40% at 85% 10%,rgba(255,55,95,.28),transparent),radial-gradient(45% 45% at 75% 90%,rgba(48,209,88,.25),transparent);filter:blur(30px)}
+.app{position:relative;z-index:1;height:100%;display:grid;grid-template-columns:210px 1fr 280px;grid-template-rows:56px 1fr;gap:10px;padding:10px;grid-template-areas:"top top top" "lf cv ip"}
+.glass{background:var(--pn);backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);border:1px solid var(--ln);border-radius:18px;box-shadow:var(--sh)}
+.top{grid-area:top;display:flex;align-items:center;gap:8px;padding:0 14px}
+.logo{font-weight:800;letter-spacing:.14em;font-size:13px;background:linear-gradient(90deg,#0a84ff,#ff375f);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap}
+.sp{flex:1}
+button{font:inherit;color:var(--tx);background:var(--in);border:0;border-radius:10px;padding:7px 11px;cursor:pointer;transition:.15s}
+button:hover{filter:brightness(.93)}button:active{transform:scale(.95)}
+button.pr{background:var(--ac);color:#fff;font-weight:600}button.on{background:var(--ac);color:#fff}
+.lf{grid-area:lf;overflow:auto;padding:10px}
+h4{margin:12px 0 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mu)}h4:first-child{margin-top:2px}
+.pl{display:flex;justify-content:space-between;width:100%;text-align:left;margin-bottom:4px;background:transparent;padding:8px 10px}
+.pl small{color:var(--mu)}.pl.on small{color:#fff9}
+.cv{grid-area:cv;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:18px;background:var(--in);background-image:linear-gradient(45deg,var(--in) 25%,transparent 25%,transparent 75%,var(--in) 75%),linear-gradient(45deg,var(--in) 25%,transparent 25%,transparent 75%,var(--in) 75%);background-size:20px 20px;background-position:0 0,10px 10px}
+#c{display:block;box-shadow:0 20px 60px rgba(0,0,0,.4);border-radius:4px;touch-action:none}
+.dock{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:2px;padding:6px;max-width:94%;overflow:auto}
+.dock button{background:transparent;padding:8px 12px;white-space:nowrap}.dock button:hover{background:var(--in)}.dock button.on{background:var(--ac)}
+.ip{grid-area:ip;overflow:auto;padding:14px}
+.rw{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px}.rw label{color:var(--mu);font-size:12px}
+.rw input[type=color]{width:44px;height:28px;border:0;padding:0;background:none}
+.rw input[type=number],.rw select{background:var(--in);border:0;border-radius:8px;color:var(--tx);padding:6px;width:100px}
+.rw input[type=range]{width:120px;accent-color:var(--ac)}
+textarea{width:100%;min-height:64px;background:var(--in);border:0;border-radius:10px;color:var(--tx);padding:8px;font:inherit;margin-bottom:10px;resize:vertical}
+.bt{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}.bt button{flex:1;min-width:52px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}.chip{width:40px;height:28px;border-radius:8px;cursor:pointer;border:2px solid var(--ln)}
+.menu{position:absolute;right:14px;top:58px;padding:6px;display:none;z-index:5;min-width:170px;flex-direction:column}.menu button{background:transparent;text-align:left}
+.tip{color:var(--mu);font-size:12px;line-height:1.5}
+@media(max-width:900px){.app{grid-template-columns:1fr;grid-template-rows:56px 52px 1fr 210px;grid-template-areas:"top" "lf" "cv" "ip";gap:8px;padding:8px}
+.lf{display:flex;gap:6px;overflow-x:auto;padding:8px;align-items:center}.lf h4{display:none}.pl{width:auto;white-space:nowrap;margin:0;gap:6px;flex:none}.logo{display:none}}
+</style></head><body>
+<div class="app">
+<div class="top glass"><span class="logo">GAMURA COVER</span><span class="sp"></span><button id="un">↶</button><button id="re">↷</button><button id="sf" title="Safe-zone guide">Safe zone</button><button class="pr" id="ex">Export ▾</button></div>
+<div class="menu glass" id="mn"><button data-e="png,1">PNG · 1×</button><button data-e="png,2">PNG · 2× (sharp)</button><button data-e="jpeg,1">JPG · 1×</button><button data-e="jpeg,2">JPG · 2×</button></div>
+<div class="lf glass" id="lf"></div>
+<div class="cv" id="cw"><canvas id="c"></canvas>
+<div class="dock glass"><button data-i="text">Aa Text</button><button data-i="rect">▭ Shape</button><button data-i="ellipse">◯ Circle</button><button data-i="img">🖼 Image / Logo</button><button data-i="emoji">✦ Sticker</button><button id="sn" class="on">⊹ Snap</button></div></div>
+<div class="ip glass" id="ip"></div></div>
+<input type="file" id="fi" accept="image/*" hidden><input type="file" id="fb" accept="image/*" hidden>
+<script>
+const $=s=>document.querySelector(s);
+const PL=[['Facebook','Cover',820,312],['Facebook','Post',1200,630],['Instagram','Post',1080,1080],['Instagram','Portrait',1080,1350],['Instagram','Story',1080,1920],['WhatsApp','Status',1080,1920],['WhatsApp','Profile',500,500],['LinkedIn','Banner',1584,396],['LinkedIn','Post',1200,627],['YouTube','Banner',2560,1440],['YouTube','Thumbnail',1280,720],['X','Header',1500,500],['X','Post',1600,900],['Pinterest','Pin',1000,1500],['TikTok','Cover',1080,1920],['Telegram','Channel',640,640]];
+const GR=[['#0f2027','#2c5364'],['#ff5f6d','#ffc371'],['#4a1d96','#ec4899'],['#022c22','#10b981'],['#0a84ff','#5e5ce6'],['#111111','#434343'],['#f9d423','#ff4e50'],['#ffffff','#dfe4ee'],['#00c6ff','#0072ff'],['#f5af19','#f12711']];
+const FONTS=['Helvetica Neue','Arial','Georgia','Times New Roman','Courier New','Trebuchet MS','Verdana','Impact','Palatino','Futura'];
+const EM=['🚀','⭐','💡','✅','🔥','🎯','📈','❤️','🎉','🧠','🌍','⚡','👑','💎','🎨','📸'];
+let D,sel=null,hist=[],fut=[],uid=1,K=1,drag=null,safe=false,snapOn=true,guides=[],IM={},lastT='bold';
+const cv=$('#c'),cx=cv.getContext('2d'),ob=()=>D.o.find(o=>o.id===sel);
+const mk=(t,o)=>Object.assign({id:uid++,t,x:100,y:100,w:300,h:100,r:0,fill:'#ffffff',color:'#ffffff',fs:Math.round(Math.min(D.w,D.h)*.08),ff:'Helvetica Neue',b:1,i:0,al:'center',op:1,rad:0,sh:0,ls:0,text:'Text'},o);
+function gi(s){let i=IM[s];if(!i){i=IM[s]=new Image();i.onload=redraw;i.src=s}return i}
+function rr(c,x,y,w,h,r){r=Math.max(0,Math.min(r,w/2,h/2));c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
+function wrap(c,t,mw){const out=[];t.split('\n').forEach(p=>{let l='';p.split(' ').forEach(w=>{const n=l?l+' '+w:w;if(l&&c.measureText(n).width>mw){out.push(l);l=w}else l=n});out.push(l)});return out}
+function obj(c,o){c.save();c.translate(o.x+o.w/2,o.y+o.h/2);c.rotate(o.r*Math.PI/180);c.globalAlpha=o.op;c.translate(-o.w/2,-o.h/2);const w=o.w,h=o.h;
+if(o.sh){c.shadowColor='rgba(0,0,0,.45)';c.shadowBlur=o.sh;c.shadowOffsetY=o.sh/3}
+if(o.t==='img'){const im=gi(o.src);if(im.naturalWidth){c.save();rr(c,0,0,w,h,o.rad);c.clip();const s=Math.max(w/im.width,h/im.height);c.drawImage(im,(w-im.width*s)/2,(h-im.height*s)/2,im.width*s,im.height*s);c.restore()}}
+else if(o.t!=='text'){c.fillStyle=o.fill;if(o.t==='ellipse'){c.beginPath();c.ellipse(w/2,h/2,w/2,h/2,0,0,7)}else rr(c,0,0,w,h,o.rad);c.fill()}
+if(o.t!=='img'&&o.text){c.fillStyle=o.color;c.font=`${o.i?'italic ':''}${o.b?700:400} ${o.fs}px '${o.ff}',sans-serif`;c.textBaseline='middle';c.textAlign=o.al;try{c.letterSpacing=o.ls+'px'}catch(e){}
+const pd=o.t==='text'?0:12,L=wrap(c,o.text,w-pd*2),lh=o.fs*1.2,y0=h/2-L.length*lh/2+lh/2,x=o.al==='left'?pd:o.al==='right'?w-pd:w/2;L.forEach((l,i)=>c.fillText(l,x,y0+i*lh))}
+c.restore()}
+function hp(o,k){const a=o.r*Math.PI/180,lx=k==='se'?o.w/2:0,ly=k==='se'?o.h/2:-o.h/2-34/K,cX=o.x+o.w/2,cY=o.y+o.h/2;return[cX+lx*Math.cos(a)-ly*Math.sin(a),cY+lx*Math.sin(a)+ly*Math.cos(a)]}
+function draw(c,m,ui){const W=D.w,H=D.h,B=D.bg;c.setTransform(m,0,0,m,0,0);c.clearRect(0,0,W,H);
+const im=B.src&&gi(B.src);if(im&&im.naturalWidth){const s=Math.max(W/im.width,H/im.height);c.drawImage(im,(W-im.width*s)/2,(H-im.height*s)/2,im.width*s,im.height*s);if(B.dim){c.fillStyle=`rgba(0,0,0,${B.dim})`;c.fillRect(0,0,W,H)}}
+else{const a=B.ang*Math.PI/180,L=Math.abs(W*Math.cos(a))+Math.abs(H*Math.sin(a)),dx=Math.cos(a)*L/2,dy=Math.sin(a)*L/2,g=c.createLinearGradient(W/2-dx,H/2-dy,W/2+dx,H/2+dy);g.addColorStop(0,B.a);g.addColorStop(1,B.b);c.fillStyle=g;c.fillRect(0,0,W,H)}
+D.o.forEach(o=>obj(c,o));if(!ui)return;
+c.lineWidth=2/K;const o=ob();
+if(o){c.save();c.translate(o.x+o.w/2,o.y+o.h/2);c.rotate(o.r*Math.PI/180);c.strokeStyle='#0a84ff';c.strokeRect(-o.w/2,-o.h/2,o.w,o.h);c.restore();
+[hp(o,'se'),hp(o,'rot')].forEach((p,i)=>{c.beginPath();c.arc(p[0],p[1],7/K,0,7);c.fillStyle=i?'#0a84ff':'#fff';c.fill();c.strokeStyle='#0a84ff';c.stroke()})}
+c.strokeStyle='#ff375f';guides.forEach(g=>{c.beginPath();g[0]==='v'?(c.moveTo(g[1],0),c.lineTo(g[1],H)):(c.moveTo(0,g[1]),c.lineTo(W,g[1]));c.stroke()});
+if(safe){let sw=W*.84,sh=H*.84;if(D.name==='YouTube Banner'){sw=1546;sh=423}c.setLineDash([10/K,8/K]);c.strokeStyle='#ffd60a';c.strokeRect((W-sw)/2,(H-sh)/2,sw,sh);c.setLineDash([]);c.fillStyle='#ffd60a';c.font=`${12/K}px sans-serif`;c.fillText('SAFE ZONE',(W-sw)/2+6/K,(H-sh)/2+16/K)}}
+function fit(){const w=$('#cw'),k=Math.min((w.clientWidth-30)/D.w,(w.clientHeight-(innerWidth>900?84:40))/D.h);K=Math.max(.05,k);const m=Math.min(3,Math.max(1,K*(devicePixelRatio||1)));cv.width=D.w*m;cv.height=D.h*m;cv.style.width=D.w*K+'px';cv.style.height=D.h*K+'px';cv._m=m}
+function redraw(){draw(cx,cv._m||1,true)}
+function left(){$('#lf').innerHTML='<h4>Platforms</h4>'+PL.map(p=>`<button class="pl${D.name===p[0]+' '+p[1]?' on':''}" data-p="${p[0]} ${p[1]}"><span>${p[0]} ${p[1]}</span><small>${p[2]}×${p[3]}</small></button>`).join('')}
+const row=(l,i)=>`<div class="rw"><label>${l}</label>${i}</div>`;
+function insp(){const p=$('#ip'),o=ob();
+if(!o){const B=D.bg;p.innerHTML=`<h4>Background</h4><div class="chips">${GR.map((g,i)=>`<div class="chip" data-g="${i}" style="background:linear-gradient(135deg,${g[0]},${g[1]})"></div>`).join('')}</div>${row('Color A',`<input type="color" data-b="a" value="${B.a}">`)}${row('Color B',`<input type="color" data-b="b" value="${B.b}">`)}${row('Angle',`<input type="range" data-b="ang" min="0" max="360" value="${B.ang}">`)}<div class="bt"><button data-a="bgimg">Upload photo</button>${B.src?'<button data-a="bgoff">Remove</button>':''}</div>${B.src?row('Darken',`<input type="range" data-b="dim" min="0" max=".8" step=".05" value="${B.dim}">`):''}<h4>Custom size</h4>${row('Width',`<input type="number" id="cw2" value="${D.w}">`)}${row('Height',`<input type="number" id="ch2" value="${D.h}">`)}<div class="bt"><button data-a="size">Apply size</button></div><h4>Starter layouts</h4><div class="bt"><button data-t="bold">Bold</button><button data-t="profile">Profile</button><button data-t="split">Split</button><button data-t="minimal">Minimal</button></div><p class="tip">Click any object to edit. Drag the blue dot to rotate, the white dot to resize. Pink guides show the centre. Arrow keys nudge (Shift = 10), Delete removes, Ctrl/⌘+Z undoes, Ctrl/⌘+D duplicates.</p>`;return}
+const hasT=o.t!=='img';
+p.innerHTML=`<h4>${o.t==='ellipse'?'circle':o.t}</h4>${hasT?`<textarea data-k="text" id="tx">${o.text.replace(/</g,'&lt;')}</textarea>`:''}${o.t==='rect'||o.t==='ellipse'?row('Fill',`<input type="color" data-k="fill" value="${o.fill.slice(0,7)}">`):''}${hasT?row('Text color',`<input type="color" data-k="color" value="${o.color}">`)+row('Font',`<select data-k="ff">${FONTS.map(f=>`<option${f===o.ff?' selected':''}>${f}</option>`).join('')}</select>`)+row('Size',`<input type="number" data-k="fs" value="${o.fs}" min="6" max="600">`)+row('Spacing',`<input type="range" data-k="ls" min="-5" max="40" value="${o.ls}">`)+`<div class="bt"><button data-a="b" class="${o.b?'on':''}"><b>B</b></button><button data-a="i" class="${o.i?'on':''}"><i>I</i></button><button data-a="left" class="${o.al==='left'?'on':''}">☰</button><button data-a="center" class="${o.al==='center'?'on':''}">≡</button><button data-a="right" class="${o.al==='right'?'on':''}">☷</button></div>`:''}${row('Opacity',`<input type="range" data-k="op" min=".05" max="1" step=".05" value="${o.op}">`)}${o.t!=='ellipse'?row('Corners',`<input type="range" data-k="rad" min="0" max="600" value="${o.rad}">`):''}${row('Shadow',`<input type="range" data-k="sh" min="0" max="60" value="${o.sh}">`)}${row('Rotate',`<input type="number" data-k="r" value="${o.r}">`)}<div class="bt"><button data-a="front">Front</button><button data-a="back">Back</button><button data-a="dup">Duplicate</button><button data-a="del">Delete</button></div>`}
+function all(){fit();redraw();left();insp()}
+function snap(){hist.push(JSON.stringify(D));if(hist.length>40)hist.shift();fut=[]}
+function undo(a,b){if(!a.length)return;b.push(JSON.stringify(D));D=JSON.parse(a.pop());sel=null;all()}
+function setSize(w,h,n){snap();const sx=w/D.w,sy=h/D.h,s=Math.min(sx,sy);D.o.forEach(o=>{o.x*=sx;o.w*=sx;o.y*=sy;o.h*=sy;o.fs=Math.round(o.fs*s);o.rad*=s});D.w=w;D.h=h;D.name=n||'Custom';sel=null;all()}
+function tpl(n){snap();lastT=n;const W=D.w,H=D.h,u=Math.min(W,H*2.2),T=Math.min(H*.2,W*.09),g=GR[Math.random()*GR.length|0];D.o=[];sel=null;
+if(n==='bold'){D.o=[mk('text',{x:W*.08,y:H*.26,w:W*.84,h:H*.3,fs:T,text:'YOUR BRAND',ls:3,sh:12}),mk('text',{x:W*.15,y:H*.6,w:W*.7,h:H*.12,fs:T*.35,b:0,op:.85,text:'Your tagline goes here'}),mk('rect',{x:W*.44,y:H*.8,w:W*.12,h:Math.max(6,H*.012),rad:99,fill:'#ffffff',text:''})]}
+if(n==='profile'){const s=Math.min(H*.62,W*.28);D.o=[mk('rect',{x:W*.06,y:(H-s)/2,w:s,h:s,rad:999,fill:'#ffffff40',text:'👤',fs:s*.45,sh:20}),mk('text',{x:W*.06+s+W*.04,y:H*.3,w:W*.9-s-W*.04,h:H*.22,fs:T*.8,al:'left',text:'Your Name'}),mk('text',{x:W*.06+s+W*.04,y:H*.54,w:W*.9-s-W*.04,h:H*.14,fs:T*.35,al:'left',b:0,op:.8,text:'Creator · Developer · Dreamer'})]}
+if(n==='split'){D.o=[mk('rect',{x:0,y:0,w:W*.38,h:H,fill:g[0],text:'',rad:0}),mk('text',{x:W*.42,y:H*.3,w:W*.52,h:H*.25,fs:T*.8,al:'left',text:'Big Headline'}),mk('text',{x:W*.42,y:H*.58,w:W*.52,h:H*.14,fs:T*.32,al:'left',b:0,op:.8,text:'Supporting line of text'})]}
+if(n==='minimal'){D.o=[mk('text',{x:W*.06,y:H*.62,w:W*.7,h:H*.2,fs:T*.7,al:'left',text:'Minimal Title',ls:1}),mk('rect',{x:W*.06,y:H*.58,w:W*.08,h:Math.max(5,H*.01),rad:99,fill:'#ffffff',text:''})]}
+if(n==='split'||n==='minimal'){D.bg={a:g[0],b:g[1],ang:135,src:null,dim:0}}all()}
+// pointer
+const pt=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)/r.width*D.w,(e.clientY-r.top)/r.height*D.h]};
+function inside(o,p){const a=-o.r*Math.PI/180,dx=p[0]-o.x-o.w/2,dy=p[1]-o.y-o.h/2,lx=dx*Math.cos(a)-dy*Math.sin(a),ly=dx*Math.sin(a)+dy*Math.cos(a);return Math.abs(lx)<=o.w/2&&Math.abs(ly)<=o.h/2}
+cv.addEventListener('pointerdown',e=>{const p=pt(e),o=ob(),R=18/K;let m=null;
+if(o){const s=hp(o,'se'),r=hp(o,'rot');if(Math.hypot(p[0]-s[0],p[1]-s[1])<R)m='se';else if(Math.hypot(p[0]-r[0],p[1]-r[1])<R)m='rot'}
+if(!m){const h=[...D.o].reverse().find(o=>inside(o,p));const ch=(h?h.id:null)!==sel;sel=h?h.id:null;if(h)m='mv';if(ch)insp()}
+if(m){snap();drag={m,p,a:{...ob()}};cv.setPointerCapture(e.pointerId)}redraw()});
+cv.addEventListener('pointermove',e=>{if(!drag)return;const o=ob(),p=pt(e),a=drag.a;guides=[];
+if(drag.m==='mv'){o.x=a.x+p[0]-drag.p[0];o.y=a.y+p[1]-drag.p[1];if(snapOn){const t=8/K;if(Math.abs(o.x+o.w/2-D.w/2)<t){o.x=D.w/2-o.w/2;guides.push(['v',D.w/2])}if(Math.abs(o.y+o.h/2-D.h/2)<t){o.y=D.h/2-o.h/2;guides.push(['h',D.h/2])}}o.x=Math.round(o.x);o.y=Math.round(o.y)}
+else if(drag.m==='se'){const r=a.r*Math.PI/180,dx=p[0]-drag.p[0],dy=p[1]-drag.p[1],lx=dx*Math.cos(r)+dy*Math.sin(r),ly=-dx*Math.sin(r)+dy*Math.cos(r);o.w=Math.max(16,Math.round(a.w+lx));o.h=Math.max(8,Math.round(a.h+ly));const ccx=a.x+a.w/2+(o.w-a.w)/2*Math.cos(r)-(o.h-a.h)/2*Math.sin(r),ccy=a.y+a.h/2+(o.w-a.w)/2*Math.sin(r)+(o.h-a.h)/2*Math.cos(r);o.x=Math.round(ccx-o.w/2);o.y=Math.round(ccy-o.h/2)}
+else{let d=Math.atan2(p[1]-(o.y+o.h/2),p[0]-(o.x+o.w/2))*180/Math.PI+90;if(snapOn){const q=Math.round(d/45)*45;if(Math.abs(d-q)<5)d=q}o.r=Math.round(d)}
+redraw()});
+addEventListener('pointerup',()=>{if(drag){drag=null;guides=[];redraw();if(!document.activeElement||document.activeElement.tagName==='BODY')insp()}});
+cv.addEventListener('dblclick',()=>{const t=$('#tx');t&&(t.focus(),t.select())});
+// inspector
+const ipE=$('#ip');ipE.addEventListener('focusin',e=>{if(e.target.dataset.k||e.target.dataset.b)snap()});
+ipE.addEventListener('input',e=>{const t=e.target,v=(t.type==='range'||t.type==='number')?+t.value:t.value;if(t.dataset.b){D.bg[t.dataset.b]=v;redraw()}else if(t.dataset.k){const o=ob();if(o){o[t.dataset.k]=v;redraw()}}});
+ipE.addEventListener('click',e=>{const t=e.target.closest('[data-a],[data-g],[data-t]'),o=ob();if(!t)return;
+if(t.dataset.g){snap();const g=GR[t.dataset.g];Object.assign(D.bg,{a:g[0],b:g[1],src:null});all();return}
+if(t.dataset.t){tpl(t.dataset.t);return}const a=t.dataset.a;
+if(a==='bgimg'){$('#fb').click();return}if(a==='bgoff'){snap();D.bg.src=null;all();return}
+if(a==='size'){const w=Math.min(4000,Math.max(100,+$('#cw2').value||D.w)),h=Math.min(4000,Math.max(100,+$('#ch2').value||D.h));setSize(w,h);return}
+snap();if(a==='b')o.b=+!o.b;if(a==='i')o.i=+!o.i;if(['left','center','right'].includes(a))o.al=a;
+if(a==='front'){D.o.splice(D.o.indexOf(o),1);D.o.push(o)}if(a==='back'){D.o.splice(D.o.indexOf(o),1);D.o.unshift(o)}
+if(a==='dup'){const c={...o,id:uid++,x:o.x+24,y:o.y+24};D.o.push(c);sel=c.id}if(a==='del'){D.o.splice(D.o.indexOf(o),1);sel=null}all()});
+$('#lf').addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(!b)return;const p=PL.find(x=>x[0]+' '+x[1]===b.dataset.p);setSize(p[2],p[3],b.dataset.p)});
+// insert
+function add(t,x){snap();const o=mk(t,x);D.o.push(o);sel=o.id;all()}
+$('.dock').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.id==='sn'){snapOn=!snapOn;b.classList.toggle('on',snapOn);return}const i=b.dataset.i,W=D.w,H=D.h,s=Math.min(W,H);
+if(i==='text')add('text',{x:W*.25,y:H*.4,w:W*.5,h:s*.14,text:'New text'});
+if(i==='rect')add('rect',{x:W*.35,y:H*.3,w:W*.3,h:H*.4,rad:s*.05,fill:'#ff375f',text:''});
+if(i==='ellipse')add('ellipse',{x:W*.4,y:H*.25,w:s*.4,h:s*.4,fill:'#0a84ff',text:''});
+if(i==='img')$('#fi').click();if(i==='emoji')add('text',{x:W/2-s*.15,y:H/2-s*.15,w:s*.3,h:s*.3,fs:Math.round(s*.2),text:EM[Math.random()*EM.length|0]})});
+function rd(f,cb){const r=new FileReader();r.onload=()=>cb(r.result);r.readAsDataURL(f)}
+$('#fi').onchange=e=>{const f=e.target.files[0];if(f)rd(f,s=>{const im=new Image();im.onload=()=>{const w=Math.min(D.w*.4,im.width),h=w*im.height/im.width;add('img',{src:s,w,h,x:(D.w-w)/2,y:(D.h-h)/2,rad:0})};im.src=s});e.target.value=''};
+$('#fb').onchange=e=>{const f=e.target.files[0];if(f)rd(f,s=>{snap();D.bg.src=s;D.bg.dim=.2;all()});e.target.value=''};
+$('#un').onclick=()=>undo(hist,fut);$('#re').onclick=()=>undo(fut,hist);
+$('#sf').onclick=e=>{safe=!safe;e.target.classList.toggle('on',safe);redraw()};
+addEventListener('keydown',e=>{const tg=e.target.tagName;if(tg==='INPUT'||tg==='TEXTAREA'||tg==='SELECT')return;const mc=e.metaKey||e.ctrlKey;
+if(mc&&e.key==='z'){e.preventDefault();e.shiftKey?undo(fut,hist):undo(hist,fut);return}const o=ob();if(!o)return;
+if(mc&&e.key==='d'){e.preventDefault();snap();const c={...o,id:uid++,x:o.x+24,y:o.y+24};D.o.push(c);sel=c.id;all();return}
+if(e.key==='Delete'||e.key==='Backspace'){snap();D.o.splice(D.o.indexOf(o),1);sel=null;all()}
+const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(d){e.preventDefault();const n=e.shiftKey?10:1;o.x+=d[0]*n;o.y+=d[1]*n;redraw()}});
+// export
+$('#ex').onclick=e=>{e.stopPropagation();const m=$('#mn');m.style.display=m.style.display==='flex'?'none':'flex'};addEventListener('click',()=>$('#mn').style.display='none');
+$('#mn').onclick=e=>{const v=e.target.dataset.e;if(!v)return;const [f,m]=v.split(','),M=+m,c=document.createElement('canvas');c.width=D.w*M;c.height=D.h*M;const x=c.getContext('2d');
+if(f==='jpeg'){x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height)}draw(x,M,false);
+c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`gamura-${D.name.toLowerCase().replace(/\s+/g,'-')}-${D.w*M}x${D.h*M}.${f==='jpeg'?'jpg':'png'}`;a.click()},'image/'+f,.93)};
+addEventListener('resize',()=>{fit();redraw()});
+D={w:820,h:312,name:'Facebook Cover',bg:{a:'#0f2027',b:'#2c5364',ang:135,src:null,dim:0},o:[]};tpl('bold');hist=[];setTimeout(()=>{fit();redraw()},80);
+</script></body></html>

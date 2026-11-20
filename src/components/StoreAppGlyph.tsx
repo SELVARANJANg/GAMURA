@@ -16,6 +16,9 @@ import {
   ShoppingBag,
   Link2,
   FileCheck2,
+  Presentation,
+  LayoutTemplate,
+  HeartPulse,
 } from "lucide-react";
 import type { StoreAppItem } from "../utils/gamuraStoreApps";
 
@@ -161,6 +164,30 @@ export default function StoreAppGlyph({
               PB<sup className="text-[0.6em] font-bold ml-0.5">2</sup>
             </span>
           </div>
+        );
+      case "pptcred":
+        return (
+          <Presentation
+            size={iconPx}
+            strokeWidth={2.1}
+            className="text-white"
+          />
+        );
+      case "covergened":
+        return (
+          <LayoutTemplate
+            size={iconPx}
+            strokeWidth={2.1}
+            className="text-white"
+          />
+        );
+      case "lifeline":
+        return (
+          <HeartPulse
+            size={iconPx}
+            strokeWidth={2.2}
+            className="text-white"
+          />
         );
       case "messenger":
         return (

@@ -29,6 +29,7 @@
     "octokit": "^5.0.5",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.5.438",
+    "pptxgenjs": "^4.0.1",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -215,6 +215,9 @@ import GamuraLinksPage from "./components/GamuraLinksPage";
 import GamuraResumePage from "./components/GamuraResumePage";
 import GamuraPortfolioBuilderPage from "./components/GamuraPortfolioBuilderPage";
 import GamuraPortfolioBuilder2Page from "./components/GamuraPortfolioBuilder2Page";
+import GamuraPptCredPage from "./components/GamuraPptCredPage";
+import GamuraCoverGenedPage from "./components/GamuraCoverGenedPage";
+import GamuraLifelinePage from "./components/GamuraLifelinePage";
 import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
@@ -9001,6 +9004,9 @@ export default function App() {
   | "resume"
   | "pb1"
   | "pb2"
+  | "ppt-cred"
+  | "cover-gened"
+  | "glifeline"
   | "privacy"
   | "terms"
   | "delete-account";
@@ -9039,6 +9045,19 @@ export default function App() {
     "pb2",
     "portfolio-builder-2",
     "gamura-pb2",
+    "ppt-cred",
+    "pptcred",
+    "ppt",
+    "gamura-ppt",
+    "gamura-ppt-cred",
+    "cover-gened",
+    "covergened",
+    "cover",
+    "gamura-cover",
+    "glifeline",
+    "lifeline",
+    "gamura-lifeline",
+    "g-lifeline",
     "cgpic",
     "cg-pic",
     "claim",
@@ -9149,6 +9168,31 @@ export default function App() {
       lower === "gamura-pb2"
     ) {
       return { page: "pb2", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "ppt-cred" ||
+      lower === "pptcred" ||
+      lower === "ppt" ||
+      lower === "gamura-ppt" ||
+      lower === "gamura-ppt-cred"
+    ) {
+      return { page: "ppt-cred", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "cover-gened" ||
+      lower === "covergened" ||
+      lower === "cover" ||
+      lower === "gamura-cover"
+    ) {
+      return { page: "cover-gened", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "glifeline" ||
+      lower === "lifeline" ||
+      lower === "gamura-lifeline" ||
+      lower === "g-lifeline"
+    ) {
+      return { page: "glifeline", claimed: null, shortSlug: null, prefillHandle: "" };
     }
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13575,6 +13619,39 @@ ${targetContext}`;
   if (currentPage === "pb2") {
     return (
       <GamuraPortfolioBuilder2Page
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "ppt-cred") {
+    return (
+      <GamuraPptCredPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "cover-gened") {
+    return (
+      <GamuraCoverGenedPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "glifeline") {
+    return (
+      <GamuraLifelinePage
         onBackHome={() => {
           window.history.pushState({}, "", "/");
           setCurrentPage("home");

@@ -23,6 +23,9 @@ export type StoreIconKind =
   | "resume"
   | "pb1"
   | "pb2"
+  | "pptcred"
+  | "covergened"
+  | "lifeline"
   | "letter";
 
 export interface StoreAppItem {
@@ -606,6 +609,60 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     version: "2.0",
     age: "3+",
     chart: "No. 2 Portfolio",
+    dl: "Featured",
+    size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-ppt-cred",
+    name: "PPT CRED",
+    cat: "Productivity",
+    tag: "GAMURA PPT Creator & Editor · Slides, themes & .pptx export",
+    desc: "PPT CRED (GAMURA PPT Creator & Editor) lets you design 16:9 presentations right in the browser with glassmorphic stage controls, drag/resize/rotate objects, inline text editing, curated slide themes, layouts, grid snap, fullscreen presenter mode, JSON project save/load, and native .pptx export.",
+    url: "/ppt-cred",
+    c1: "#10b981",
+    c2: "#0a84ff",
+    iconKind: "pptcred",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Slides",
+    dl: "Featured",
+    size: "Web · 2 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-cover-gened",
+    name: "COVER GENED",
+    cat: "Creative",
+    tag: "GAMURA Cover Generator & Editor · 16 social sizes & 2× PNG/JPG",
+    desc: "COVER GENED (GAMURA Cover Generator & Editor) designs banners, thumbnails, posts, and covers for Facebook, Instagram, YouTube, LinkedIn, X, WhatsApp, TikTok & Pinterest with live high-DPI canvas editing, gradients & photos, safe-zone & snap center guides, starter templates, and crisp 1×/2× PNG/JPG export.",
+    url: "/cover-gened",
+    c1: "#0a84ff",
+    c2: "#ff375f",
+    iconKind: "covergened",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Design",
+    dl: "Featured",
+    size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-lifeline",
+    name: "Glifeline (GAMURA LIFELINE)",
+    cat: "Health & Safety",
+    tag: "One-tap SOS, emergency medical card, CPR metronome & numbers",
+    desc: "Glifeline (GAMURA LIFELINE) is your offline-ready emergency & safety companion: one-tap pulsing SOS with flashing rescue screen, local Emergency Medical Card, interactive 110 BPM CPR metronome, First Aid step-by-step guides, GPS location sharing, and tap-to-call international emergency numbers.",
+    url: "/glifeline",
+    c1: "#ff3b30",
+    c2: "#c4170d",
+    iconKind: "lifeline",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Safety",
     dl: "Featured",
     size: "Web · 1 MB",
     isBuiltin: true,

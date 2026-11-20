@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gamura Lifeline</title>
+<style>
+:root{box-sizing:border-box;--bg:#f2f2f7;--card:#fff;--tx:#1c1c1e;--sub:#6e6e73;--line:#e5e5ea;--em:#10b981;--red:#ff3b30;--glass:rgba(255,255,255,.78);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--card:#1c1c1e;--tx:#f5f5f7;--sub:#98989f;--line:#2c2c2e;--glass:rgba(28,28,30,.78)}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Inter","Segoe UI",Roboto,sans-serif}
+body{max-width:520px;margin:0 auto;padding:18px 16px 110px}
+h1{font-size:32px;letter-spacing:-.6px;margin:8px 0 2px}
+.sub{color:var(--sub);font-size:14px;margin:0 0 18px}
+.card{background:var(--card);border-radius:20px;padding:16px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.sos{width:210px;height:210px;border-radius:50%;border:0;margin:14px auto 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 30% 25%,#ff6b61,var(--red) 60%,#c4170d);color:#fff;font-size:44px;font-weight:800;letter-spacing:1px;box-shadow:0 14px 40px rgba(255,59,48,.45);animation:pu 2.4s infinite}
+.sos small{font-size:13px;font-weight:500;opacity:.9;letter-spacing:0}
+@keyframes pu{50%{box-shadow:0 14px 60px rgba(255,59,48,.7);transform:scale(1.025)}}
+.btn{display:block;width:100%;border:0;border-radius:14px;padding:14px;font-size:16px;font-weight:600;background:var(--em);color:#fff;text-align:center;text-decoration:none;margin-top:10px}
+.btn.g{background:var(--bg);color:var(--tx)}.btn.r{background:var(--red)}
+label{display:block;font-size:12px;color:var(--sub);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.5px}
+input,select,textarea{width:100%;border:1px solid var(--line);background:var(--bg);color:var(--tx);border-radius:12px;padding:12px;font-size:16px;font-family:inherit}
+.row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);font-size:16px}
+.row:last-child{border:0}.row b{color:var(--em);font-size:20px}
+.pill{display:inline-block;background:rgba(16,185,129,.14);color:var(--em);border-radius:99px;padding:4px 10px;font-size:12px;font-weight:600}
+details{border-bottom:1px solid var(--line);padding:12px 0}details:last-child{border:0}
+summary{font-weight:600;font-size:17px;cursor:pointer;list-style:none}
+ol{padding-left:20px;margin:10px 0 0;color:var(--tx);line-height:1.5;font-size:15px}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;padding:8px 12px calc(10px + env(safe-area-inset-bottom,0px));background:var(--glass);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border-top:1px solid var(--line)}
+nav div{display:flex;width:100%;max-width:520px}
+nav button{flex:1;border:0;background:none;color:var(--sub);font-size:11px;padding:6px 0;font-weight:600}
+nav button span{display:block;font-size:22px;margin-bottom:2px}nav button.on{color:var(--em)}
+.hide{display:none}
+#ov{position:fixed;inset:0;z-index:50;display:none;flex-direction:column;justify-content:center;padding:24px;color:#fff;text-align:center;animation:fl 1s infinite;overflow:auto}
+@keyframes fl{0%,100%{background:#c4170d}50%{background:#ff3b30}}
+#ov h2{font-size:42px;margin:0 0 6px}#ov .info{background:rgba(0,0,0,.25);border-radius:18px;padding:14px;margin:14px 0;text-align:left;font-size:17px;line-height:1.5}
+.beat{width:130px;height:130px;border-radius:50%;margin:10px auto;background:var(--em);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:22px}
+.beat.b{animation:bt .545s infinite}@keyframes bt{0%{transform:scale(1.15)}100%{transform:scale(1)}}
+.note{font-size:12px;color:var(--sub);text-align:center;margin-top:16px;line-height:1.4}
+</style></head><body>
+
+<section id="v-sos">
+<h1>Lifeline</h1><p class="sub">Help, ready in one tap. Works offline. Your data stays on this device.</p>
+<button class="sos" onclick="sos()">SOS<small>Tap in an emergency</small></button>
+<div class="card"><label style="margin-top:0">Your country</label><select id="cty" onchange="setC()"></select>
+<a id="callBtn" class="btn r" href="tel:112">Call emergency</a>
+<button class="btn g" onclick="shareLoc()">📍 Share my location</button><p id="locMsg" class="sub" style="margin:8px 0 0"></p></div>
+</section>
+
+<section id="v-card" class="hide">
+<h1>Emergency Card</h1><p class="sub">Shown on the SOS screen so helpers know what to do.</p>
+<div class="card">
+<label style="margin-top:0">Full name</label><input id="n" placeholder="Your name">
+<label>Blood group</label><select id="bg"><option value="">—</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select>
+<label>Allergies / conditions / medicines</label><textarea id="md" rows="3" placeholder="e.g. Penicillin allergy"></textarea>
+<label>Emergency contact name</label><input id="cn">
+<label>Emergency contact phone</label><input id="cp" type="tel" inputmode="tel" placeholder="+91 …">
+<button class="btn" onclick="save()">Save card</button><p id="sv" class="sub" style="text-align:center;margin:8px 0 0"></p></div>
+</section>
+
+<section id="v-aid" class="hide">
+<h1>First Aid</h1><p class="sub">Quick steps. Call emergency services first.</p>
+<div class="card">
+<details><summary>❤️ CPR (adult)</summary>
+<div class="beat" id="bt" onclick="metro()">Start beat</div>
+<ol><li>Check the scene is safe, shout for help, call emergency services.</li><li>Place the heel of your hand on the centre of the chest, other hand on top.</li><li>Push hard and fast, about 5–6 cm deep, 100–120 times per minute (follow the beat).</li><li>Let the chest rise fully between pushes.</li><li>Use an AED as soon as one arrives. Continue until help takes over.</li></ol></details>
+<details><summary>🫁 Choking (adult)</summary><ol><li>Ask “Are you choking?” If they cannot cough, speak or breathe, act.</li><li>Give up to 5 firm back blows between the shoulder blades.</li><li>Then up to 5 abdominal thrusts (inward and upward above the navel).</li><li>Alternate until the object clears or they collapse. Then call emergency and start CPR.</li></ol></details>
+<details><summary>🩸 Severe bleeding</summary><ol><li>Call emergency services.</li><li>Press firmly on the wound with a clean cloth. Do not remove it if soaked; add more on top.</li><li>Keep pressure on and raise the injured limb if possible.</li><li>Keep the person lying down and warm until help arrives.</li></ol></details>
+<details><summary>🔥 Burns</summary><ol><li>Cool the burn under cool running water for 20 minutes.</li><li>Remove rings or tight items before swelling starts, unless stuck to skin.</li><li>Cover loosely with clean cling film or a non-fluffy cloth.</li><li>No ice, butter or creams. Seek urgent care for large, deep or facial burns.</li></ol></details>
+<details><summary>🧠 Stroke signs (FAST)</summary><ol><li><b>F</b>ace drooping on one side.</li><li><b>A</b>rm weakness, cannot raise both.</li><li><b>S</b>peech slurred or confused.</li><li><b>T</b>ime: call emergency immediately and note when symptoms began.</li></ol></details>
+</div></section>
+
+<section id="v-num" class="hide">
+<h1>Numbers</h1><p class="sub">Emergency numbers by country. Tap to call.</p>
+<div class="card" id="nums"></div>
+<p class="note">Numbers can change. Verify for your location. 112 works on most mobile networks worldwide.</p>
+</section>
+
+<div id="ov"><h2>🆘 I NEED HELP</h2><div class="info" id="ovi"></div>
+<a id="ovc" class="btn" style="background:#fff;color:#c4170d" href="tel:112">Call emergency</a>
+<button class="btn g" onclick="shareLoc()">📍 Share my location</button>
+<button class="btn" style="background:rgba(0,0,0,.35)" onclick="document.getElementById('ov').style.display='none'">Close</button></div>
+
+<nav><div>
+<button class="on" onclick="tab('sos',this)"><span>🆘</span>SOS</button>
+<button onclick="tab('card',this)"><span>🪪</span>Card</button>
+<button onclick="tab('aid',this)"><span>🩹</span>First Aid</button>
+<button onclick="tab('num',this)"><span>📞</span>Numbers</button></div></nav>
+
+<script>
+var C=[["India","112"],["United States / Canada","911"],["United Kingdom","999"],["European Union","112"],["Australia","000"],["New Zealand","111"],["Japan (ambulance/fire)","119"],["Japan (police)","110"],["UAE","999"],["Singapore (ambulance)","995"],["Singapore (police)","999"],["Brazil (ambulance)","192"],["South Africa (mobile)","112"],["Other / Worldwide","112"]];
+var cur="112",ST={};
+function g(k){try{return localStorage.getItem(k)}catch(e){return ST[k]}}
+function s(k,v){try{localStorage.setItem(k,v)}catch(e){ST[k]=v}}
+function $(i){return document.getElementById(i)}
+function tab(n,b){["sos","card","aid","num"].forEach(function(x){$("v-"+x).className=x==n?"":"hide"});
+document.querySelectorAll("nav button").forEach(function(x){x.className=""});b.className="on";window.scrollTo(0,0)}
+function init(){var h="",o="";C.forEach(function(c,i){h+='<option value="'+i+'">'+c[0]+' — '+c[1]+'</option>';
+o+='<div class="row"><span>'+c[0]+'</span><a href="tel:'+c[1]+'" style="text-decoration:none"><b>'+c[1]+'</b></a></div>'});
+$("cty").innerHTML=h;$("nums").innerHTML=o;var i=g("gl_c");if(i!==null&&C[i])$("cty").value=i;setC();
+var d=g("gl_card");if(d){try{d=JSON.parse(d);$("n").value=d.n||"";$("bg").value=d.bg||"";$("md").value=d.md||"";$("cn").value=d.cn||"";$("cp").value=d.cp||""}catch(e){}}}
+function setC(){var i=$("cty").value;s("gl_c",i);cur=C[i][1];$("callBtn").href="tel:"+cur;$("callBtn").textContent="Call "+cur;$("ovc").href="tel:"+cur;$("ovc").textContent="Call "+cur}
+function save(){s("gl_card",JSON.stringify({n:$("n").value,bg:$("bg").value,md:$("md").value,cn:$("cn").value,cp:$("cp").value}));$("sv").textContent="Saved on this device ✓"}
+function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML}
+function sos(){var d={};try{d=JSON.parse(g("gl_card")||"{}")}catch(e){}
+var h="";if(d.n)h+="<b>Name:</b> "+esc(d.n)+"<br>";if(d.bg)h+="<b>Blood:</b> "+esc(d.bg)+"<br>";if(d.md)h+="<b>Medical:</b> "+esc(d.md)+"<br>";
+if(d.cn||d.cp)h+="<b>Contact:</b> "+esc(d.cn||"")+' <a style="color:#fff" href="tel:'+esc(d.cp||"")+'">'+esc(d.cp||"")+"</a>";
+$("ovi").innerHTML=h||"Fill your Emergency Card so helpers can see your details here.";$("ov").style.display="flex";
+if(navigator.vibrate)navigator.vibrate([300,150,300])}
+function shareLoc(){var m=$("locMsg");m.textContent="Getting location…";
+if(!navigator.geolocation){m.textContent="Location not available on this device.";return}
+navigator.geolocation.getCurrentPosition(function(p){var u="https://maps.google.com/?q="+p.coords.latitude+","+p.coords.longitude;
+var t="I need help. My location: "+u;
+if(navigator.share){navigator.share({text:t}).catch(function(){})}
+else if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){m.textContent="Location message copied. Paste it to a contact."})}
+m.textContent=u},function(){m.textContent="Could not get location. Allow location access."},{enableHighAccuracy:true,timeout:10000})}
+var mi=null,ac=null;
+function metro(){var b=$("bt");if(mi){clearInterval(mi);mi=null;b.className="beat";b.textContent="Start beat";return}
+try{ac=ac||new (window.AudioContext||window.webkitAudioContext)()}catch(e){}
+b.className="beat b";b.textContent="Push!";
+function tick(){if(!ac)return;var o=ac.createOscillator(),gn=ac.createGain();o.frequency.value=880;gn.gain.value=.25;o.connect(gn);gn.connect(ac.destination);o.start();o.stop(ac.currentTime+.06)}
+tick();mi=setInterval(tick,545)}
+init();
+</script></body></html>

@@ -2,16 +2,19 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
+  Columns2,
   Copy,
   Download,
   ExternalLink,
   Image as ImageIcon,
   MapPin,
+  Monitor,
   Moon,
   Plus,
   QrCode,
   RotateCcw,
   Share2,
+  Smartphone,
   Sun,
   Trash2,
   Video,
@@ -209,17 +212,21 @@ export default function GamuraPortfolioBuilderPage({
       ? window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false
       : false,
   );
-  const [mode, setMode] = useState<"edit" | "preview">(() => {
+  const [mode, setMode] = useState<"edit" | "split" | "preview">(() => {
     if (typeof window !== "undefined") {
       try {
         const sp = new URLSearchParams(window.location.search);
         if (sp.get("preview") === "1") return "preview";
+        if (sp.get("split") === "1") return "split";
       } catch {
         // ignore
       }
     }
     return "edit";
   });
+  const [splitDevice, setSplitDevice] = useState<"desktop" | "mobile">(
+    "desktop",
+  );
   const [videoUrlDraft, setVideoUrlDraft] = useState("");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
@@ -717,7 +724,7 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
             </div>
           </div>
 
-          {/* Center: Edit / Preview Apple Segmented Control */}
+          {/* Center: Edit / Split / Preview Apple Segmented Control */}
           <div
             role="tablist"
             aria-label="Portfolio Builder mode"
@@ -731,7 +738,7 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
                 setMode("edit");
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className={`px-4 py-1.5 rounded-[8px] text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-[8px] text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 mode === "edit"
                   ? isDark
                     ? "bg-[#1c1c1e] text-white shadow-sm"
@@ -744,12 +751,31 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
             <button
               type="button"
               role="tab"
+              aria-selected={mode === "split"}
+              onClick={() => {
+                setMode("split");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`px-3 sm:px-3.5 py-1.5 rounded-[8px] text-xs font-semibold transition-all cursor-pointer whitespace-nowrap inline-flex items-center gap-1 ${
+                mode === "split"
+                  ? isDark
+                    ? "bg-[#1c1c1e] text-white shadow-sm"
+                    : "bg-white text-[#1d1d1f] shadow-sm"
+                  : `${tx2} hover:opacity-85`
+              }`}
+            >
+              <Columns2 size={12} />
+              <span>Split</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
               aria-selected={mode === "preview"}
               onClick={() => {
                 setMode("preview");
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className={`px-4 py-1.5 rounded-[8px] text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-[8px] text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 mode === "preview"
                   ? isDark
                     ? "bg-[#1c1c1e] text-white shadow-sm"
@@ -815,8 +841,21 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
       </header>
 
       {/* Main Mode Workspace */}
-      {mode === "edit" ? (
-        <main className="w-full max-w-[720px] mx-auto px-4 pt-5 pb-16">
+      <div
+        className={
+          mode === "split"
+            ? "flex-1 grid grid-cols-1 lg:grid-cols-[minmax(360px,480px)_minmax(0,1fr)] gap-4 max-w-[1440px] w-full mx-auto px-3 sm:px-5 pt-4 pb-6 lg:h-[calc(100vh-56px)] lg:overflow-hidden"
+            : "flex-1 w-full"
+        }
+      >
+        {(mode === "edit" || mode === "split") && (
+          <main
+            className={
+              mode === "split"
+                ? `w-full overflow-y-auto pr-1 pb-10 lg:h-full`
+                : "w-full max-w-[720px] mx-auto px-4 pt-5 pb-16"
+            }
+          >
           {/* PROFILE */}
           <h2
             className={`text-[13px] uppercase tracking-[0.5px] font-semibold mx-3.5 mt-1 mb-2 ${tx2}`}
@@ -1523,10 +1562,79 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
             <RotateCcw size={14} />
             <span>Reset all</span>
           </button>
-        </main>
-      ) : (
-        /* PREVIEW MODE */
-        <main className="w-full max-w-[980px] mx-auto px-5">
+          </main>
+        )}
+
+        {(mode === "preview" || mode === "split") && (
+          <section
+            aria-label="Live Portfolio Preview"
+            className={
+              mode === "split"
+                ? `flex flex-col rounded-[22px] border ${borderLine} overflow-hidden shadow-sm min-h-[540px] lg:h-full ${pageBg}`
+                : "w-full"
+            }
+          >
+            {mode === "split" && (
+              <div
+                className={`h-11 px-3.5 border-b ${borderLine} flex items-center justify-between gap-2 shrink-0 ${
+                  isDark ? "bg-[#1c1c1e]" : "bg-white"
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: state.ac || "#0071e3" }}
+                  />
+                  <span className="text-xs font-semibold truncate">
+                    Live Preview · {state.name || "Portfolio"}
+                  </span>
+                </div>
+                <div className={`flex items-center p-0.5 rounded-lg ${fillBg}`}>
+                  <button
+                    type="button"
+                    onClick={() => setSplitDevice("desktop")}
+                    aria-label="Desktop preview width"
+                    className={`px-2 py-1 rounded-md text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer ${
+                      splitDevice === "desktop"
+                        ? isDark
+                          ? "bg-[#1c1c1e] text-white shadow-xs"
+                          : "bg-white text-[#1d1d1f] shadow-xs"
+                        : tx2
+                    }`}
+                  >
+                    <Monitor size={12} />
+                    <span className="hidden sm:inline">Desktop</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSplitDevice("mobile")}
+                    aria-label="Mobile preview width"
+                    className={`px-2 py-1 rounded-md text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer ${
+                      splitDevice === "mobile"
+                        ? isDark
+                          ? "bg-[#1c1c1e] text-white shadow-xs"
+                          : "bg-white text-[#1d1d1f] shadow-xs"
+                        : tx2
+                    }`}
+                  >
+                    <Smartphone size={12} />
+                    <span className="hidden sm:inline">Mobile</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <main
+              className={
+                mode === "split"
+                  ? `flex-1 overflow-y-auto px-4 sm:px-6 mx-auto w-full transition-all ${
+                      splitDevice === "mobile"
+                        ? `max-w-[400px] my-3 rounded-[28px] border ${borderLine} shadow-md`
+                        : "max-w-[920px]"
+                    }`
+                  : "w-full max-w-[980px] mx-auto px-5"
+              }
+            >
           {/* Hero */}
           <div className="text-center pt-16 pb-12">
             <div
@@ -1766,7 +1874,9 @@ figcaption{padding:10px 14px;font-size:14px;color:var(--tx2)}
             </div>
           </footer>
         </main>
+      </section>
       )}
+      </div>
 
       {/* Confirm Reset Dialog (no window.confirm) */}
       {confirmResetOpen && (
