@@ -218,6 +218,10 @@ import GamuraPortfolioBuilder2Page from "./components/GamuraPortfolioBuilder2Pag
 import GamuraPptCredPage from "./components/GamuraPptCredPage";
 import GamuraCoverGenedPage from "./components/GamuraCoverGenedPage";
 import GamuraLifelinePage from "./components/GamuraLifelinePage";
+import GamuraShieldPage from "./components/GamuraShieldPage";
+import GamuraFreshPage from "./components/GamuraFreshPage";
+import GamuraCardPage from "./components/GamuraCardPage";
+import GamuraWalletPage from "./components/GamuraWalletPage";
 import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
@@ -9007,6 +9011,10 @@ export default function App() {
   | "ppt-cred"
   | "cover-gened"
   | "glifeline"
+  | "gshield"
+  | "gfresh"
+  | "gcard"
+  | "gwallet"
   | "privacy"
   | "terms"
   | "delete-account";
@@ -9058,6 +9066,22 @@ export default function App() {
     "lifeline",
     "gamura-lifeline",
     "g-lifeline",
+    "gshield",
+    "shield",
+    "gamura-shield",
+    "g-shield",
+    "gfresh",
+    "fresh",
+    "gamura-fresh",
+    "g-fresh",
+    "gcard",
+    "g-card",
+    "card",
+    "gamura-card",
+    "gwallet",
+    "g-wallet",
+    "wallet",
+    "gamura-wallet",
     "cgpic",
     "cg-pic",
     "claim",
@@ -9193,6 +9217,38 @@ export default function App() {
       lower === "g-lifeline"
     ) {
       return { page: "glifeline", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "gshield" ||
+      lower === "shield" ||
+      lower === "gamura-shield" ||
+      lower === "g-shield"
+    ) {
+      return { page: "gshield", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "gfresh" ||
+      lower === "fresh" ||
+      lower === "gamura-fresh" ||
+      lower === "g-fresh"
+    ) {
+      return { page: "gfresh", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "gcard" ||
+      lower === "g-card" ||
+      lower === "card" ||
+      lower === "gamura-card"
+    ) {
+      return { page: "gcard", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "gwallet" ||
+      lower === "g-wallet" ||
+      lower === "wallet" ||
+      lower === "gamura-wallet"
+    ) {
+      return { page: "gwallet", claimed: null, shortSlug: null, prefillHandle: "" };
     }
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13655,6 +13711,60 @@ ${targetContext}`;
         onBackHome={() => {
           window.history.pushState({}, "", "/");
           setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "gshield") {
+    return (
+      <GamuraShieldPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "gfresh") {
+    return (
+      <GamuraFreshPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "gcard") {
+    return (
+      <GamuraCardPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+        onNavigateUrl={(path) => {
+          window.history.pushState({}, "", path);
+          const resolved = resolveRouteFromLocation();
+          setCurrentPage(resolved.page);
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "gwallet") {
+    return (
+      <GamuraWalletPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+        onNavigateUrl={(path) => {
+          window.history.pushState({}, "", path);
+          const resolved = resolveRouteFromLocation();
+          setCurrentPage(resolved.page);
         }}
       />
     );

@@ -20,11 +20,31 @@ import {
   Copy,
   Download,
   ImagePlus,
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  LogIn,
+  LogOut,
+  Eye,
+  MessageSquarePlus,
+  SlidersHorizontal,
 } from "lucide-react";
 import { QRCodeSVG, QRCodeCanvas } from "qrcode.react";
+import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  type User as FirebaseUser,
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 import StoreAppGlyph from "./StoreAppGlyph";
+import LaunchLivePreviewModal from "./LaunchLivePreviewModal";
 import {
   type StoreAppItem,
+  APP_RATINGS_EVENT,
+  APP_RATINGS_KEY,
   BUILTIN_STORE_APPS,
   CUSTOM_STORE_APPS_KEY,
   LEGACY_INSTALLED_KEY,
@@ -37,7 +57,18 @@ import {
   addMobileInstalledId,
   removeMobileInstalledId,
   downloadStandaloneAppPackage,
+  rateStoreApp,
 } from "../utils/gamuraStoreApps";
+import {
+  type CloudInstalledState,
+  type StoreReviewDoc,
+  computeCombinedAppRatingStats,
+  deleteAppReviewFromCloud,
+  saveAppReviewToCloud,
+  subscribeStoreReviews,
+  subscribeUserInstalledApps,
+  syncInstalledAppsToCloud,
+} from "../utils/gamuraCloudSync";
 
 export const LAUNCH_LOGO_SRC = "/assets/aistudio/1794679627931_b0492bbb.png";
 export const LAUNCH_LOGO_FALLBACK =
@@ -99,6 +130,36 @@ export default function GamuraStoreLaunch({
   const [fC1, setFC1] = useState("#34d399");
   const [fC2, setFC2] = useState("#059669");
 
+  // Real-time Firebase Auth & Cloud Sync State
+  const [authUser, setAuthUser] = useState<FirebaseUser | null>(
+    () => auth.currentUser,
+  );
+  const [gamuraHandle, setGamuraHandle] = useState<string>("");
+  const [cloudState, setCloudState] = useState<CloudInstalledState | null>(null);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+
+  // Real-time Community Reviews & Star Ratings State
+  const [storeReviews, setStoreReviews] = useState<StoreReviewDoc[]>([]);
+  const [localRatingsMap, setLocalRatingsMap] = useState<Record<string, number>>(
+    () => readStoreJson<Record<string, number>>(APP_RATINGS_KEY, {}),
+  );
+  const [draftRating, setDraftRating] = useState<number>(5);
+  const [draftComment, setDraftComment] = useState<string>("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Quality Filtering & Sorting State
+  const [minRatingFilter, setMinRatingFilter] = useState<
+    "all" | "4.9" | "4.5" | "reviewed"
+  >("all");
+  const [sortOrder, setSortOrder] = useState<
+    "recommended" | "rating" | "reviews"
+  >("recommended");
+
+  // Live Preview Simulator Modal State
+  const [livePreviewApp, setLivePreviewApp] = useState<StoreAppItem | null>(
+    null,
+  );
+
   useEffect(() => {
     const prev = document.title;
     document.title = "Gamura Launch Store";
@@ -107,15 +168,76 @@ export default function GamuraStoreLaunch({
     };
   }, []);
 
-  // Keep synced with storage changes across tabs (e.g. uninstall from Universe tab)
+  // Real-time Auth listener + profile lookup for Gamura ID handle
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      setAuthUser(user);
+      if (user) {
+        try {
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          if (userSnap.exists()) {
+            const d = userSnap.data();
+            const handle =
+              (typeof d.username === "string" && d.username) ||
+              (typeof d.nickname === "string" && d.nickname) ||
+              user.displayName ||
+              user.email ||
+              "Gamura Member";
+            setGamuraHandle(handle);
+          } else {
+            setGamuraHandle(user.displayName || user.email || "Gamura Member");
+          }
+        } catch {
+          setGamuraHandle(user.displayName || user.email || "Gamura Member");
+        }
+      } else {
+        setGamuraHandle("");
+        setCloudState(null);
+      }
+    });
+    return () => unsubAuth();
+  }, []);
+
+  // Real-time Firestore Cloud Sync listener for installed apps when signed into Gamura ID
+  useEffect(() => {
+    if (!authUser) return;
+    setIsSyncingCloud(true);
+    const unsubCloud = subscribeUserInstalledApps(
+      authUser.uid,
+      gamuraHandle || authUser.displayName || authUser.email,
+      (remote) => {
+        setCloudState(remote);
+        setUniverseApps(readStoreJson<StoreAppItem[]>(UNIVERSE_APPS_KEY, []));
+        setMobileIds(readStoreJson<string[]>(MOBILE_APPS_KEY, []));
+        setCustomApps(readStoreJson<StoreAppItem[]>(CUSTOM_STORE_APPS_KEY, []));
+        setIsSyncingCloud(false);
+      },
+    );
+    return () => unsubCloud();
+  }, [authUser, gamuraHandle]);
+
+  // Real-time Firestore listener for Launch Store community star ratings & reviews
+  useEffect(() => {
+    const unsubReviews = subscribeStoreReviews((reviews) => {
+      setStoreReviews(reviews);
+    });
+    return () => unsubReviews();
+  }, []);
+
+  // Keep synced with storage changes across tabs (e.g. uninstall or rate from Universe tab)
   useEffect(() => {
     const syncState = () => {
       setUniverseApps(readStoreJson<StoreAppItem[]>(UNIVERSE_APPS_KEY, []));
       setMobileIds(readStoreJson<string[]>(MOBILE_APPS_KEY, []));
       setCustomApps(readStoreJson<StoreAppItem[]>(CUSTOM_STORE_APPS_KEY, []));
+      setLocalRatingsMap(readStoreJson<Record<string, number>>(APP_RATINGS_KEY, {}));
     };
     window.addEventListener("storage", syncState);
-    return () => window.removeEventListener("storage", syncState);
+    window.addEventListener(APP_RATINGS_EVENT, syncState);
+    return () => {
+      window.removeEventListener("storage", syncState);
+      window.removeEventListener(APP_RATINGS_EVENT, syncState);
+    };
   }, []);
 
   const showToast = (msg: string) => {
@@ -128,6 +250,45 @@ export default function GamuraStoreLaunch({
     [customApps],
   );
 
+  const ratingStatsByAppId = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof computeCombinedAppRatingStats>>();
+    allApps.forEach((app) => {
+      map.set(
+        app.id,
+        computeCombinedAppRatingStats(
+          app,
+          storeReviews,
+          authUser?.uid,
+          localRatingsMap[app.id] || 0,
+        ),
+      );
+    });
+    return map;
+  }, [allApps, storeReviews, authUser?.uid, localRatingsMap]);
+
+  const getLiveStats = (app: StoreAppItem) =>
+    ratingStatsByAppId.get(app.id) ||
+    computeCombinedAppRatingStats(
+      app,
+      storeReviews,
+      authUser?.uid,
+      localRatingsMap[app.id] || 0,
+    );
+
+  // Sync draft rating & review input whenever user opens an app detail sheet
+  useEffect(() => {
+    if (!selectedApp) return;
+    const stats = getLiveStats(selectedApp);
+    if (stats.userReview) {
+      setDraftRating(stats.userReview.rating);
+      setDraftComment(stats.userReview.comment);
+    } else {
+      setDraftRating(localRatingsMap[selectedApp.id] || 5);
+      setDraftComment("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedApp?.id]);
+
   const installedIdSet = useMemo(() => {
     const ids = new Set<string>(mobileIds);
     universeApps.forEach((a) => ids.add(a.id));
@@ -137,18 +298,126 @@ export default function GamuraStoreLaunch({
   const isInUniverse = (id: string) => universeApps.some((a) => a.id === id);
   const isInMobile = (id: string) => mobileIds.includes(id);
 
+  const applyQualityFilterAndSort = (list: StoreAppItem[]) => {
+    const filtered = list.filter((a) => {
+      const stats = getLiveStats(a);
+      if (minRatingFilter === "4.9") return stats.average >= 4.9;
+      if (minRatingFilter === "4.5") return stats.average >= 4.5;
+      if (minRatingFilter === "reviewed") return stats.reviewCount > 0;
+      return true;
+    });
+    if (sortOrder === "rating") {
+      return [...filtered].sort(
+        (a, b) => getLiveStats(b).average - getLiveStats(a).average,
+      );
+    }
+    if (sortOrder === "reviews") {
+      return [...filtered].sort(
+        (a, b) =>
+          getLiveStats(b).reviewCount - getLiveStats(a).reviewCount ||
+          getLiveStats(b).average - getLiveStats(a).average,
+      );
+    }
+    return filtered;
+  };
+
   const filteredApps = useMemo(() => {
     const q = queryText.trim().toLowerCase();
-    if (!q) return allApps;
-    return allApps.filter((a) =>
-      `${a.name} ${a.cat} ${a.tag} ${a.desc}`.toLowerCase().includes(q),
-    );
-  }, [allApps, queryText]);
+    const searched = q
+      ? allApps.filter((a) =>
+          `${a.name} ${a.cat} ${a.tag} ${a.desc}`.toLowerCase().includes(q),
+        )
+      : allApps;
+    return applyQualityFilterAndSort(searched);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allApps, queryText, minRatingFilter, sortOrder, ratingStatsByAppId]);
 
   const categories = useMemo(
     () => Array.from(new Set(allApps.map((a) => a.cat))),
     [allApps],
   );
+
+  const pushInstalledAppsToCloud = async (
+    nextUniverseApps: StoreAppItem[],
+    nextMobileIds: string[],
+    nextCustomApps: StoreAppItem[],
+  ) => {
+    if (!authUser) return;
+    setIsSyncingCloud(true);
+    try {
+      await syncInstalledAppsToCloud({
+        uid: authUser.uid,
+        gamuraHandle: gamuraHandle || authUser.displayName || authUser.email,
+        universeAppIds: nextUniverseApps.map((a) => a.id),
+        mobileAppIds: nextMobileIds,
+        customApps: nextCustomApps,
+      });
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
+  const handleStoreGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    try {
+      await signInWithPopup(auth, provider);
+      showToast("Signed in · Cloud Sync active ✓");
+    } catch {
+      showToast("Use your Gamura ID sign-in page if popup is blocked");
+    }
+  };
+
+  const handleStoreSignOut = async () => {
+    try {
+      await signOut(auth);
+      showToast("Signed out of Cloud Sync");
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSubmitReview = async (app: StoreAppItem) => {
+    // Always record quick local rating first
+    rateStoreApp(app, draftRating);
+    setLocalRatingsMap(readStoreJson<Record<string, number>>(APP_RATINGS_KEY, {}));
+
+    if (!authUser) {
+      showToast("Rating saved locally · Sign in to publish review");
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      await saveAppReviewToCloud({
+        appId: app.id,
+        userId: authUser.uid,
+        authorName: gamuraHandle || authUser.displayName || "Gamura Member",
+        authorPhoto: authUser.photoURL,
+        rating: draftRating,
+        comment: draftComment.trim(),
+      });
+      showToast(`Review published for ${app.name} ✓`);
+    } catch {
+      showToast("Could not publish review right now");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const handleDeleteReview = async (app: StoreAppItem) => {
+    if (!authUser) return;
+    setIsSubmittingReview(true);
+    try {
+      await deleteAppReviewFromCloud(app.id, authUser.uid);
+      setDraftComment("");
+      showToast("Your review was removed");
+    } catch {
+      showToast("Could not remove review");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   // Clicking GET or Download opens the destination prompt question
   const handleGetClick = (
@@ -181,15 +450,20 @@ export default function GamuraStoreLaunch({
         setInstallingId(null);
         setInstallPct(0);
 
+        let nextUniverse = universeApps;
+        let nextMobile = mobileIds;
+
         if (destination === "universe" || destination === "both") {
-          const updatedU = addAppToUniverse(app);
-          setUniverseApps(updatedU);
+          nextUniverse = addAppToUniverse(app);
+          setUniverseApps(nextUniverse);
         }
         if (destination === "mobile" || destination === "both") {
-          const updatedM = addMobileInstalledId(app.id);
-          setMobileIds(updatedM);
+          nextMobile = addMobileInstalledId(app.id);
+          setMobileIds(nextMobile);
           downloadStandaloneAppPackage(app);
         }
+
+        void pushInstalledAppsToCloud(nextUniverse, nextMobile, customApps);
 
         // Sync legacy installed key for full compatibility
         const legacy = readStoreJson<string[]>(LEGACY_INSTALLED_KEY, []);
@@ -215,6 +489,7 @@ export default function GamuraStoreLaunch({
     const nextM = removeMobileInstalledId(app.id);
     setUniverseApps(nextU);
     setMobileIds(nextM);
+    void pushInstalledAppsToCloud(nextU, nextM, customApps);
     const legacy = readStoreJson<string[]>(LEGACY_INSTALLED_KEY, []).filter(
       (id) => id !== app.id,
     );
@@ -224,10 +499,14 @@ export default function GamuraStoreLaunch({
 
   const handleToggleUniverse = (app: StoreAppItem) => {
     if (isInUniverse(app.id)) {
-      setUniverseApps(removeAppFromUniverse(app.id));
+      const nextU = removeAppFromUniverse(app.id);
+      setUniverseApps(nextU);
+      void pushInstalledAppsToCloud(nextU, mobileIds, customApps);
       showToast(`Removed ${app.name} from Universe Apps`);
     } else {
-      setUniverseApps(addAppToUniverse(app));
+      const nextU = addAppToUniverse(app);
+      setUniverseApps(nextU);
+      void pushInstalledAppsToCloud(nextU, mobileIds, customApps);
       showToast(`Added ${app.name} to Universe Apps ✓`);
     }
   };
@@ -430,6 +709,7 @@ export default function GamuraStoreLaunch({
     const next = [...customApps, created];
     setCustomApps(next);
     writeStoreJson(CUSTOM_STORE_APPS_KEY, next);
+    void pushInstalledAppsToCloud(universeApps, mobileIds, next);
     setFName("");
     setFUrl("");
     setFTag("");
@@ -444,8 +724,11 @@ export default function GamuraStoreLaunch({
     const nextCustom = customApps.filter((a) => a.id !== id);
     setCustomApps(nextCustom);
     writeStoreJson(CUSTOM_STORE_APPS_KEY, nextCustom);
-    setUniverseApps(removeAppFromUniverse(id));
-    setMobileIds(removeMobileInstalledId(id));
+    const nextU = removeAppFromUniverse(id);
+    const nextM = removeMobileInstalledId(id);
+    setUniverseApps(nextU);
+    setMobileIds(nextM);
+    void pushInstalledAppsToCloud(nextU, nextM, nextCustom);
     if (selectedApp?.id === id) setSelectedApp(null);
     showToast("App removed from Store");
   };
@@ -454,6 +737,7 @@ export default function GamuraStoreLaunch({
     const isInstalled = installedIdSet.has(app.id);
     const isInstalling = installingId === app.id;
     const isDirectLaunchApp = app.id === "gamura-camera";
+    const stats = getLiveStats(app);
     const handleRowActivate = () => {
       if (isDirectLaunchApp) {
         window.location.assign(app.url);
@@ -491,7 +775,15 @@ export default function GamuraStoreLaunch({
           <div className="text-[11px] text-[#6E6E73] mt-0.5 tabular-nums flex items-center gap-1.5">
             <span>{app.cat}</span>
             <span aria-hidden="true">·</span>
-            <span>{app.rating} ★</span>
+            <span className="font-semibold text-[#1D1D1F]">
+              {stats.average.toFixed(1)} ★
+            </span>
+            {stats.reviewCount > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{stats.reviewCount} reviews</span>
+              </>
+            )}
             {isInUniverse(app.id) && (
               <>
                 <span aria-hidden="true">·</span>
@@ -502,6 +794,20 @@ export default function GamuraStoreLaunch({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLivePreviewApp(app);
+            }}
+            aria-label={`Live preview ${app.name}`}
+            title={`Try ${app.name} Live Preview before installing`}
+            className="hidden md:inline-flex min-h-[32px] px-2.5 py-1 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] text-[11px] font-semibold items-center gap-1 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+          >
+            <Eye size={13} className="text-[#059669]" />
+            <span>Preview</span>
+          </button>
+
           <button
             type="button"
             onClick={(e) => openQrForApp(app, e)}
@@ -559,8 +865,9 @@ export default function GamuraStoreLaunch({
     );
   };
 
-  const renderAppTile = (app: StoreAppItem) =>
-    app.id === "gamura-camera" ? (
+  const renderAppTile = (app: StoreAppItem) => {
+    const stats = getLiveStats(app);
+    return app.id === "gamura-camera" ? (
       <a
         key={app.id}
         href={app.url}
@@ -580,7 +887,7 @@ export default function GamuraStoreLaunch({
             {app.name}
           </div>
           <div className="text-[11px] text-[#6E6E73] tabular-nums">
-            {app.rating} ★ · {app.dl}
+            {stats.average.toFixed(1)} ★ · {app.dl}
           </div>
         </div>
       </a>
@@ -603,13 +910,12 @@ export default function GamuraStoreLaunch({
             {app.name}
           </div>
           <div className="text-[11px] text-[#6E6E73] tabular-nums">
-            {app.rating} ★ · {app.dl}
+            {stats.average.toFixed(1)} ★ · {app.dl}
           </div>
         </div>
       </button>
     );
-
-  const ratingBars = [72, 18, 6, 3, 1];
+  };
 
   return (
     <div
@@ -658,6 +964,28 @@ export default function GamuraStoreLaunch({
             )}
           </div>
 
+          {authUser ? (
+            <button
+              type="button"
+              onClick={() => setPage("lib")}
+              title={`Cloud Sync Active · ${gamuraHandle || authUser.email || "Gamura ID"}`}
+              className="hidden sm:inline-flex min-h-[38px] items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Cloud size={14} />
+              <span>{isSyncingCloud ? "Syncing…" : "Synced"}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleStoreGoogleSignIn}
+              title="Sign in with Gamura ID to enable Cloud Sync"
+              className="hidden sm:inline-flex min-h-[38px] items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 border border-zinc-200/80 text-[#1D1D1F] text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <LogIn size={13} className="text-[#059669]" />
+              <span>Cloud Sync</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={openQrForStore}
@@ -672,7 +1000,7 @@ export default function GamuraStoreLaunch({
             href="/gpdf"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:inline-flex min-h-[38px] items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
+            className="hidden md:inline-flex min-h-[38px] items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
           >
             <span>G PDF Studio</span>
             <ExternalLink size={12} />
@@ -724,18 +1052,52 @@ export default function GamuraStoreLaunch({
                 Gamura Launch Store
               </h1>
               <p className="text-xs sm:text-sm text-[#6E6E73]">
-                Download apps directly into your Universe Apps dock, save to
-                your mobile device, or share any store link via scannable QR code.
+                Try live device previews, read verified reviews, sync installed
+                apps via Gamura ID Cloud Sync, or share via scannable QR code.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={openQrForStore}
-              className="px-4 py-2 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-            >
-              <QrCode size={14} />
-              <span>Generate Store &amp; App QR Code</span>
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const defaultApp =
+                    allApps.find((a) => a.id === "gamura-ppt-cred") ||
+                    allApps[0];
+                  if (defaultApp) setLivePreviewApp(defaultApp);
+                }}
+                className="min-h-[38px] px-4 py-2 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <Eye size={14} />
+                <span>Try Live Simulator</span>
+              </button>
+              <button
+                type="button"
+                onClick={openQrForStore}
+                className="min-h-[38px] px-4 py-2 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <QrCode size={14} />
+                <span>Generate QR Code</span>
+              </button>
+              {authUser ? (
+                <button
+                  type="button"
+                  onClick={() => setPage("lib")}
+                  className="min-h-[38px] px-4 py-2 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  <Cloud size={14} className="text-[#059669]" />
+                  <span>Cloud Sync: {gamuraHandle || "Connected"}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleStoreGoogleSignIn}
+                  className="min-h-[38px] px-4 py-2 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  <CloudOff size={14} className="text-[#6E6E73]" />
+                  <span>Sign in for Cloud Sync</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -1028,13 +1390,125 @@ export default function GamuraStoreLaunch({
                   </div>
                 </div>
 
-                {/* Apple App Store Style List */}
-                <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-2">
-                  <h2 className="text-xs font-bold uppercase tracking-wider text-[#6E6E73] px-2 pb-1">
-                    Discover
-                  </h2>
+                {/* Interactive Live Preview Simulator Shelf */}
+                <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h2 className="text-lg font-bold tracking-tight text-[#1D1D1F]">
+                        Live Interactive Previews
+                      </h2>
+                      <p className="text-xs text-[#6E6E73]">
+                        Test PPT Cred, Cover Gened &amp; apps inside a simulated phone or desktop frame before installing
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
+                    {[
+                      "gamura-gcard",
+                      "gamura-gwallet",
+                      "gamura-ppt-cred",
+                      "gamura-cover-gened",
+                      "gamura-pb1",
+                      "gamura-pb2",
+                      "gamura-lifeline",
+                      "gamura-shield",
+                      "gamura-fresh",
+                    ]
+                      .map((id) => allApps.find((a) => a.id === id))
+                      .filter((a): a is StoreAppItem => Boolean(a))
+                      .map((previewApp) => (
+                        <button
+                          key={previewApp.id}
+                          type="button"
+                          onClick={() => setLivePreviewApp(previewApp)}
+                          className="min-w-[205px] shrink-0 p-3 rounded-2xl bg-[#F5F5F7] hover:bg-[#E2F5ED]/60 border border-zinc-200/80 hover:border-[#059669]/40 flex items-center gap-3 text-left transition-all cursor-pointer"
+                        >
+                          <StoreAppGlyph
+                            app={previewApp}
+                            sizeClass="w-11 h-11"
+                            iconPx={20}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-[#1D1D1F] truncate">
+                              {previewApp.name}
+                            </div>
+                            <div className="text-[11px] text-[#059669] font-semibold inline-flex items-center gap-1 mt-0.5">
+                              <Eye size={11} />
+                              <span>Launch Preview</span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Quality Filter & Sort Bar + Apple App Store Style Discover List */}
+                <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xs font-bold uppercase tracking-wider text-[#6E6E73]">
+                        Discover
+                      </h2>
+                      <span className="text-xs text-[#6E6E73] tabular-nums">
+                        · {applyQualityFilterAndSort(allApps).length} apps
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#F5F5F7]">
+                        {(
+                          [
+                            { id: "all", label: "All" },
+                            { id: "4.9", label: "4.9★+" },
+                            { id: "4.5", label: "4.5★+" },
+                            { id: "reviewed", label: "Reviewed" },
+                          ] as const
+                        ).map((q) => (
+                          <button
+                            key={q.id}
+                            type="button"
+                            onClick={() => setMinRatingFilter(q.id)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors ${
+                              minRatingFilter === q.id
+                                ? "bg-white text-[#1D1D1F] shadow-xs"
+                                : "text-[#6E6E73] hover:text-[#1D1D1F]"
+                            }`}
+                          >
+                            {q.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#F5F5F7] text-[11px] font-semibold text-[#1D1D1F]">
+                        <SlidersHorizontal size={12} className="text-[#059669]" />
+                        <select
+                          aria-label="Sort store apps"
+                          value={sortOrder}
+                          onChange={(e) =>
+                            setSortOrder(
+                              e.target.value as "recommended" | "rating" | "reviews",
+                            )
+                          }
+                          className="bg-transparent outline-none cursor-pointer pr-1"
+                        >
+                          <option value="recommended">Recommended</option>
+                          <option value="rating">Highest Rated</option>
+                          <option value="reviews">Most Reviewed</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="divide-y divide-zinc-100">
-                    {allApps.map((app) => renderAppRow(app))}
+                    {applyQualityFilterAndSort(allApps).length > 0 ? (
+                      applyQualityFilterAndSort(allApps).map((app) =>
+                        renderAppRow(app),
+                      )
+                    ) : (
+                      <div className="py-10 text-center text-xs text-[#6E6E73]">
+                        No apps match the selected quality filter yet.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1061,11 +1535,15 @@ export default function GamuraStoreLaunch({
             {tab === "top" && (
               <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-2">
                 <h2 className="text-lg font-bold tracking-tight text-[#1D1D1F] px-2 pb-1">
-                  Top free apps
+                  Top rated &amp; reviewed apps
                 </h2>
                 <div className="divide-y divide-zinc-100">
                   {[...allApps]
-                    .sort((a, b) => b.rating - a.rating)
+                    .sort(
+                      (a, b) =>
+                        getLiveStats(b).average - getLiveStats(a).average ||
+                        getLiveStats(b).reviewCount - getLiveStats(a).reviewCount,
+                    )
                     .map((app, i) => renderAppRow(app, i + 1))}
                 </div>
               </div>
@@ -1122,81 +1600,156 @@ export default function GamuraStoreLaunch({
             </div>
           </div>
         ) : page === "lib" ? (
-          <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold tracking-tight text-[#1D1D1F]">
-                Installed apps
-              </h2>
-              <span className="text-xs text-[#6E6E73]">
-                {installedIdSet.size} installed
-              </span>
+          <div className="space-y-4">
+            {/* Real-Time Gamura ID Cloud Sync Panel */}
+            <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5 min-w-0">
+                <div
+                  className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                    authUser
+                      ? "bg-[#E2F5ED] text-[#059669]"
+                      : "bg-[#F5F5F7] text-[#6E6E73]"
+                  }`}
+                >
+                  {authUser ? <Cloud size={20} /> : <CloudOff size={20} />}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-[#1D1D1F] truncate">
+                    {authUser
+                      ? `Gamura Cloud Sync · ${gamuraHandle || authUser.email || "Signed in"}`
+                      : "Cloud Sync Disabled (Local Only)"}
+                  </div>
+                  <p className="text-xs text-[#6E6E73] mt-0.5 leading-relaxed">
+                    {authUser
+                      ? `Your installed apps sync in real time across devices via Firestore${
+                          cloudState?.lastDevice
+                            ? ` · Last device: ${cloudState.lastDevice}`
+                            : ""
+                        }`
+                      : "Sign in with your Gamura ID to access your installed apps across phones, tablets, and desktops."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {authUser ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void pushInstalledAppsToCloud(
+                          universeApps,
+                          mobileIds,
+                          customApps,
+                        );
+                        showToast("Synced installed apps to cloud ✓");
+                      }}
+                      className="min-h-[38px] px-3.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
+                    >
+                      <RefreshCw
+                        size={13}
+                        className={isSyncingCloud ? "animate-spin" : ""}
+                      />
+                      <span>{isSyncingCloud ? "Syncing…" : "Sync Now"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleStoreSignOut}
+                      className="min-h-[38px] px-3.5 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#6E6E73] text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
+                    >
+                      <LogOut size={13} />
+                      <span>Sign Out</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStoreGoogleSignIn}
+                    className="min-h-[40px] px-4 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap"
+                  >
+                    <LogIn size={14} />
+                    <span>Sign In with Gamura ID</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {allApps.filter((a) => installedIdSet.has(a.id)).length > 0 ? (
-              <div className="divide-y divide-zinc-100">
-                {allApps
-                  .filter((a) => installedIdSet.has(a.id))
-                  .map((app) => (
-                    <div
-                      key={app.id}
-                      className="flex flex-wrap items-center justify-between gap-3 py-3.5"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setSelectedApp(app)}
-                        className="flex items-center gap-3.5 text-left min-w-0 flex-1 cursor-pointer"
-                      >
-                        <StoreAppGlyph
-                          app={app}
-                          sizeClass="w-14 h-14 text-2xl"
-                          iconPx={26}
-                        />
-                        <div className="min-w-0">
-                          <div className="text-sm font-bold text-[#1D1D1F] truncate">
-                            {app.name}
-                          </div>
-                          <div className="text-xs text-[#6E6E73] truncate">
-                            {[
-                              isInUniverse(app.id) ? "In Universe Apps" : "",
-                              isInMobile(app.id) ? "In Mobile App" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </div>
-                        </div>
-                      </button>
+            <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold tracking-tight text-[#1D1D1F]">
+                  Installed apps
+                </h2>
+                <span className="text-xs text-[#6E6E73] tabular-nums">
+                  {installedIdSet.size} installed
+                </span>
+              </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <a
-                          href={app.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold transition-colors"
-                        >
-                          OPEN
-                        </a>
+              {allApps.filter((a) => installedIdSet.has(a.id)).length > 0 ? (
+                <div className="divide-y divide-zinc-100">
+                  {allApps
+                    .filter((a) => installedIdSet.has(a.id))
+                    .map((app) => (
+                      <div
+                        key={app.id}
+                        className="flex flex-wrap items-center justify-between gap-3 py-3.5"
+                      >
                         <button
                           type="button"
-                          onClick={() => handleUninstallAll(app)}
-                          className="px-3.5 py-1.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold cursor-pointer transition-colors"
+                          onClick={() => setSelectedApp(app)}
+                          className="flex items-center gap-3.5 text-left min-w-0 flex-1 cursor-pointer"
                         >
-                          Uninstall
+                          <StoreAppGlyph
+                            app={app}
+                            sizeClass="w-14 h-14 text-2xl"
+                            iconPx={26}
+                          />
+                          <div className="min-w-0">
+                            <div className="text-sm font-bold text-[#1D1D1F] truncate">
+                              {app.name}
+                            </div>
+                            <div className="text-xs text-[#6E6E73] truncate">
+                              {[
+                                isInUniverse(app.id) ? "In Universe Apps" : "",
+                                isInMobile(app.id) ? "In Mobile App" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                          </div>
                         </button>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <a
+                            href={app.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold transition-colors"
+                          >
+                            OPEN
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleUninstallAll(app)}
+                            className="px-3.5 py-1.5 rounded-full bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold cursor-pointer transition-colors"
+                          >
+                            Uninstall
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <div className="py-12 text-center space-y-2">
-                <p className="text-sm font-medium text-[#1D1D1F]">
-                  Nothing installed yet.
-                </p>
-                <p className="text-xs text-[#6E6E73]">
-                  Tap GET on any app to install it in Universe Page or your
-                  mobile app.
-                </p>
-              </div>
-            )}
+                    ))}
+                </div>
+              ) : (
+                <div className="py-12 text-center space-y-2">
+                  <p className="text-sm font-medium text-[#1D1D1F]">
+                    Nothing installed yet.
+                  </p>
+                  <p className="text-xs text-[#6E6E73]">
+                    Tap GET on any app to install it in Universe Page or your
+                    mobile app.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           /* Developer Tab */
@@ -1443,8 +1996,8 @@ export default function GamuraStoreLaunch({
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {installingId === selectedApp.id ? (
                         <span className="px-5 py-1.5 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums">
                           {installPct}%
@@ -1462,6 +2015,14 @@ export default function GamuraStoreLaunch({
                           </a>
                           <button
                             type="button"
+                            onClick={() => setLivePreviewApp(selectedApp)}
+                            className="px-3.5 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] text-xs font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Eye size={13} className="text-[#059669]" />
+                            <span>Preview</span>
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleUninstallAll(selectedApp)}
                             className="px-3.5 py-1.5 rounded-full bg-zinc-100 hover:bg-red-50 hover:text-red-600 text-xs font-semibold text-[#6E6E73] cursor-pointer transition-colors"
                           >
@@ -1477,15 +2038,14 @@ export default function GamuraStoreLaunch({
                           >
                             GET
                           </button>
-                          <a
-                            href={selectedApp.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-4 py-1.5 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] text-xs font-semibold tracking-tight transition-colors inline-flex items-center gap-1"
+                          <button
+                            type="button"
+                            onClick={() => setLivePreviewApp(selectedApp)}
+                            className="px-4 py-1.5 rounded-full bg-[#1D1D1F] hover:bg-black text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
                           >
-                            <span>Open</span>
-                            <ExternalLink size={12} />
-                          </a>
+                            <Eye size={13} />
+                            <span>Live Preview</span>
+                          </button>
                         </>
                       )}
                     </div>
@@ -1515,39 +2075,44 @@ export default function GamuraStoreLaunch({
               </div>
 
               {/* 3-Column Metrics Strip Matching Apple App Store Screenshot */}
-              <div className="grid grid-cols-3 divide-x divide-zinc-200/80 py-3.5 border-y border-zinc-200/70 text-center">
-                <div className="px-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#6E6E73]">
-                    Rating
+              {(() => {
+                const activeStats = getLiveStats(selectedApp);
+                return (
+                  <div className="grid grid-cols-3 divide-x divide-zinc-200/80 py-3.5 border-y border-zinc-200/70 text-center">
+                    <div className="px-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#6E6E73]">
+                        Rating ({activeStats.totalVotes})
+                      </div>
+                      <div className="text-xl font-bold text-[#1D1D1F] tabular-nums mt-0.5">
+                        {activeStats.average.toFixed(1)}
+                      </div>
+                      <div className="text-[10px] text-[#059669] tracking-tight">
+                        {"★".repeat(Math.round(activeStats.average))}
+                      </div>
+                    </div>
+                    <div className="px-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#6E6E73]">
+                        Age
+                      </div>
+                      <div className="text-xl font-bold text-[#1D1D1F] tabular-nums mt-0.5">
+                        {selectedApp.age || "3+"}
+                      </div>
+                      <div className="text-[11px] text-[#6E6E73]">Years Old</div>
+                    </div>
+                    <div className="px-2">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#6E6E73]">
+                        Chart
+                      </div>
+                      <div className="text-xl font-bold text-[#1D1D1F] mt-0.5">
+                        {selectedApp.chart || "Top"}
+                      </div>
+                      <div className="text-[11px] text-[#6E6E73] truncate">
+                        {selectedApp.cat}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xl font-bold text-[#1D1D1F] tabular-nums mt-0.5">
-                    {selectedApp.rating}
-                  </div>
-                  <div className="text-[10px] text-[#6E6E73] tracking-tight">
-                    ★★★★★
-                  </div>
-                </div>
-                <div className="px-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#6E6E73]">
-                    Age
-                  </div>
-                  <div className="text-xl font-bold text-[#1D1D1F] tabular-nums mt-0.5">
-                    {selectedApp.age || "3+"}
-                  </div>
-                  <div className="text-[11px] text-[#6E6E73]">Years Old</div>
-                </div>
-                <div className="px-2">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#6E6E73]">
-                    Chart
-                  </div>
-                  <div className="text-xl font-bold text-[#1D1D1F] mt-0.5">
-                    {selectedApp.chart || "Top"}
-                  </div>
-                  <div className="text-[11px] text-[#6E6E73] truncate">
-                    {selectedApp.cat}
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Destination Quick Controls */}
               {installedIdSet.has(selectedApp.id) && (
@@ -1576,7 +2141,13 @@ export default function GamuraStoreLaunch({
                     <button
                       type="button"
                       onClick={() => {
-                        setMobileIds(addMobileInstalledId(selectedApp.id));
+                        const nextM = addMobileInstalledId(selectedApp.id);
+                        setMobileIds(nextM);
+                        void pushInstalledAppsToCloud(
+                          universeApps,
+                          nextM,
+                          customApps,
+                        );
                         downloadStandaloneAppPackage(selectedApp);
                         showToast(`Downloaded ${selectedApp.name} for mobile ✓`);
                       }}
@@ -1589,26 +2160,34 @@ export default function GamuraStoreLaunch({
                 </div>
               )}
 
-              {/* Showcase Cards */}
+              {/* Showcase Cards (Clickable to launch Live Preview) */}
               <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
                 {["Discover", "Play", "Create"].map((word, idx) => (
-                  <div
+                  <button
                     key={word}
+                    type="button"
+                    onClick={() => setLivePreviewApp(selectedApp)}
                     style={{
                       background: `linear-gradient(${150 + idx * 40}deg, ${selectedApp.c1}, ${selectedApp.c2})`,
                     }}
-                    className="w-40 h-56 shrink-0 rounded-2xl p-4 text-white flex flex-col justify-between shadow-xs"
+                    className="w-40 h-56 shrink-0 rounded-2xl p-4 text-white flex flex-col justify-between shadow-xs text-left cursor-pointer hover:scale-[1.02] transition-transform"
                   >
                     <span className="text-3xl font-black opacity-35">
                       {selectedApp.name.charAt(0)}
                       {idx + 1}
                     </span>
-                    <div className="text-sm font-bold leading-snug">
-                      {word} with
-                      <br />
-                      {selectedApp.name.split(" ")[0]}
+                    <div>
+                      <div className="text-sm font-bold leading-snug">
+                        {word} with
+                        <br />
+                        {selectedApp.name.split(" ")[0]}
+                      </div>
+                      <div className="text-[11px] opacity-85 mt-1 inline-flex items-center gap-1">
+                        <Eye size={11} />
+                        <span>Live Preview</span>
+                      </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
 
@@ -1630,50 +2209,228 @@ export default function GamuraStoreLaunch({
                 />
                 <div className="space-y-0.5">
                   <div className="text-xs font-bold text-[#1D1D1F]">
-                    Data safety
+                    Data safety &amp; Cloud Sync
                   </div>
                   <p className="text-xs text-[#6E6E73] leading-relaxed">
                     No data is shared with third parties. Gamura apps run in
-                    your browser and keep your data on your device unless you
-                    sign in.
+                    your browser and optionally sync your library and reviews
+                    with your Gamura ID via Firestore.
                   </p>
                 </div>
               </div>
 
-              {/* Ratings */}
-              <div className="space-y-2">
-                <h3 className="text-sm font-bold text-[#1D1D1F]">
-                  Ratings &amp; reviews
-                </h3>
-                <div className="flex items-center gap-5">
-                  <div className="text-center shrink-0">
-                    <div className="text-4xl font-light text-[#1D1D1F] tabular-nums">
-                      {selectedApp.rating}
+              {/* Real-Time Star Ratings & Community Reviews */}
+              {(() => {
+                const stats = getLiveStats(selectedApp);
+                return (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-[#1D1D1F]">
+                        Ratings &amp; reviews
+                      </h3>
+                      <span className="text-xs text-[#6E6E73] tabular-nums">
+                        {stats.totalVotes} ratings · {stats.reviewCount} reviews
+                      </span>
                     </div>
-                    <div className="flex items-center justify-center gap-0.5 text-[#059669] mt-1">
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <Star key={n} size={12} fill="currentColor" />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex-1 space-y-1.5">
-                    {ratingBars.map((pct, i) => (
-                      <div
-                        key={5 - i}
-                        className="flex items-center gap-2 text-[11px] text-[#6E6E73]"
-                      >
-                        <span className="w-2.5 tabular-nums">{5 - i}</span>
-                        <div className="flex-1 h-2 bg-[#F5F5F7] rounded-full overflow-hidden">
-                          <div
-                            style={{ width: `${pct}%` }}
-                            className="h-full bg-[#059669] rounded-full"
-                          />
+
+                    <div className="flex items-center gap-5">
+                      <div className="text-center shrink-0">
+                        <div className="text-4xl font-light text-[#1D1D1F] tabular-nums">
+                          {stats.average.toFixed(1)}
+                        </div>
+                        <div className="flex items-center justify-center gap-0.5 text-[#059669] mt-1">
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <Star
+                              key={n}
+                              size={12}
+                              fill={
+                                n <= Math.round(stats.average)
+                                  ? "currentColor"
+                                  : "none"
+                              }
+                            />
+                          ))}
                         </div>
                       </div>
-                    ))}
+                      <div className="flex-1 space-y-1.5">
+                        {stats.distribution.map((pct, i) => (
+                          <div
+                            key={5 - i}
+                            className="flex items-center gap-2 text-[11px] text-[#6E6E73]"
+                          >
+                            <span className="w-2.5 tabular-nums">{5 - i}</span>
+                            <div className="flex-1 h-2 bg-[#F5F5F7] rounded-full overflow-hidden">
+                              <div
+                                style={{ width: `${pct}%` }}
+                                className="h-full bg-[#059669] rounded-full transition-all duration-300"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Interactive Write / Edit Review Card */}
+                    <div className="p-4 rounded-2xl bg-[#F5F5F7] border border-zinc-200/70 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-[#1D1D1F]">
+                          <MessageSquarePlus
+                            size={14}
+                            className="text-[#059669]"
+                          />
+                          <span>
+                            {stats.userReview
+                              ? "Update your review"
+                              : "Tap to rate & review"}
+                          </span>
+                        </div>
+
+                        <div
+                          className="flex items-center gap-1"
+                          role="group"
+                          aria-label={`Rate ${selectedApp.name}`}
+                        >
+                          {[1, 2, 3, 4, 5].map((starVal) => (
+                            <button
+                              key={starVal}
+                              type="button"
+                              onClick={() => setDraftRating(starVal)}
+                              aria-label={`${starVal} stars`}
+                              className="p-1 rounded-lg hover:scale-110 transition-transform cursor-pointer"
+                            >
+                              <Star
+                                size={18}
+                                className={
+                                  starVal <= draftRating
+                                    ? "text-amber-500 fill-amber-500"
+                                    : "text-zinc-300"
+                                }
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <textarea
+                        rows={2}
+                        maxLength={600}
+                        value={draftComment}
+                        onChange={(e) => setDraftComment(e.target.value)}
+                        placeholder={
+                          authUser
+                            ? `Share what you like about ${selectedApp.name}…`
+                            : "Write a review (sign in with Gamura ID to publish to the community)…"
+                        }
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-zinc-200/80 text-xs sm:text-sm text-[#1D1D1F] outline-none focus:border-[#059669] resize-y"
+                      />
+
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[11px] text-[#6E6E73] tabular-nums">
+                          {draftComment.length}/600 ·{" "}
+                          {authUser
+                            ? `Posting as ${gamuraHandle || authUser.displayName || "Member"}`
+                            : "Guest mode"}
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                          {stats.userReview && authUser && (
+                            <button
+                              type="button"
+                              disabled={isSubmittingReview}
+                              onClick={() => handleDeleteReview(selectedApp)}
+                              className="px-3 py-1.5 rounded-full bg-white hover:bg-red-50 text-red-600 border border-zinc-200 text-xs font-semibold cursor-pointer transition-colors"
+                            >
+                              Delete
+                            </button>
+                          )}
+                          {!authUser && (
+                            <button
+                              type="button"
+                              onClick={handleStoreGoogleSignIn}
+                              className="px-3 py-1.5 rounded-full bg-white hover:bg-zinc-100 border border-zinc-200 text-xs font-semibold text-[#1D1D1F] inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <LogIn size={12} className="text-[#059669]" />
+                              <span>Sign in</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={isSubmittingReview}
+                            onClick={() => handleSubmitReview(selectedApp)}
+                            className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold cursor-pointer transition-colors disabled:opacity-60"
+                          >
+                            {isSubmittingReview
+                              ? "Saving…"
+                              : authUser
+                                ? stats.userReview
+                                  ? "Update Review"
+                                  : "Publish Review"
+                                : "Save Star Rating"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Live Community Reviews Feed */}
+                    {stats.reviews.length > 0 ? (
+                      <div className="space-y-2.5">
+                        {stats.reviews.map((rev) => (
+                          <div
+                            key={rev.id}
+                            className="p-3.5 rounded-2xl bg-white border border-zinc-200/80 space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                {rev.authorPhoto ? (
+                                  <img
+                                    src={rev.authorPhoto}
+                                    alt={rev.authorName}
+                                    referrerPolicy="no-referrer"
+                                    className="w-6 h-6 rounded-full object-cover shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full bg-[#E2F5ED] text-[#059669] text-[11px] font-bold flex items-center justify-center shrink-0">
+                                    {rev.authorName.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <span className="text-xs font-bold text-[#1D1D1F] truncate">
+                                  {rev.authorName}
+                                </span>
+                                {rev.userId === authUser?.uid && (
+                                  <span className="text-[10px] font-semibold text-[#059669]">
+                                    · You
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0 text-[11px] text-[#6E6E73]">
+                                <span className="text-amber-500">
+                                  {"★".repeat(rev.rating)}
+                                  <span className="text-zinc-300">
+                                    {"★".repeat(5 - rev.rating)}
+                                  </span>
+                                </span>
+                                <span>
+                                  {new Date(rev.updatedAtMs).toLocaleDateString()}
+                                </span>
+                              </div>
+                            </div>
+                            {rev.comment && (
+                              <p className="text-xs text-[#424245] leading-relaxed">
+                                {rev.comment}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[#6E6E73] text-center py-2">
+                        No written reviews yet — be the first to review {selectedApp.name}!
+                      </p>
+                    )}
                   </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -2104,6 +2861,20 @@ export default function GamuraStoreLaunch({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Interactive Simulated-Device Live Preview Modal */}
+      {livePreviewApp && (
+        <LaunchLivePreviewModal
+          app={livePreviewApp}
+          allApps={allApps}
+          averageRating={getLiveStats(livePreviewApp).average}
+          reviewCount={getLiveStats(livePreviewApp).reviewCount}
+          isInstalled={installedIdSet.has(livePreviewApp.id)}
+          onSelectApp={(nextApp) => setLivePreviewApp(nextApp)}
+          onInstallClick={(targetApp) => setPromptApp(targetApp)}
+          onClose={() => setLivePreviewApp(null)}
+        />
       )}
 
       {/* Toast */}

@@ -19,6 +19,10 @@ import {
   Presentation,
   LayoutTemplate,
   HeartPulse,
+  ShieldCheck,
+  Leaf,
+  CreditCard,
+  Wallet,
 } from "lucide-react";
 import type { StoreAppItem } from "../utils/gamuraStoreApps";
 
@@ -186,6 +190,38 @@ export default function StoreAppGlyph({
           <HeartPulse
             size={iconPx}
             strokeWidth={2.2}
+            className="text-white"
+          />
+        );
+      case "gshield":
+        return (
+          <ShieldCheck
+            size={iconPx}
+            strokeWidth={2.2}
+            className="text-white"
+          />
+        );
+      case "gfresh":
+        return (
+          <Leaf
+            size={iconPx}
+            strokeWidth={2.2}
+            className="text-white"
+          />
+        );
+      case "gcard":
+        return (
+          <CreditCard
+            size={iconPx}
+            strokeWidth={2.1}
+            className="text-white"
+          />
+        );
+      case "gwallet":
+        return (
+          <Wallet
+            size={iconPx}
+            strokeWidth={2.1}
             className="text-white"
           />
         );

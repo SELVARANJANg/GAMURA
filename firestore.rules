@@ -310,5 +310,111 @@ service cloud.firestore {
         allow delete: if isValidClipRoomCode(roomCode) && isValidId(deviceId);
       }
     }
+
+    // Gamura Launch Store: Community Star Ratings & Reviews (Public social proof, owner-restricted writes)
+    function isValidStoreReview(data) {
+      return data.keys().hasAll(['appId', 'userId', 'authorName', 'rating', 'comment', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['appId', 'userId', 'authorName', 'authorPhoto', 'rating', 'comment', 'createdAt', 'updatedAt'])
+        && isValidId(data.appId) && data.appId.size() <= 80
+        && data.userId is string && data.userId == request.auth.uid && data.userId.size() <= 128
+        && data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60
+        && (!('authorPhoto' in data) || (data.authorPhoto is string && data.authorPhoto.size() <= 500))
+        && (data.rating is int || data.rating is number) && data.rating >= 1 && data.rating <= 5
+        && data.comment is string && data.comment.size() <= 600
+        && (data.createdAt is timestamp)
+        && (data.updatedAt is timestamp);
+    }
+
+    match /store_reviews/{reviewId} {
+      allow get: if isValidId(reviewId);
+      allow list: if resource.data.rating >= 1 && resource.data.rating <= 5;
+      allow create: if isSignedIn()
+        && isValidId(reviewId)
+        && isValidStoreReview(incoming())
+        && reviewId == (incoming().appId + '__' + request.auth.uid)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(reviewId)
+        && (existing().userId == request.auth.uid || isAdmin())
+        && isValidStoreReview(incoming())
+        && incoming().userId == existing().userId
+        && incoming().appId == existing().appId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['authorName', 'authorPhoto', 'rating', 'comment', 'updatedAt']);
+      allow delete: if isSignedIn()
+        && isValidId(reviewId)
+        && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // Gamura Launch Store: Cross-Device Cloud Sync for Installed Apps (Strict owner-only access)
+    function isValidUserInstalledApps(data, userId) {
+      return data.keys().hasAll(['uid', 'universeAppIds', 'mobileAppIds', 'customApps', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'gamuraHandle', 'universeAppIds', 'mobileAppIds', 'customApps', 'lastDevice', 'updatedAt'])
+        && data.uid is string && data.uid == userId && data.uid == request.auth.uid && data.uid.size() <= 128
+        && (!('gamuraHandle' in data) || (data.gamuraHandle is string && data.gamuraHandle.size() <= 80))
+        && (!('lastDevice' in data) || (data.lastDevice is string && data.lastDevice.size() <= 64))
+        && data.universeAppIds is list && data.universeAppIds.size() <= 100
+        && (data.universeAppIds.size() == 0 || data.universeAppIds[0] is string)
+        && data.mobileAppIds is list && data.mobileAppIds.size() <= 100
+        && (data.mobileAppIds.size() == 0 || data.mobileAppIds[0] is string)
+        && data.customApps is list && data.customApps.size() <= 30
+        && (data.customApps.size() == 0 || data.customApps[0] is map)
+        && (data.updatedAt is timestamp);
+    }
+
+    match /user_installed_apps/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserInstalledApps(incoming(), userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && (request.auth.uid == userId || isAdmin())
+        && isValidUserInstalledApps(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['gamuraHandle', 'universeAppIds', 'mobileAppIds', 'customApps', 'lastDevice', 'updatedAt']);
+      allow delete: if isSignedIn()
+        && isValidId(userId)
+        && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Gamura Card (Gcard) <-> Gwallet (Gamura Wallet) Real-Time Sync Vault (Strict owner-only access)
+    function isValidCardWalletVault(data, userId) {
+      return data.keys().hasAll(['uid', 'connected', 'connectedAtMs', 'cardJson', 'walletJson', 'updatedByApp', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'connected', 'connectedAtMs', 'cardJson', 'walletJson', 'updatedByApp', 'updatedAt'])
+        && data.uid is string && data.uid == userId && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.connected is bool
+        && (data.connectedAtMs is int || data.connectedAtMs is number) && data.connectedAtMs >= 0
+        && data.cardJson is string && data.cardJson.size() <= 600000
+        && data.walletJson is string && data.walletJson.size() <= 250000
+        && data.updatedByApp in ['gcard', 'gwallet']
+        && (data.updatedAt is timestamp);
+    }
+
+    match /card_wallet_vaults/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidCardWalletVault(incoming(), userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && (request.auth.uid == userId || isAdmin())
+        && isValidCardWalletVault(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['connected', 'connectedAtMs', 'cardJson', 'walletJson', 'updatedByApp', 'updatedAt']);
+      allow delete: if isSignedIn()
+        && isValidId(userId)
+        && (request.auth.uid == userId || isAdmin());
+    }
   }
 }

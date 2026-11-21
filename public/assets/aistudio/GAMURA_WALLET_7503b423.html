@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GAMURA WALLET</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{--bg:#f2f2f7;--c:#fff;--t:#111;--m:#6e6e73;--l:#e3e3e8;--sf:#efeff4;--ac:#0a8f5a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--c:#1c1c1e;--t:#f5f5f7;--m:#98989d;--l:#38383a;--sf:#2c2c2e}}
+:root[data-theme="dark"]{--bg:#000;--c:#1c1c1e;--t:#f5f5f7;--m:#98989d;--l:#38383a;--sf:#2c2c2e}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--t);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input{font:inherit;color:var(--t);width:100%;border:0;background:var(--sf);border-radius:14px;padding:14px 16px;font-size:16px;outline:0;margin-top:8px}
+#app{max-width:520px;margin:0 auto;height:100%;overflow-y:auto;padding:0 18px 120px;position:relative}
+.top{display:flex;align-items:center;gap:10px;padding:14px 0 6px;position:sticky;top:0;background:var(--bg);z-index:5}
+.logo{width:36px;height:36px;border-radius:11px;background:linear-gradient(135deg,#10d98a,#05452d);display:grid;place-items:center;color:#fff;font-weight:800;font-size:19px;box-shadow:0 4px 12px rgba(10,143,90,.45)}
+.top b{font-size:22px;letter-spacing:-.4px;flex:1}.ib{width:40px;height:40px;border-radius:50%;background:var(--c);display:grid;place-items:center;font-size:19px;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.bal{margin:14px 0 4px;padding:20px;border-radius:26px;background:linear-gradient(135deg,#0b3d2a,#05150f);color:#fff;position:relative;overflow:hidden}
+.bal small{opacity:.7;font-size:13px;letter-spacing:.6px;text-transform:uppercase}.bal h1{margin:4px 0 0;font-size:40px;letter-spacing:-1px}
+.bal:after{content:"";position:absolute;right:-50px;top:-50px;width:170px;height:170px;border-radius:50%;border:26px solid rgba(16,217,138,.2);box-shadow:0 0 0 24px rgba(16,217,138,.08)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:14px 0;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:9px 16px;border-radius:99px;background:var(--c);font-size:14px;font-weight:600;border:1px solid var(--l)}.chip.on{background:var(--t);color:var(--bg);border-color:var(--t)}
+.srch{margin:0 0 6px}
+.slot{margin-top:-108px;position:relative;animation:in .5s both cubic-bezier(.2,.9,.3,1);transition:transform .25s}.slot:first-child{margin-top:0}.slot:active{transform:scale(.98)}
+@keyframes in{from{opacity:0;transform:translateY(40px) scale(.96)}}
+.wc{aspect-ratio:1.586;border-radius:24px;background:linear-gradient(135deg,var(--a),var(--b));color:var(--tc,#fff);position:relative;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:inset 0 1.5px 0 rgba(255,255,255,.35),0 -6px 18px rgba(0,0,0,.14),0 14px 30px rgba(0,0,0,.25)}
+.wc svg{position:absolute;right:-40px;top:-40px;width:230px;opacity:.5}.wc .sh{position:absolute;inset:0;background:radial-gradient(circle at var(--mx,25%) var(--my,0%),rgba(255,255,255,.42),transparent 48%);mix-blend-mode:overlay}
+.wc .ho{position:absolute;inset:0;background:conic-gradient(from var(--ang,0deg) at 50% 50%,#ff7ab8,#7affc8,#7ab8ff,#ffe27a,#ff7ab8);opacity:.13;mix-blend-mode:color-dodge}
+.wc>div{position:relative}.r1{display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:17px}.r1 small{font-weight:600;opacity:.75;font-size:11px;letter-spacing:1.2px;text-transform:uppercase}
+.r2{display:flex;justify-content:space-between;align-items:flex-end}.r2 span{font-size:13px;opacity:.8;max-width:50%}.r2 b{font-size:21px;letter-spacing:.5px;font-variant-numeric:tabular-nums}
+.empty{text-align:center;color:var(--m);padding:60px 0}.empty div{font-size:60px}
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--t);color:var(--bg);padding:16px 30px;border-radius:99px;font-weight:700;font-size:17px;box-shadow:0 10px 30px rgba(0,0,0,.35);z-index:8}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:none;align-items:flex-end;justify-content:center;z-index:20}.sheet.on{display:flex}
+.sc{background:var(--bg);width:min(520px,100%);max-height:94%;overflow-y:auto;border-radius:30px 30px 0 0;padding:10px 18px calc(24px + env(safe-area-inset-bottom,0px));animation:up .35s cubic-bezier(.2,.9,.3,1)}@keyframes up{from{transform:translateY(100%)}}
+.grab{width:42px;height:5px;border-radius:9px;background:var(--l);margin:4px auto 12px}
+.h{display:flex;align-items:center;margin-bottom:12px}.h b{flex:1;font-size:21px}
+.btn{background:var(--ac);color:#fff;border-radius:16px;padding:16px;font-weight:700;font-size:17px;width:100%;margin-top:14px}.btn.s{background:var(--c);color:var(--t);border:1px solid var(--l)}.btn.d{background:#e5484d}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.qr{background:#fff;border-radius:22px;padding:16px;width:max-content;margin:16px auto 6px}.qr img,.qr canvas{display:block}
+.num{text-align:center;font-family:ui-monospace,Menlo,monospace;color:var(--m);letter-spacing:2px;font-size:14px}
+.tx{display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--l);font-size:16px}.tx small{display:block;color:var(--m);font-size:12px}.plus{color:#0a8f5a}
+.lab{color:var(--m);font-size:13px;margin:16px 0 0;text-transform:uppercase;letter-spacing:.5px}
+.sw{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}.sw i{width:42px;height:42px;border-radius:50%;border:2px solid var(--l)}.sw i.on{outline:3px solid var(--t);outline-offset:2px}
+.tp{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.nfc{height:240px;display:grid;place-items:center;position:relative}.nfc i{position:absolute;width:90px;height:90px;border-radius:50%;border:3px solid var(--ac);animation:pu 1.4s infinite}.nfc i:nth-child(2){animation-delay:.45s}.nfc i:nth-child(3){animation-delay:.9s}
+@keyframes pu{from{transform:scale(.6);opacity:1}to{transform:scale(3);opacity:0}}.nfc span{font-size:46px;z-index:2}
+.ok{font-size:90px;text-align:center;animation:in .5s}
+#lock{position:fixed;inset:0;background:linear-gradient(160deg,#05150f,#0b3d2a);color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:60}#lock.on{display:flex}
+.dots{display:flex;gap:16px;margin:22px 0 34px}.dots i{width:14px;height:14px;border-radius:50%;border:2px solid #fff}.dots i.f{background:#fff}
+.pad{display:grid;grid-template-columns:repeat(3,74px);gap:16px}.pad button{height:74px;border-radius:50%;background:rgba(255,255,255,.12);font-size:28px;color:#fff}
+.tog{width:52px;height:32px;border-radius:99px;background:var(--l);position:relative;flex:none}.tog:after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:.2s}.tog.on{background:var(--ac)}.tog.on:after{left:23px}
+.li{display:flex;align-items:center;justify-content:space-between;padding:15px 0;border-bottom:1px solid var(--l);font-size:17px}
+.toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#111;color:#fff;padding:11px 20px;border-radius:99px;font-size:15px;opacity:0;transition:.3s;z-index:90;pointer-events:none;white-space:nowrap}.toast.on{opacity:1}
+</style></head><body>
+<div id="app">
+ <div class="top"><div class="logo">G</div><b>Wallet</b><button class="ib" onclick="settings()">⚙︎</button></div>
+ <div class="bal"><small>Gamura balance</small><h1 id="tot">₹0</h1></div>
+ <div class="chips" id="chips"></div>
+ <input class="srch" id="q" placeholder="🔍  Search your wallet" oninput="q=this.value.toLowerCase();list()">
+ <div id="list" style="padding-top:8px"></div>
+</div>
+<button class="fab" onclick="form()">＋ Add to Wallet</button>
+<div class="sheet" id="sheet" onclick="if(event.target==this)closeS()"><div class="sc" id="sc"></div></div>
+<div id="lock"><div style="font-size:44px">🔒</div><h2 id="lt" style="margin:10px 0 0">Enter PIN</h2><div class="dots" id="dots"></div><div class="pad" id="pad"></div><button onclick="lockCancel()" id="lc" style="margin-top:26px;opacity:.7;color:#fff;display:none">Cancel</button></div>
+<div class="toast" id="toast"></div>
+<script>
+const $=s=>document.querySelector(s);
+const TY={pay:["Payment","💳"],pass:["Pass","🎫"],id:["ID","🪪"],key:["Key","🔑"],gift:["Gift & loyalty","🎁"]};
+const PAL=[["#10b981","#064e3b"],["#2358e8","#0b1f66"],["#e11d48","#4a0a1d"],["#a21caf","#3a0a4a"],["#f59e0b","#7a2d08"],["#2b2b30","#050506"],["#06b6d4","#0b3a66"],["#f4f4f7","#b9b9c6"]];
+const uid=()=>Math.random().toString(36).slice(2,9);
+const SEED=[{id:uid(),type:"pay",name:"Gamura Pay",sub:"Virtual card",num:"4821 7733 0912 4821",bal:2450,col:0,tx:[{t:"Gamura Cafe",a:-120,d:Date.now()-864e5},{t:"Added money",a:2000,d:Date.now()-2*864e5}]},
+{id:uid(),type:"id",name:"Gamura ID",sub:"Selvaranjan G · BCA",num:"GAMURA-SR-2026",col:1},
+{id:uid(),type:"pass",name:"Metro Pass",sub:"Chennai · Monthly",num:"MTR-8842-1190",col:6},
+{id:uid(),type:"gift",name:"Gamura Gold",sub:"Loyalty · 1,240 pts",num:"GG-5521-0007",col:4},
+{id:uid(),type:"key",name:"Hostel Key",sub:"Block B · Room 204",num:"KEY-B204-AX9",col:5}];
+let W=load(),filt="all",q="",cur=null,pcol=0,ptype="pay",ed=null,pinBuf="",pinCb=null,pinMode="";
+function load(){try{const r=JSON.parse(localStorage.getItem("gw2"));if(r)return r}catch(e){}return{cards:SEED,pin:null}}
+function save(){try{localStorage.setItem("gw2",JSON.stringify(W))}catch(e){}}
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("on"),1900)}
+const inr=n=>"₹"+Number(n).toLocaleString("en-IN");
+const mask=c=>c.type=="pay"?inr(c.bal):"•••• "+String(c.num).slice(-4);
+function card(c){const p=PAL[c.col]||PAL[0];return `<div class="wc" style="--a:${p[0]};--b:${p[1]};${c.col==7?"--tc:#111":""}"><svg viewBox="0 0 230 230" fill="none" stroke="#fff" stroke-opacity=".35"><circle cx="115" cy="115" r="40"/><circle cx="115" cy="115" r="70"/><circle cx="115" cy="115" r="100"/><circle cx="115" cy="115" r="140" stroke-dasharray="3 7"/></svg><div class="ho"></div><div class="sh"></div><div class="r1"><span>${TY[c.type][1]} ${esc(c.name)}</span><small>${TY[c.type][0]}</small></div><div class="r2"><span>${esc(c.sub||"")}</span><b>${mask(c)}</b></div></div>`}
+function esc(s){return String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
+function chips(){$("#chips").innerHTML=[["all","All"],...Object.entries(TY).map(([k,v])=>[k,v[1]+" "+v[0]])].map(([k,l])=>`<button class="chip ${filt==k?"on":""}" onclick="filt='${k}';chips();list()">${l}</button>`).join("")}
+function list(){const a=W.cards.filter(c=>(filt=="all"||c.type==filt)&&(c.name+c.sub).toLowerCase().includes(q));
+ $("#tot").textContent=inr(W.cards.filter(c=>c.type=="pay").reduce((s,c)=>s+c.bal,0));
+ $("#list").innerHTML=a.length?a.map((c,i)=>`<div class="slot" data-id="${c.id}" style="z-index:${i};animation-delay:${i*60}ms" onclick="openC('${c.id}')">${card(c)}</div>`).join(""):`<div class="empty"><div>👛</div><p>Nothing here yet.<br>Tap “Add to Wallet”.</p></div>`}
+$("#list").addEventListener("pointermove",e=>{const w=e.target.closest(".wc");if(!w)return;const r=w.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*100,y=(e.clientY-r.top)/r.height*100;w.style.setProperty("--mx",x+"%");w.style.setProperty("--my",y+"%");w.style.setProperty("--ang",x*3.6+"deg")});
+function S(h){$("#sc").innerHTML=`<div class="grab"></div>`+h;$("#sheet").classList.add("on")}
+function closeS(){$("#sheet").classList.remove("on")}
+const byId=id=>W.cards.find(c=>c.id==id);
+/* detail */
+function openC(id){cur=byId(id);if(!cur)return;const c=cur;
+ S(`<div class="h"><b>${esc(c.name)}</b><button class="ib" onclick="closeS()">✕</button></div>${card(c)}
+ ${c.type=="pay"?`<div class="row"><button class="btn" onclick="payFlow()">Tap to pay</button><button class="btn s" onclick="addMoney()">Add money</button></div>`:`<div class="qr" id="qr"></div><div class="num">${esc(c.num)}</div>`}
+ ${c.type=="pay"?`<div class="lab">Recent activity</div>${(c.tx||[]).slice(0,12).map(t=>`<div class="tx"><div>${esc(t.t)}<small>${new Date(t.d).toLocaleDateString()}</small></div><b class="${t.a>0?"plus":""}">${t.a>0?"+":"−"}${inr(Math.abs(t.a))}</b></div>`).join("")||`<p class="num">No activity yet</p>`}`:""}
+ <div class="row"><button class="btn s" onclick="form('${c.id}')">Edit</button><button class="btn s d2" style="color:#e5484d" onclick="del(this)">Remove</button></div>`);
+ if(c.type!="pay"){try{new QRCode($("#qr"),{text:"gamura-wallet:"+c.type+":"+c.num,width:190,height:190,correctLevel:QRCode.CorrectLevel.M})}catch(e){}}}
+function del(b){if(!b.dataset.s){b.dataset.s=1;b.textContent="Tap again to confirm";return}W.cards=W.cards.filter(x=>x!=cur);save();closeS();list();toast("Removed")}
+/* pay */
+const MER=["Gamura Cafe","Campus Store","Metro Ticket","Gamura Games"];let mer=0;
+function payFlow(){S(`<div class="h"><b>Tap to pay</b><button class="ib" onclick="openC('${cur.id}')">←</button></div><div class="lab" style="margin-top:0">Merchant</div><div class="tp">${MER.map((m,i)=>`<button class="chip ${i==mer?"on":""}" onclick="mer=${i};payFlow()">${m}</button>`).join("")}</div><div class="lab">Amount (₹)</div><input id="amt" type="number" inputmode="decimal" value="${window._a||50}" oninput="window._a=this.value"><button class="btn" onclick="doPay()">Hold near reader</button><p class="num" style="margin-top:14px">Simulated payment — no real money moves.</p>`)}
+function doPay(){const a=+$("#amt").value;if(!(a>0))return toast("Enter an amount");if(a>cur.bal)return toast("Insufficient balance");
+ const go=()=>{S(`<div class="nfc"><i></i><i></i><i></i><span>📲</span></div><h3 style="text-align:center;margin:0">Hold near the reader…</h3>`);
+  setTimeout(()=>{cur.bal-=a;(cur.tx=cur.tx||[]).unshift({t:MER[mer],a:-a,d:Date.now()});save();list();S(`<div class="ok">✅</div><h2 style="text-align:center;margin:0">${inr(a)} paid</h2><p class="num">${MER[mer]} · Balance ${inr(cur.bal)}</p><button class="btn" onclick="openC('${cur.id}')">Done</button>`)},1900)};
+ W.pin?askPin("Confirm payment",go):go()}
+function addMoney(){S(`<div class="h"><b>Add money</b><button class="ib" onclick="openC('${cur.id}')">←</button></div><div class="tp">${[100,500,1000,5000].map(n=>`<button class="chip" onclick="$('#am').value=${n}">+${inr(n)}</button>`).join("")}</div><input id="am" type="number" inputmode="decimal" placeholder="Custom amount"><button class="btn" onclick="const a=+$('#am').value;if(!(a>0))return toast('Enter an amount');cur.bal+=a;(cur.tx=cur.tx||[]).unshift({t:'Added money',a:a,d:Date.now()});save();list();openC('${cur.id}');toast('Added '+inr(a))">Add</button>`)}
+/* add / edit */
+function form(id){ed=id?byId(id):null;ptype=ed?ed.type:"pay";pcol=ed?ed.col:0;fr(ed?{n:ed.name,s:ed.sub,u:ed.num,b:ed.bal}:{})}
+let FV={};function keep(){["n","s","u","b"].forEach(k=>{const e=$("#f"+k);if(e)FV[k]=e.value})}
+function fr(v){FV=Object.assign(FV,v);S(`<div class="h"><b>${ed?"Edit":"Add"} pass</b><button class="ib" onclick="closeS()">✕</button></div><div class="tp">${Object.entries(TY).map(([k,t])=>`<button class="chip ${ptype==k?"on":""}" onclick="keep();ptype='${k}';fr({})">${t[1]} ${t[0]}</button>`).join("")}</div>
+ <input id="fn" placeholder="Name (e.g. Gamura Pay)" value="${esc(FV.n||"")}"><input id="fs" placeholder="Subtitle / issuer" value="${esc(FV.s||"")}"><input id="fu" placeholder="${ptype=="pay"?"Card number":"Pass / ticket / ID number"}" value="${esc(FV.u||"")}">
+ ${ptype=="pay"||ptype=="gift"?`<input id="fb" type="number" inputmode="decimal" placeholder="Balance (₹)" value="${FV.b??""}">`:""}
+ <div class="lab">Color</div><div class="sw">${PAL.map((p,i)=>`<i class="${pcol==i?"on":""}" style="background:linear-gradient(135deg,${p[0]},${p[1]})" onclick="keep();pcol=${i};fr({})"></i>`).join("")}</div><div style="margin:18px 0 0">${card({type:ptype,name:FV.n||"Your pass",sub:FV.s||"Subtitle",num:FV.u||"0000",bal:+FV.b||0,col:pcol})}</div><button class="btn" onclick="saveForm()">${ed?"Save changes":"Add to Wallet"}</button>`)}
+function saveForm(){keep();const n=(FV.n||"").trim(),u=(FV.u||"").trim()||String(Math.floor(1e11*Math.random()));if(!n)return toast("Enter a name");
+ const o={type:ptype,name:n,sub:(FV.s||"").trim(),num:u,col:pcol};if(ptype=="pay"||ptype=="gift")o.bal=+FV.b||0;
+ if(ed){Object.assign(ed,o)}else{W.cards.unshift({id:uid(),tx:[],...o})}FV={};save();closeS();list();toast(ed?"Saved":"Added to Wallet")}
+/* settings */
+function settings(){S(`<div class="h"><b>Settings</b><button class="ib" onclick="closeS()">✕</button></div>
+ <div class="li"><span>🔒 PIN lock</span><button class="tog ${W.pin?"on":""}" onclick="togPin()"></button></div>
+ <div class="li"><span>🌙 Dark mode</span><button class="tog" onclick="theme()"></button></div>
+ <div class="li"><span>Cards in wallet</span><b>${W.cards.length}</b></div>
+ <button class="btn s" onclick="if(!this.dataset.s){this.dataset.s=1;this.textContent='Tap again to reset';return}W=load.call(0,0)||{};W={cards:JSON.parse(JSON.stringify(SEED)),pin:null};save();list();closeS();toast('Wallet reset')">Reset demo wallet</button>
+ <p class="num" style="margin-top:16px">Gamura Wallet · data stays on this device.<br>Payments are simulated.</p>`)}
+function theme(){const r=document.documentElement,d=r.dataset.theme=="dark"||(r.dataset.theme!="light"&&matchMedia("(prefers-color-scheme:dark)").matches);r.dataset.theme=d?"light":"dark"}
+function togPin(){if(W.pin){askPin("Enter PIN to turn off",()=>{W.pin=null;save();settings();toast("PIN removed")})}else{pinMode="set";pinBuf="";pinCb=p=>{W.pin=p;save();settings();toast("PIN set")};showLock("Create a 4-digit PIN",true)}}
+/* lock */
+function askPin(t,cb){pinMode="ask";pinBuf="";pinCb=cb;showLock(t,true)}
+function showLock(t,c){$("#lt").textContent=t;$("#lc").style.display=c?"block":"none";$("#lock").classList.add("on");dots()}
+function lockCancel(){$("#lock").classList.remove("on")}
+function dots(){$("#dots").innerHTML=[0,1,2,3].map(i=>`<i class="${i<pinBuf.length?"f":""}"></i>`).join("")}
+$("#pad").innerHTML=[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map(k=>k===""?"<i></i>":`<button onclick="key('${k}')">${k}</button>`).join("");
+function key(k){if(k=="⌫")pinBuf=pinBuf.slice(0,-1);else if(pinBuf.length<4)pinBuf+=k;dots();if(pinBuf.length==4){const p=pinBuf;pinBuf="";
+ if(pinMode=="set"||p===W.pin){setTimeout(()=>{$("#lock").classList.remove("on");pinCb&&pinCb(p)},150)}else{$("#lt").textContent="Wrong PIN, try again";setTimeout(dots,200)}}}
+chips();list();
+if(W.pin){pinMode="ask";pinCb=null;showLock("Unlock Gamura Wallet",false)}
+</script></body></html>

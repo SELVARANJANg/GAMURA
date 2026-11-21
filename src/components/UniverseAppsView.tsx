@@ -1,19 +1,40 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { ArrowUpRight, Info, LayoutGrid, Sparkles, Star, Trash2 } from "lucide-react";
+import {
+  ArrowUpRight,
+  Cloud,
+  Info,
+  LayoutGrid,
+  Sparkles,
+  Star,
+  Trash2,
+} from "lucide-react";
+import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 import StoreAppGlyph from "./StoreAppGlyph";
 import {
   APP_RATINGS_EVENT,
   APP_RATINGS_KEY,
+  CUSTOM_STORE_APPS_KEY,
+  MOBILE_APPS_KEY,
   StoreAppItem,
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
-  getAppRatingStats,
   getAppVersion,
   getUniverseInstalledApps,
   rateStoreApp,
+  readStoreJson,
   removeAppFromUniverse,
 } from "../utils/gamuraStoreApps";
+import {
+  type StoreReviewDoc,
+  computeCombinedAppRatingStats,
+  saveAppReviewToCloud,
+  subscribeStoreReviews,
+  subscribeUserInstalledApps,
+  syncInstalledAppsToCloud,
+} from "../utils/gamuraCloudSync";
 
 interface UniverseAppsViewProps {
   showToast: (
@@ -32,17 +53,73 @@ export default function UniverseAppsView({
   const [apps, setApps] = useState<StoreAppItem[]>(() =>
     getUniverseInstalledApps(),
   );
-  const [ratingsTick, setRatingsTick] = useState(0);
+  const [localRatingsMap, setLocalRatingsMap] = useState<
+    Record<string, number>
+  >(() => readStoreJson<Record<string, number>>(APP_RATINGS_KEY, {}));
+  const [storeReviews, setStoreReviews] = useState<StoreReviewDoc[]>([]);
+  const [authUser, setAuthUser] = useState<FirebaseUser | null>(
+    () => auth.currentUser,
+  );
+  const [gamuraHandle, setGamuraHandle] = useState<string>("");
   const [sortByRating, setSortByRating] = useState(true);
   const [hoveredAppId, setHoveredAppId] = useState<string | null>(null);
   const [pinnedTooltipId, setPinnedTooltipId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      setAuthUser(user);
+      if (user) {
+        try {
+          const userSnap = await getDoc(doc(db, "users", user.uid));
+          if (userSnap.exists()) {
+            const d = userSnap.data();
+            const handle =
+              (typeof d.username === "string" && d.username) ||
+              (typeof d.nickname === "string" && d.nickname) ||
+              user.displayName ||
+              user.email ||
+              "Gamura Member";
+            setGamuraHandle(handle);
+          } else {
+            setGamuraHandle(user.displayName || user.email || "Gamura Member");
+          }
+        } catch {
+          setGamuraHandle(user.displayName || user.email || "Gamura Member");
+        }
+      } else {
+        setGamuraHandle("");
+      }
+    });
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) return;
+    const unsubCloud = subscribeUserInstalledApps(
+      authUser.uid,
+      gamuraHandle || authUser.displayName || authUser.email,
+      () => {
+        setApps(getUniverseInstalledApps());
+      },
+    );
+    return () => unsubCloud();
+  }, [authUser, gamuraHandle]);
+
+  useEffect(() => {
+    const unsubReviews = subscribeStoreReviews((reviews) => {
+      setStoreReviews(reviews);
+    });
+    return () => unsubReviews();
+  }, []);
 
   useEffect(() => {
     const syncApps = () => {
       setApps(getUniverseInstalledApps());
     };
     const syncRatings = () => {
-      setRatingsTick((t) => t + 1);
+      setLocalRatingsMap(
+        readStoreJson<Record<string, number>>(APP_RATINGS_KEY, {}),
+      );
     };
 
     const handleStorage = (e: StorageEvent) => {
@@ -64,33 +141,81 @@ export default function UniverseAppsView({
     };
   }, []);
 
+  const statsByAppId = useMemo(() => {
+    const map = new Map<
+      string,
+      ReturnType<typeof computeCombinedAppRatingStats>
+    >();
+    apps.forEach((app) => {
+      map.set(
+        app.id,
+        computeCombinedAppRatingStats(
+          app,
+          storeReviews,
+          authUser?.uid,
+          localRatingsMap[app.id] || 0,
+        ),
+      );
+    });
+    return map;
+  }, [apps, storeReviews, authUser, localRatingsMap]);
+
   const displayedApps = useMemo(() => {
     if (!sortByRating) return apps;
-    return [...apps].sort(
-      (a, b) => getAppRatingStats(b).average - getAppRatingStats(a).average,
-    );
-  }, [apps, sortByRating, ratingsTick]);
+    return [...apps].sort((a, b) => {
+      const avgB = statsByAppId.get(b.id)?.average ?? b.rating ?? 4.8;
+      const avgA = statsByAppId.get(a.id)?.average ?? a.rating ?? 4.8;
+      return avgB - avgA;
+    });
+  }, [apps, sortByRating, statsByAppId]);
 
-  const handleUninstall = (app: StoreAppItem) => {
+  const handleUninstall = async (app: StoreAppItem) => {
     const next = removeAppFromUniverse(app.id);
     setApps(next);
     if (hoveredAppId === app.id) setHoveredAppId(null);
     if (pinnedTooltipId === app.id) setPinnedTooltipId(null);
+    if (authUser) {
+      await syncInstalledAppsToCloud({
+        uid: authUser.uid,
+        gamuraHandle: gamuraHandle || authUser.displayName || authUser.email,
+        universeAppIds: next.map((x) => x.id),
+        mobileAppIds: readStoreJson<string[]>(MOBILE_APPS_KEY, []),
+        customApps: readStoreJson<StoreAppItem[]>(CUSTOM_STORE_APPS_KEY, []),
+      });
+    }
     showToast(
       "🗑️",
       `${app.name} Uninstalled`,
-      "Removed from your Universe Apps workspace.",
+      authUser
+        ? "Removed from Universe Apps and synced across your Gamura ID devices."
+        : "Removed from your Universe Apps workspace.",
       "info",
     );
   };
 
-  const handleQuickRate = (app: StoreAppItem, stars: number) => {
+  const handleQuickRate = async (app: StoreAppItem, stars: number) => {
     rateStoreApp(app, stars);
-    setRatingsTick((t) => t + 1);
+    setLocalRatingsMap(
+      readStoreJson<Record<string, number>>(APP_RATINGS_KEY, {}),
+    );
+    if (authUser) {
+      const existingReview = statsByAppId.get(app.id)?.userReview;
+      await saveAppReviewToCloud({
+        appId: app.id,
+        userId: authUser.uid,
+        authorName:
+          gamuraHandle || authUser.displayName || authUser.email || "Gamura Member",
+        authorPhoto: authUser.photoURL,
+        rating: stars,
+        comment: existingReview?.comment || "",
+      });
+    }
     showToast(
       "⭐",
       `Rated ${app.name} ${stars}/5`,
-      "Your star rating synced with Gamura Launch Store.",
+      authUser
+        ? "Your star rating synced live to Gamura Cloud."
+        : "Your star rating synced with Gamura Launch Store.",
       "success",
     );
   };
@@ -103,9 +228,17 @@ export default function UniverseAppsView({
             <LayoutGrid size={18} />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-zinc-900 tracking-tight">
-              Universe Apps
-            </h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-semibold text-zinc-900 tracking-tight">
+                Universe Apps
+              </h2>
+              {authUser && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
+                  <Cloud size={12} />
+                  <span>Cloud Sync Active</span>
+                </span>
+              )}
+            </div>
             <p className="text-xs text-zinc-500 mt-0.5">
               {apps.length === 0
                 ? "Empty until you install apps from Gamura Launch Store."
@@ -162,11 +295,18 @@ export default function UniverseAppsView({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 overflow-visible">
           {displayedApps.map((app) => {
-            const stats = getAppRatingStats(app);
+            const stats =
+              statsByAppId.get(app.id) ??
+              computeCombinedAppRatingStats(
+                app,
+                storeReviews,
+                authUser?.uid,
+                localRatingsMap[app.id] || 0,
+              );
+            const userRating =
+              stats.userReview?.rating || localRatingsMap[app.id] || 0;
             const activeStarDisplay =
-              stats.userRating > 0
-                ? stats.userRating
-                : Math.round(stats.average);
+              userRating > 0 ? userRating : Math.round(stats.average);
             const isPopular = stats.average >= 4.8;
             const versionLabel = getAppVersion(app);
             const isPopoverOpen =
@@ -174,7 +314,7 @@ export default function UniverseAppsView({
 
             return (
               <div
-                key={`${app.id}-${ratingsTick}`}
+                key={app.id}
                 onMouseEnter={() => setHoveredAppId(app.id)}
                 onMouseLeave={() =>
                   setHoveredAppId((prev) => (prev === app.id ? null : prev))
@@ -355,9 +495,9 @@ export default function UniverseAppsView({
                     <span className="text-zinc-400">
                       ({stats.totalVotes})
                     </span>
-                    {stats.userRating > 0 && (
+                    {userRating > 0 && (
                       <span className="text-[10px] font-semibold text-[#059669]">
-                        · You rated {stats.userRating}★
+                        · You rated {userRating}★
                       </span>
                     )}
                   </div>

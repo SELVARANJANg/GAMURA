@@ -184,6 +184,52 @@
         "n": { "type": "string", "maxLength": 32 }
       },
       "required": ["ts", "n"]
+    },
+    "StoreAppReview": {
+      "title": "StoreAppReview",
+      "description": "Community star rating and review for a Gamura Launch Store application",
+      "type": "object",
+      "properties": {
+        "appId": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 60 },
+        "authorPhoto": { "type": "string", "maxLength": 500 },
+        "rating": { "type": "number" },
+        "comment": { "type": "string", "maxLength": 600 },
+        "createdAt": { "type": "object" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["appId", "userId", "authorName", "rating", "comment", "createdAt", "updatedAt"]
+    },
+    "UserInstalledApps": {
+      "title": "UserInstalledApps",
+      "description": "Cross-device cloud-synced installed Launch Store apps for a Gamura ID user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "gamuraHandle": { "type": "string", "maxLength": 80 },
+        "universeAppIds": { "type": "array" },
+        "mobileAppIds": { "type": "array" },
+        "customApps": { "type": "array" },
+        "lastDevice": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["uid", "universeAppIds", "mobileAppIds", "customApps", "updatedAt"]
+    },
+    "CardWalletVault": {
+      "title": "CardWalletVault",
+      "description": "Real-time bidirectional synced state between Gamura Card (Gcard) and Gwallet (Gamura Wallet) per user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "connected": { "type": "boolean" },
+        "connectedAtMs": { "type": "number" },
+        "cardJson": { "type": "string", "maxLength": 600000 },
+        "walletJson": { "type": "string", "maxLength": 250000 },
+        "updatedByApp": { "type": "string", "enum": ["gcard", "gwallet"] },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["uid", "connected", "connectedAtMs", "cardJson", "walletJson", "updatedByApp", "updatedAt"]
     }
   },
   "firestore": {
@@ -246,6 +292,18 @@
     "/clip_rooms/{roomCode}/presence/{deviceId}": {
       "schema": { "$ref": "#/entities/ClipRoomPresence" },
       "description": "Active device presence heartbeats inside a 6-character clip room"
+    },
+    "/store_reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/StoreAppReview" },
+      "description": "Public star ratings and community reviews for Gamura Launch Store apps"
+    },
+    "/user_installed_apps/{userId}": {
+      "schema": { "$ref": "#/entities/UserInstalledApps" },
+      "description": "Private cloud-synced installed app libraries keyed by Gamura ID user UID"
+    },
+    "/card_wallet_vaults/{userId}": {
+      "schema": { "$ref": "#/entities/CardWalletVault" },
+      "description": "Private real-time synchronized Gamura Card (Gcard) and Gwallet (Gamura Wallet) data per user"
     }
   }
 }

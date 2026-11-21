@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GAMURA CARD</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Archivo+Black&family=Playfair+Display:wght@600&family=Bebas+Neue&family=Space+Mono:wght@700&family=Syne:wght@800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{--bg:#f2f2f7;--c:#fff;--t:#111;--m:#6e6e73;--l:#e5e5ea;--ac:#0a8f5a;--sf:#f2f1ee;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--c:#1c1c1e;--t:#f5f5f7;--m:#98989d;--l:#38383a;--sf:#2c2c2e}}
+:root[data-theme="dark"]{--bg:#000;--c:#1c1c1e;--t:#f5f5f7;--m:#98989d;--l:#38383a;--sf:#2c2c2e}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--t);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input[type=text],input[type=url],input[type=tel],input[type=email],textarea{font:inherit;color:var(--t);width:100%;border:0;border-bottom:1.5px solid var(--t);background:none;padding:8px 0;outline:0;font-size:17px}
+#app{max-width:520px;margin:0 auto;height:100%;position:relative;overflow:hidden}
+.scr{position:absolute;inset:0;display:none;flex-direction:column;overflow-y:auto;padding:0 20px 24px}
+.scr.on{display:flex}
+.bar{display:flex;align-items:center;gap:14px;height:56px;flex:none;position:sticky;top:0;background:var(--bg);z-index:5;font-size:19px;font-weight:600}
+.bar .sp{flex:1}.ib{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:20px}
+.pri{background:var(--ac);color:#fff;border-radius:999px;padding:12px 26px;font-weight:600;font-size:16px}
+.sec{background:var(--c);border:1px solid var(--l);border-radius:999px;padding:11px 18px;font-weight:600;font-size:14px}
+.big{width:100%;padding:17px;font-size:18px}
+/* card */
+.fl{perspective:1200px;width:100%}.fi{position:relative;aspect-ratio:8/5;transition:transform .6s cubic-bezier(.3,.8,.3,1);transform-style:preserve-3d}
+.fl.b .fi{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;border-radius:22px;overflow:hidden;backface-visibility:hidden;container-type:inline-size;box-shadow:0 8px 30px rgba(0,0,0,.14)}
+.face.bk{transform:rotateY(180deg);background:#111;color:#fff}
+.card{position:absolute;inset:0}.pat{position:absolute;inset:0;background-size:cover;background-position:center}
+.ph{position:absolute;background:#ccc center/cover;display:grid;place-items:center;font-weight:700;font-size:7cqw;color:#fff;overflow:hidden}
+.tx{position:absolute;max-width:84cqw;line-height:1.2}
+.tx h2{margin:0;font-size:8.4cqw;line-height:1.02;text-transform:uppercase;font-weight:inherit;word-break:break-word}
+.tx p{margin:1.6cqw 0 0;font-size:3.5cqw;font-family:Inter,sans-serif;font-weight:400}
+.tx p.l{margin-top:.6cqw}
+[data-l="0"] .ph{left:7cqw;top:7cqw;width:16cqw;height:16cqw;border-radius:50%}[data-l="0"] .tx{left:7cqw;bottom:7cqw}
+[data-l="1"] .ph{right:7cqw;top:7cqw;bottom:7cqw;width:23cqw;border-radius:3cqw}[data-l="1"] .tx{left:7cqw;top:50%;transform:translateY(-50%);max-width:60cqw}
+[data-l="2"] .ph{right:7cqw;top:7cqw;width:17cqw;height:17cqw;border-radius:3cqw}[data-l="2"] .tx{left:7cqw;top:7cqw;max-width:66cqw}
+[data-l="3"] .ph,[data-l="4"] .ph,[data-l="5"] .ph{display:none}[data-l="3"] .tx{right:7cqw;bottom:7cqw;text-align:right}
+[data-l="4"] .tx{left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;width:84cqw}
+[data-l="5"] .tx{left:7cqw;top:7cqw}[data-l="5"] .tx h2{font-size:11cqw}
+.stk{position:absolute;transform-origin:center;touch-action:none;filter:drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff) drop-shadow(0 1.5px 0 #fff) drop-shadow(0 -1.5px 0 #fff) drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+.stk img{display:block;width:100%;pointer-events:none;-webkit-user-drag:none}.stk.sel{outline:2px dotted #fff;outline-offset:4px}
+.hint{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:0 20%;font-weight:600;font-size:4.4cqw;pointer-events:none}
+/* intro */
+.fan{position:relative;height:300px;margin:20px 0 10px}.fan .fc{position:absolute;width:62%;left:19%;top:60px;transition:transform .8s cubic-bezier(.2,.9,.3,1)}
+.fan .fc .face{position:relative;aspect-ratio:8/5;inset:auto;box-shadow:0 10px 26px rgba(0,0,0,.22)}
+h1{font-size:34px;line-height:1.1;margin:10px 0 8px;letter-spacing:-.5px}
+.li{display:flex;gap:16px;align-items:center;padding:11px 0;font-size:17px}
+/* editor */
+.pv{padding:6px 0 18px;flex:none}.panel{flex:1;min-height:200px;padding-bottom:110px}
+.panel h3{font-size:22px;margin:6px 0 12px}.lab{color:var(--m);font-size:15px;margin:16px 0 0;display:flex;justify-content:space-between;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.grid.g2{grid-template-columns:1fr 1fr}
+.opt{background:var(--sf);border-radius:14px;border:2.5px solid transparent;aspect-ratio:8/5;overflow:hidden;position:relative}
+.opt.on,.fb.on{border-color:var(--t)}.fb{border:2px solid var(--l);border-radius:14px;padding:20px 8px;font-size:22px;text-align:center}.fb.on{background:var(--sf);border-width:2.5px}
+.sw{display:grid;grid-template-columns:repeat(6,1fr);gap:14px 8px;justify-items:center}
+.dot{width:42px;height:42px;border-radius:50%;border:2px solid var(--l)}.dot.on{outline:3px solid var(--t);outline-offset:2px}
+.tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(492px,calc(100% - 28px));background:var(--c);border-radius:999px;box-shadow:0 4px 24px rgba(0,0,0,.16);display:flex;justify-content:space-between;padding:8px;z-index:9}
+.tabs button{width:60px;height:46px;border-radius:999px;display:grid;place-items:center}.tabs button.on{background:var(--sf)}
+.tabs svg{width:26px;height:26px;stroke:var(--t);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tog{width:52px;height:32px;border-radius:99px;background:var(--l);position:relative;transition:.2s}.tog:after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.4);transition:.2s}.tog.on{background:var(--ac)}.tog.on:after{left:23px}
+.add{width:100px;height:100px;border-radius:16px;background:var(--sf);display:grid;place-items:center;font-size:34px;color:var(--m)}
+.row{display:flex;gap:12px;flex-wrap:wrap}.th{width:100px;height:100px;border-radius:16px;background:var(--sf);border:2px solid var(--t);display:grid;place-items:center;padding:6px;position:relative}.th img{max-width:100%;max-height:100%}
+.th i{position:absolute;top:-8px;right:-8px;background:#e5484d;color:#fff;border-radius:50%;width:22px;height:22px;font-style:normal;font-size:14px;display:grid;place-items:center}
+input[type=range]{width:100%;accent-color:var(--ac)}
+/* sheet */
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;justify-content:center;z-index:30}.sheet.on{display:flex}
+.sh{background:var(--c);width:min(520px,100%);border-radius:28px 28px 0 0;padding:14px 16px calc(18px + env(safe-area-inset-bottom,0px))}
+#dc{width:100%;height:300px;background:var(--sf);border-radius:16px;touch-action:none;display:block}
+.toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#111;color:#fff;padding:11px 20px;border-radius:99px;font-size:15px;opacity:0;transition:.3s;z-index:50;pointer-events:none;white-space:nowrap}.toast.on{opacity:1}
+#qr{background:#fff;padding:14px;border-radius:22px;border:1px solid var(--l);display:grid;place-items:center;width:max-content;margin:22px auto 16px}
+#qr img,#qr canvas{display:block}
+.acts{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.menu{position:absolute;right:20px;top:54px;background:var(--c);border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.25);overflow:hidden;z-index:20;display:none}.menu.on{display:block}.menu button{display:block;padding:14px 22px;width:100%;text-align:left;font-size:16px}
+.cc{margin:14px 0}.cc small{color:var(--m);display:block;margin:6px 4px}
+</style></head><body><div id="app">
+
+<section class="scr" id="intro">
+ <div class="bar"><span class="sp"></span></div>
+ <div class="fan" id="fan"></div>
+ <h1>Say hello to your Gamura Card</h1>
+ <p style="font-size:19px;margin:0 0 14px">Meet in person. Scan. Connect in seconds.</p>
+ <div class="li"><span>🎨</span>Personalize your card to make it yours</div>
+ <div class="li"><span>👛</span>Share it by QR, link or card code</div>
+ <div class="li"><span>📇</span>Collect cards to remember who you met</div>
+ <p style="color:var(--m);text-align:center;font-size:14px;margin:auto 0 12px;padding-top:14px">Everything is stored privately on your device.</p>
+ <button class="pri big" onclick="go('edit')">Customize your card</button>
+</section>
+
+<section class="scr" id="edit">
+ <div class="bar"><button class="ib" onclick="cancelEdit()">✕</button><span>Edit card</span><span class="sp"></span><button class="pri" style="padding:9px 22px" onclick="saveCard()">Save</button></div>
+ <div class="pv" id="pv" onclick="S.back=!S.back;draw()"></div>
+ <div class="panel" id="panel"></div>
+ <nav class="tabs" id="tabs"></nav>
+</section>
+
+<section class="scr" id="view">
+ <div class="bar"><span class="sp"></span><span style="font-size:19px">Business card</span><span class="sp"></span><button class="ib" onclick="go('edit')">✎</button><button class="ib" onclick="$('#menu').classList.toggle('on')">⋮</button></div>
+ <div class="menu" id="menu"><button onclick="cardCode()">Copy card code</button><button onclick="vcf()">Copy as vCard</button><button onclick="resetAll()">Reset card</button><button onclick="toggleTheme()">Toggle dark mode</button></div>
+ <div class="pv" id="vv" onclick="V=!V;drawView()" style="margin-top:20px"></div>
+ <p style="text-align:center;color:var(--m);font-size:13px;margin:0">Tap the card to flip it</p>
+ <div id="qr"></div>
+ <div class="acts"><button class="sec" onclick="share()">⬆ Share</button><button class="sec" onclick="copy(S.link,'Link copied')">🔗 Copy link</button><button class="sec" onclick="wallet()">👛 Add to Gamura Wallet</button></div>
+ <button class="sec" style="position:fixed;right:20px;bottom:calc(24px + env(safe-area-inset-bottom,0px));padding:16px;font-size:22px;box-shadow:0 4px 18px rgba(0,0,0,.2)" onclick="go('coll')">📇</button>
+</section>
+
+<section class="scr" id="coll">
+ <div class="bar"><button class="ib" onclick="go('view')">←</button><span id="cn">0 cards collected</span></div>
+ <div id="cl"></div>
+ <div style="margin-top:auto;padding-top:20px"><label class="lab" style="margin:0 0 4px">Paste a Gamura Card code to collect it</label><textarea id="cin" rows="2" placeholder="Paste card code…" style="border:1.5px solid var(--l);border-radius:12px;padding:10px;font-size:14px"></textarea><button class="pri big" style="margin-top:12px" onclick="collect()">Collect card</button></div>
+</section>
+</div>
+
+<div class="sheet" id="sheet"><div class="sh">
+ <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><button class="ib" onclick="closeD()">✕</button><button class="ib" onclick="undoD()">↶</button><b style="flex:1;text-align:center;font-size:18px">Create doodle</b><button class="pri" style="width:44px;height:44px;padding:0;font-size:24px" onclick="addDoodle()">+</button></div>
+ <canvas id="dc"></canvas>
+ <div class="lab"><span>Pen size</span><input type="range" id="ds" min="3" max="20" value="9" style="width:60%"></div>
+</div></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="fp" accept="image/*" hidden><input type="file" id="fc" accept="image/*" hidden>
+
+<script>
+const $=s=>document.querySelector(s);
+const FONTS=[["Clean","Inter",600],["Strong","Archivo Black",400],["Classic","Playfair Display",600],["Striking","Bebas Neue",400],["Precise","Space Mono",700],["Grand","Syne",800]];
+const SOL=[["#fafaf8","#111"],["#3b2619","#fff"],"","","","","","",["#c8e6fb","#0a2540"],["#cfebd0","#0b3d1e"],["#fddcc2","#5a2a0a"],["#fde0df","#6b0f1a"],["#fcdcf0","#5a0f4a"],["#e6dcfb","#2e1a66"],["#2358e8","#fff"],["#0b7a2f","#fff"],["#bd4208","#fff"],["#c0173b","#fff"],["#a81b9a","#fff"],["#6a4bd8","#fff"],["#0b3a75","#fff"],["#0a4630","#fff"],["#7a2208","#fff"],["#7a0f2a","#fff"],["#6e0b52","#fff"],["#4b1e66","#fff"]];
+const SETS=[["#fff7e6","#2358e8"],["#fff7e6","#0b7a2f"],["#fff7e6","#bd4208"],["#fff7e6","#c0173b"],["#fff7e6","#a81b9a"],["#fff7e6","#6a4bd8"],["#fddcf0","#0a4630"],["#c8e6fb","#0a4630"],["#fddcc2","#4b1e66"],["#fddcc2","#7a0f2a"],["#c8e6fb","#6e0b52"],["#fddcf0","#0b3a75"]];
+const DEF={name:"SELVARANJAN G",head:"Founder Of GAMURA | BCA Student | Developer",loc:"Chennai",showLoc:true,link:"https://gamura.vercel.app",phone:"",email:"",photo:null,layout:0,font:0,bg:"#fafaf8",ink:"#111111",pat:0,st:[],cuts:[],doods:[]};
+let S=load()||JSON.parse(JSON.stringify(DEF)),SNAP,tab=0,sel=null,V=false,coll=[];S.back=false;
+function load(){try{const r=localStorage.getItem("gcard");return r?JSON.parse(r):null}catch(e){return null}}
+function persist(){try{localStorage.setItem("gcard",JSON.stringify(S));localStorage.setItem("gcoll",JSON.stringify(coll))}catch(e){toast("Storage full – remove big stickers")}}
+try{coll=JSON.parse(localStorage.getItem("gcoll")||"[]")}catch(e){}
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("on"),1800)}
+function go(n){document.querySelectorAll(".scr").forEach(e=>e.classList.remove("on"));$("#"+n).classList.add("on");$("#menu").classList.remove("on");
+ if(n=="edit"){SNAP=JSON.stringify(S);tab=0;S.back=false;sel=null;draw();panel();tabs()}
+ if(n=="view"){V=false;drawView();qr()}if(n=="coll")drawColl()}
+/* patterns */
+function pat(i,c){if(!i)return"";const a=`stroke="${c}" stroke-opacity=".28" fill="none" stroke-width="1.3"`;let b="";
+ const tile=(id,w,h,inner)=>`<defs><pattern id="p" width="${w}" height="${h}" patternUnits="userSpaceOnUse">${inner}</pattern></defs><rect width="320" height="200" fill="url(#p)"/>`;
+ if(i==1){for(let k=0;k<14;k++)b+=`<ellipse cx="190" cy="95" rx="${12+k*13}" ry="${8+k*8}" transform="rotate(-18 190 95)" ${a}/>`}
+ else if(i==2){for(let k=0;k<26;k++)b+=`<line x1="0" y1="0" x2="320" y2="${k*9}" ${a}/><line x1="0" y1="0" x2="${k*13}" y2="200" ${a}/>`}
+ else if(i==3)b=tile(0,24,24,`<path d="M24 0H0V24" ${a}/>`);
+ else if(i==4)b=tile(0,16,16,`<circle cx="8" cy="8" r="1.3" fill="${c}" fill-opacity=".35"/>`);
+ else if(i==5)b=tile(0,40,40,`<path d="M20 0c8 8 12 8 20 0M0 0c8 8 12 8 20 0M20 40c8-8 12-8 20 0M0 40c8-8 12-8 20 0M0 20c8-8 8-12 0-20M40 20c-8-8-8-12 0-20M0 20c8 8 8 12 0 20M40 20c-8 8-8 12 0 20" ${a}/>`);
+ else if(i==6)b=tile(0,40,20,`<path d="M0 20a20 20 0 0 1 40 0M8 20a12 12 0 0 1 24 0M15 20a5 5 0 0 1 10 0" ${a}/>`);
+ else if(i==7)b=tile(0,36,36,`<circle cx="18" cy="18" r="18" ${a}/><circle cx="0" cy="0" r="18" ${a}/><circle cx="36" cy="36" r="18" ${a}/><circle cx="36" cy="0" r="18" ${a}/><circle cx="0" cy="36" r="18" ${a}/>`);
+ else if(i==8){for(let k=0;k<12;k++)b+=`<path d="M-10 ${k*18+10}C60 ${k*18-15} 120 ${k*18+35} 190 ${k*18+10}S280 ${k*18-15} 340 ${k*18+10}" ${a}/>`}
+ else if(i==9){for(let k=1;k<9;k++)b+=`<circle cx="160" cy="100" r="${k*14}" stroke="${c}" stroke-opacity=".4" fill="none" stroke-width="3" stroke-dasharray="2 ${k*3+4}"/>`}
+ else if(i==10){for(let k=1;k<9;k++)b+=`<circle cx="30" cy="190" r="${k*7}" ${a}/><circle cx="300" cy="20" r="${k*8}" ${a}/>`}
+ else if(i==11)b=`<path d="M0 150C60 170 110 90 170 100S250 40 320 60V0H200C170 60 120 40 60 60S0 90 0 90Z" fill="${c}" fill-opacity=".14"/><path d="M130 200C170 150 220 150 250 120S320 110 320 110V200Z" fill="${c}" fill-opacity=".14"/>`;
+ return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice">${b}</svg>`)}")`}
+function esc(s){return String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
+function front(d,f){f=FONTS[d.font];const ini=(d.name||"G").trim()[0]||"G";
+ return `<div class="card" data-l="${d.layout}" style="background:${d.bg};color:${d.ink};font-family:'${f[1]}',sans-serif;font-weight:${f[2]}"><div class="pat" style="background-image:${pat(d.pat,d.ink)}"></div><div class="ph" style="${d.photo?`background-image:url(${d.photo})`:`background:linear-gradient(135deg,#0a8f5a,#0b3d1e)`}">${d.photo?"":esc(ini)}</div><div class="tx"><h2>${esc(d.name)||"&nbsp;"}</h2><p>${esc(d.head)}</p>${d.showLoc&&d.loc?`<p class="l">${esc(d.loc)}</p>`:""}</div></div>`}
+function back(d,ed){return `<div id="${ed?"bk":""}" style="position:absolute;inset:0">${d.st.map((s,i)=>`<div class="stk ${ed&&sel==i?"sel":""}" data-i="${i}" style="left:${s.x}%;top:${s.y}%;width:${s.s}%;transform:translate(-50%,-50%) rotate(${s.r}deg)"><img src="${s.src}"></div>`).join("")}${ed&&!d.st.length?`<div class="hint">Add a photo sticker or doodle to the back</div>`:""}</div>`}
+function flip(d,b,ed){return `<div class="fl ${b?"b":""}"><div class="fi"><div class="face">${front(d)}</div><div class="face bk">${back(d,ed)}</div></div></div>`}
+function draw(){$("#pv").innerHTML=flip(S,S.back,true);bindStk()}
+function drawView(){$("#vv").innerHTML=flip(S,V,false)}
+/* sticker drag */
+function bindStk(){const bk=$("#bk");if(!bk)return;bk.querySelectorAll(".stk").forEach(el=>{el.onpointerdown=e=>{e.stopPropagation();const i=+el.dataset.i;sel=i;const r=bk.getBoundingClientRect(),s=S.st[i];
+ bk.querySelectorAll(".stk").forEach(x=>x.classList.remove("sel"));el.classList.add("sel");el.setPointerCapture(e.pointerId);
+ el.onpointermove=m=>{s.x=Math.max(0,Math.min(100,(m.clientX-r.left)/r.width*100));s.y=Math.max(0,Math.min(100,(m.clientY-r.top)/r.height*100));el.style.left=s.x+"%";el.style.top=s.y+"%"};
+ el.onpointerup=()=>{el.onpointermove=null;if(tab==5)panel()}};el.onclick=e=>e.stopPropagation()})}
+/* tabs */
+const IC=["<rect x='3' y='5' width='18' height='14' rx='2'/><circle cx='9' cy='11' r='2'/><path d='M14 10h4M14 14h4M6 16h6'/>","<rect x='3' y='3' width='18' height='18' rx='3'/><path d='M8 8h8v8H8z'/>","<path d='M4 19L10 5l6 14M6.5 14h7M17 8h4M19 8v10'/>","<circle cx='12' cy='12' r='9'/><path d='M12 3a9 9 0 0 1 0 18z' fill='currentColor'/>","<path d='M3 7c4-3 14 3 18 0M3 12c4-3 14 3 18 0M3 17c4-3 14 3 18 0'/>","<path d='M20 12a8 8 0 1 1-8-8v8z'/><path d='M14 3l7 7'/>"];
+function tabs(){$("#tabs").innerHTML=IC.map((p,i)=>`<button class="${i==tab?"on":""}" onclick="setTab(${i})"><svg viewBox="0 0 24 24">${p}</svg></button>`).join("")}
+function setTab(i){tab=i;S.back=i==5;tabs();draw();panel()}
+function upd(k,v,r){S[k]=v;persist();draw();if(r)panel()}
+function tg(el,k){S[k]=!S[k];el.classList.toggle("on");draw();panel()}
+function panel(){let h="";
+ if(tab==0)h=`<h3>Info</h3><div class="lab">Name</div><input type="text" value="${esc(S.name)}" maxlength="40" oninput="upd('name',this.value)">
+ <div class="lab"><span>Headline</span><span>${S.head.length}/100</span></div><input type="text" maxlength="100" value="${esc(S.head)}" oninput="upd('head',this.value);this.parentNode.querySelector('.lab:nth-of-type(2) span:last-child').textContent=this.value.length+'/100'">
+ <div class="lab"><span>Location</span><button class="tog ${S.showLoc?"on":""}" onclick="tg(this,'showLoc')"></button></div>${S.showLoc?`<input type="text" value="${esc(S.loc)}" oninput="upd('loc',this.value)">`:""}
+ <div class="lab">Card link (used for the QR code)</div><input type="url" value="${esc(S.link)}" oninput="upd('link',this.value)">
+ <div class="lab">Phone (optional, saved in vCard)</div><input type="tel" value="${esc(S.phone)}" oninput="upd('phone',this.value)">
+ <div class="lab">Email (optional, saved in vCard)</div><input type="email" value="${esc(S.email)}" oninput="upd('email',this.value)">
+ <div class="row" style="margin-top:18px"><button class="sec" onclick="$('#fp').click()">📷 Change photo</button>${S.photo?`<button class="sec" onclick="upd('photo',null,1)">Remove photo</button>`:""}</div>`;
+ if(tab==1)h=`<h3>Layout</h3><div class="grid">${[0,1,2,3,4,5].map(i=>`<div class="opt ${S.layout==i?"on":""}" onclick="S.layout=${i};persist();draw();panel()" style="background:var(--sf)"><div style="transform:scale(.33);transform-origin:top left;width:303%;height:303%;pointer-events:none"><div class="face" style="position:relative;inset:auto;aspect-ratio:8/5;box-shadow:none;border-radius:0">${front({...S,layout:i,pat:0,bg:"#f2f1ee",ink:"#111"})}</div></div></div>`).join("")}</div>`;
+ if(tab==2)h=`<h3>Font</h3><div class="grid g2">${FONTS.map((f,i)=>`<button class="fb ${S.font==i?"on":""}" style="font-family:'${f[1]}';font-weight:${f[2]}" onclick="S.font=${i};persist();draw();panel()">${f[0]}</button>`).join("")}</div>`;
+ if(tab==3)h=`<h3>Color</h3><div class="sw">${SOL.map(c=>c?`<button class="dot ${S.bg==c[0]&&S.ink==c[1]?"on":""}" style="background:${c[0]};${c[0]=="#fafaf8"?`display:grid;place-items:center`:""}" onclick="setC('${c[0]}','${c[1]}')">${c[0]=="#fafaf8"?"<i style='width:14px;height:14px;border-radius:50%;background:#111'></i>":""}</button>`:"<i></i>").join("")}</div>
+ <div class="lab" style="margin:22px 0 12px">Color sets</div><div class="sw">${SETS.map(c=>`<button class="dot ${S.bg==c[0]&&S.ink==c[1]?"on":""}" style="background:linear-gradient(90deg,${c[0]} 50%,${c[1]} 50%)" onclick="setC('${c[0]}','${c[1]}')"></button>`).join("")}</div>
+ <div class="lab" style="margin-top:22px"><span>Custom background</span><input type="color" value="${S.bg}" oninput="S.bg=this.value;persist();draw()"></div><div class="lab"><span>Custom text color</span><input type="color" value="${S.ink}" oninput="S.ink=this.value;persist();draw()"></div>`;
+ if(tab==4)h=`<h3>Pattern</h3><div class="grid">${[...Array(12).keys()].map(i=>`<div class="opt ${S.pat==i?"on":""}" onclick="S.pat=${i};persist();draw();panel()">${i?`<div style="position:absolute;inset:0;background:${pat(i,"#333")};background-size:cover"></div>`:`<div style="display:grid;place-items:center;height:100%;font-size:26px">⊗</div>`}</div>`).join("")}</div>`;
+ if(tab==5){const c=sel!=null&&S.st[sel];h=`<h3>Stickers</h3><div class="lab" style="margin-top:0">Cut-outs</div><div class="row" style="margin-top:8px"><button class="add" onclick="$('#fc').click()">+</button>${S.cuts.map((s,i)=>`<div class="th" onclick="addSt('${i}','c')"><img src="${s}"><i onclick="event.stopPropagation();S.cuts.splice(${i},1);persist();panel()">×</i></div>`).join("")}</div>
+ <div class="lab">Doodles</div><div class="row" style="margin-top:8px"><button class="add" onclick="openD()">+</button>${S.doods.map((s,i)=>`<div class="th" onclick="addSt('${i}','d')"><img src="${s}"><i onclick="event.stopPropagation();S.doods.splice(${i},1);persist();panel()">×</i></div>`).join("")}</div>
+ ${c?`<div class="lab">Selected sticker · size</div><input type="range" min="8" max="80" value="${c.s}" oninput="c_(${sel},'s',+this.value)"><div class="lab">Rotate</div><input type="range" min="-180" max="180" value="${c.r}" oninput="c_(${sel},'r',+this.value)"><div class="row" style="margin-top:14px"><button class="sec" onclick="S.st.push(S.st.splice(${sel},1)[0]);sel=S.st.length-1;draw();panel()">Bring to front</button><button class="sec" style="color:#e5484d" onclick="S.st.splice(${sel},1);sel=null;persist();draw();panel()">Delete</button></div>`:`<p style="color:var(--m);font-size:14px">Tap a sticker to add it, then drag it on the card back.</p>`}`}
+ $("#panel").innerHTML=h}
+function setC(b,i){S.bg=b;S.ink=i;persist();draw();panel()}
+function c_(i,k,v){S.st[i][k]=v;const e=document.querySelector(`#bk .stk[data-i="${i}"]`);if(e){e.style.width=S.st[i].s+"%";e.style.transform=`translate(-50%,-50%) rotate(${S.st[i].r}deg)`}}
+function addSt(i,t){if(S.st.length>=12)return toast("Max 12 stickers");S.st.push({src:(t=="c"?S.cuts:S.doods)[i],x:50,y:50,s:t=="c"?28:34,r:0});sel=S.st.length-1;persist();draw();panel()}
+/* uploads */
+function shrink(file,max,cb,type){const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=im.width*k;c.height=im.height*k;c.getContext("2d").drawImage(im,0,0,c.width,c.height);cb(c.toDataURL(type,.85))};im.src=r.result};r.readAsDataURL(file)}
+$("#fp").onchange=e=>{const f=e.target.files[0];if(f)shrink(f,360,d=>{S.photo=d;persist();draw();panel()},"image/jpeg");e.target.value=""};
+$("#fc").onchange=e=>{const f=e.target.files[0];if(f)shrink(f,320,d=>{S.cuts.push(d);persist();panel()},"image/png");e.target.value=""};
+/* doodle */
+let dctx,strokes=[],cur=null;const dc=$("#dc");
+function openD(){$("#sheet").classList.add("on");dc.width=dc.clientWidth*2;dc.height=600;dctx=dc.getContext("2d");strokes=[];redraw()}
+function closeD(){$("#sheet").classList.remove("on")}
+function redraw(){dctx.clearRect(0,0,dc.width,dc.height);dctx.lineCap=dctx.lineJoin="round";dctx.strokeStyle="#111";strokes.forEach(s=>{dctx.lineWidth=s.w;dctx.beginPath();s.p.forEach((p,i)=>i?dctx.lineTo(p[0],p[1]):dctx.moveTo(p[0],p[1]));if(s.p.length==1)dctx.lineTo(s.p[0][0]+.1,s.p[0][1]);dctx.stroke()})}
+const pt=e=>{const r=dc.getBoundingClientRect();return[(e.clientX-r.left)*dc.width/r.width,(e.clientY-r.top)*dc.height/r.height]};
+dc.onpointerdown=e=>{dc.setPointerCapture(e.pointerId);cur={w:+$("#ds").value*2,p:[pt(e)]};strokes.push(cur);redraw()};
+dc.onpointermove=e=>{if(cur){cur.p.push(pt(e));redraw()}};dc.onpointerup=()=>cur=null;
+function undoD(){strokes.pop();redraw()}
+function addDoodle(){if(!strokes.length)return toast("Draw something first");let x0=1e9,y0=1e9,x1=0,y1=0;strokes.forEach(s=>s.p.forEach(p=>{x0=Math.min(x0,p[0]-s.w);y0=Math.min(y0,p[1]-s.w);x1=Math.max(x1,p[0]+s.w);y1=Math.max(y1,p[1]+s.w)}));
+ x0=Math.max(0,x0);y0=Math.max(0,y0);const w=Math.min(dc.width,x1)-x0,h=Math.min(dc.height,y1)-y0,c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(dc,x0,y0,w,h,0,0,w,h);
+ // make doodle white for dark back
+ const g=c.getContext("2d");g.globalCompositeOperation="source-in";g.fillStyle="#fff";g.fillRect(0,0,w,h);S.doods.push(c.toDataURL());persist();closeD();panel();toast("Doodle added")}
+/* save / cancel */
+function saveCard(){S.back=false;persist();go("view");toast("Card saved")}
+function cancelEdit(){if(SNAP&&SNAP!=JSON.stringify(S)&&!confirm("Discard your changes?"))return;if(SNAP)S=JSON.parse(SNAP);go(localStorage.getItem("gcard")?"view":"intro")}
+/* view actions */
+function qr(){const q=$("#qr");q.innerHTML="";try{new QRCode(q,{text:S.link||"https://gamura.vercel.app",width:200,height:200,colorDark:"#000",colorLight:"#fff",correctLevel:QRCode.CorrectLevel.M})}catch(e){q.textContent="QR unavailable"}}
+function copy(t,m){try{navigator.clipboard.writeText(t).then(()=>toast(m),()=>toast("Copy blocked by browser"))}catch(e){toast("Copy not supported")}}
+function code(d){return btoa(unescape(encodeURIComponent(JSON.stringify({...d,back:false}))))}
+function cardCode(){copy(code(S),"Card code copied – send it to a friend");$("#menu").classList.remove("on")}
+function vcf(){copy(`BEGIN:VCARD\nVERSION:3.0\nFN:${S.name}\nTITLE:${S.head}\n${S.phone?`TEL:${S.phone}\n`:""}${S.email?`EMAIL:${S.email}\n`:""}${S.showLoc?`ADR:;;${S.loc};;;;\n`:""}URL:${S.link}\nEND:VCARD`,"vCard copied");$("#menu").classList.remove("on")}
+function share(){const d={title:S.name,text:`${S.name} – ${S.head}`,url:S.link};if(navigator.share)navigator.share(d).catch(()=>{});else copy(S.link,"Link copied")}
+function wallet(){const w=JSON.parse(localStorage.getItem("gwallet")||"[]");if(!w.includes(S.name))w.push(S.name);try{localStorage.setItem("gwallet",JSON.stringify(w))}catch(e){}toast("Added to Gamura Wallet")}
+function resetAll(){if(confirm("Reset your card to default?")){S=JSON.parse(JSON.stringify(DEF));S.back=false;persist();drawView();qr();$("#menu").classList.remove("on")}}
+function toggleTheme(){const r=document.documentElement,d=r.dataset.theme=="dark"||(r.dataset.theme!="light"&&matchMedia("(prefers-color-scheme:dark)").matches);r.dataset.theme=d?"light":"dark";$("#menu").classList.remove("on")}
+/* collection */
+function drawColl(){$("#cn").textContent=coll.length+" card"+(coll.length==1?"":"s")+" collected";$("#cl").innerHTML=coll.length?coll.map((d,i)=>`<div class="cc"><div class="fl"><div class="fi"><div class="face">${front(d)}</div></div></div><small>${esc(d.name)} · <a href="#" onclick="coll.splice(${i},1);persist();drawColl();return false" style="color:#e5484d">Remove</a></small></div>`).join(""):`<div style="text-align:center;margin-top:90px"><div style="font-size:64px">📇</div><h2>Start your card collection</h2><p style="color:var(--m)">Paste someone's Gamura Card code below to add it here.</p></div>`}
+function collect(){const v=$("#cin").value.trim();if(!v)return;try{const d=JSON.parse(decodeURIComponent(escape(atob(v))));if(!d.name||d.layout==null)throw 0;d.st=[];coll.unshift(d);persist();$("#cin").value="";drawColl();toast("Card collected")}catch(e){toast("That code isn't valid")}}
+/* intro fan */
+(function(){const P=[{...DEF,bg:"#0a4630",ink:"#fff",pat:5,layout:4,font:2},{...DEF,bg:"#fddcf0",ink:"#0a4630",pat:11,layout:2,font:0},{...DEF,bg:"#6e0b52",ink:"#fff",pat:3,layout:5,font:3},{...DEF,bg:"#2358e8",ink:"#fff",pat:1,layout:3,font:1},{...DEF,bg:"#fafaf8",ink:"#111",pat:0,layout:0,font:0}];
+ const T=[["-10deg",-70,-30],["8deg",70,-20],["-4deg",-30,50],["6deg",50,70],["-2deg",0,110]];
+ $("#fan").innerHTML=P.map((d,i)=>`<div class="fc" style="transform:translate(${T[i][1]}px,${T[i][2]}px) rotate(${T[i][0]});z-index:${i}"><div class="face">${front(d)}</div></div>`).join("")})();
+go(localStorage.getItem("gcard")?"view":"intro");
+</script></body></html>
