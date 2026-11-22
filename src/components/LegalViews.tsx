@@ -8,9 +8,17 @@ import {
   ExternalLink,
   Mail,
   UserCheck,
+  Scale,
 } from "lucide-react";
 import { deleteDoc, doc } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import {
+  acceptGamuraLicense,
+  GAMURA_LICENSE_EVENT,
+  GAMURA_LICENSE_VERSION,
+  openGamuraLicenseModal,
+  readLicenseRecord,
+} from "../utils/gamuraLicense";
 
 interface LegalViewProps {
   onBack: () => void;
@@ -471,3 +479,171 @@ export function AccountDeletionView({
     </div>
   );
 }
+
+export function LicenseAgreementView({
+  onBack,
+  currentUser,
+}: {
+  onBack: () => void;
+  currentUser?: { uid?: string | null } | null;
+}) {
+  const [record, setRecord] = useState(() => readLicenseRecord());
+  const [saving, setSaving] = useState(false);
+
+  React.useEffect(() => {
+    const sync = () => setRecord(readLicenseRecord());
+    window.addEventListener(GAMURA_LICENSE_EVENT, sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener(GAMURA_LICENSE_EVENT, sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
+  const uid = currentUser?.uid && currentUser.uid !== "guest_explorer_uid" ? currentUser.uid : null;
+
+  const handleAcceptHere = async () => {
+    setSaving(true);
+    try {
+      const next = await acceptGamuraLicense(uid);
+      setRecord(next);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      style={APPLE_FONT_STYLE}
+      className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F] flex flex-col selection:bg-blue-100 selection:text-blue-900"
+    >
+      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-zinc-200/80">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200/80 text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer whitespace-nowrap shrink-0"
+          >
+            <ArrowLeft size={14} />
+            <span>Back to Gamura</span>
+          </button>
+          <div className="flex items-center gap-1.5 text-xs font-medium text-[#6E6E73] whitespace-nowrap">
+            <Scale size={15} className="text-[#0066CC]" />
+            <span>Software License · v{GAMURA_LICENSE_VERSION}</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="w-full max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-6">
+        <div className="space-y-2 px-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6E6E73]">
+            End-User License Agreement (EULA)
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#1D1D1F]">
+            GAMURA Software License
+          </h1>
+          <p className="text-sm text-[#6E6E73]">
+            Version {GAMURA_LICENSE_VERSION} · Copyright &copy; 2026 Selvaranjan G (Gamura World)
+          </p>
+        </div>
+
+        {/* Interactive Status Card */}
+        <section className="p-5 sm:p-6 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="text-xs font-semibold text-[#6E6E73]">Current Consent Status</div>
+            <div className="text-sm font-bold text-[#1D1D1F] flex items-center gap-2">
+              {record.status === "agreed" ? (
+                <>
+                  <CheckCircle2 size={16} className="text-emerald-600" />
+                  <span>Agreed &amp; Active · v{record.version}</span>
+                </>
+              ) : record.status === "declined" ? (
+                <span>Declined · License Consent Required</span>
+              ) : (
+                <span>Pending Acceptance</span>
+              )}
+            </div>
+            {record.updatedAtMs > 0 && (
+              <p className="text-xs text-[#6E6E73]">
+                Updated {new Date(record.updatedAtMs).toLocaleString()}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => openGamuraLicenseModal("prompt")}
+              className="px-4 py-2 rounded-xl bg-[#F5F5F7] hover:bg-zinc-200 text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer"
+            >
+              Open License Dialog
+            </button>
+            {record.status !== "agreed" && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleAcceptHere}
+                className="px-4 py-2 rounded-xl bg-[#0071E3] hover:bg-[#0077ED] text-xs font-semibold text-white transition-colors cursor-pointer disabled:opacity-60"
+              >
+                {saving ? "Saving..." : "Agree & Activate"}
+              </button>
+            )}
+          </div>
+        </section>
+
+        <div className="space-y-4 text-sm text-[#424245] leading-relaxed">
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              1. Grant of License
+            </h2>
+            <p>
+              GAMURA grants you a personal, non-exclusive, revocable license to access and use the GAMURA
+              web platform and Android application (<code className="text-xs bg-zinc-100 px-1.5 py-0.5 rounded text-[#1D1D1F]">com.gamura.app</code>),
+              including all integrated Launch Store applications (Portfolio Builder&sup2;, PPT Cred, Cover Gened,
+              Glifeline, Gshield, Gfresh, GAMURA Card, Gwallet, GPDF Studio, Clip, Veo, Messenger, and GPG).
+            </p>
+          </section>
+
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              2. Permitted Use &amp; Workspace Content Ownership
+            </h2>
+            <p>
+              You retain 100% ownership of your original exports, resumes, slides, cover designs, health/emergency
+              profiles, and digital wallet assets created locally or synced via your Gamura ID. You may not redistribute
+              GAMURA source software, bypass authentication/security rules, or misuse shared pairing infrastructure.
+            </p>
+          </section>
+
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              3. Cloud Sync, Privacy &amp; Updates
+            </h2>
+            <p>
+              Optional cloud sync (Firebase Authentication &amp; Cloud Firestore) stores installed app libraries,
+              card/wallet state, and your license consent status under strict owner-only access rules. GAMURA
+              may update features or license versions over time; material legal revisions prompt fresh confirmation.
+            </p>
+          </section>
+
+          <section className="p-6 sm:p-7 rounded-2xl bg-white border border-zinc-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <h2 className="text-base sm:text-lg font-semibold text-[#1D1D1F]">
+              4. Warranty Disclaimer &amp; Contact
+            </h2>
+            <p>
+              GAMURA software is provided &ldquo;as is&rdquo; without warranties of merchantability or fitness for a particular
+              purpose. Questions or licensing inquiries may be addressed to{" "}
+              <a
+                href="mailto:support@gamura.app"
+                className="text-[#0066CC] hover:underline font-medium"
+              >
+                support@gamura.app
+              </a>
+              .
+            </p>
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}
+

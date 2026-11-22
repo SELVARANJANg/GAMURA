@@ -32,6 +32,7 @@ import {
   Cpu,
   Briefcase,
   KeyRound,
+  Scale,
 } from "lucide-react";
 import { doc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
 import { signOut as firebaseSignOut } from "firebase/auth";
@@ -42,6 +43,14 @@ import UniversePermissionsManager, {
   type AllowAccessPermissions,
   DEFAULT_ALLOW_ACCESS,
 } from "./UniversePermissionsManager";
+import {
+  GAMURA_LICENSE_EVENT,
+  GAMURA_LICENSE_VERSION,
+  openGamuraLicenseModal,
+  readLicenseRecord,
+  resetGamuraLicensePrompt,
+  syncLicenseToCloud,
+} from "../utils/gamuraLicense";
 
 export { DEFAULT_ALLOW_ACCESS, type AllowAccessPermissions };
 
@@ -227,6 +236,17 @@ export default function UniverseSettingsView({
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
   const [savingProfile, setSavingProfile] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [licenseRecord, setLicenseRecord] = useState(() => readLicenseRecord());
+
+  useEffect(() => {
+    const syncLicense = () => setLicenseRecord(readLicenseRecord());
+    window.addEventListener(GAMURA_LICENSE_EVENT, syncLicense);
+    window.addEventListener("storage", syncLicense);
+    return () => {
+      window.removeEventListener(GAMURA_LICENSE_EVENT, syncLicense);
+      window.removeEventListener("storage", syncLicense);
+    };
+  }, []);
 
   const [editNickname, setEditNickname] = useState(userInfo?.nickname || "");
   const [editHandle, setEditHandle] = useState(userInfo?.username || "");
@@ -1279,6 +1299,59 @@ export default function UniverseSettingsView({
                           {scope === "mine" ? "My Activity" : "Global Feed"}
                         </button>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* Software License & Consent Management */}
+                  <div className="mt-4 bg-white border border-zinc-200/80 rounded-3xl overflow-hidden divide-y divide-zinc-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                    <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <Scale size={16} className="text-[#0071E3] mt-0.5 shrink-0" />
+                        <div className="space-y-0.5">
+                          <div className="text-xs font-bold text-[#1D1D1F]">
+                            GAMURA Software License &amp; Legal Consent
+                          </div>
+                          <div className="text-xs text-[#6E6E73]">
+                            {licenseRecord.status === "agreed" ? (
+                              <>
+                                Accepted · v{licenseRecord.version || GAMURA_LICENSE_VERSION}
+                                {licenseRecord.updatedAtMs > 0
+                                  ? ` · ${new Date(licenseRecord.updatedAtMs).toLocaleDateString()}`
+                                  : ""}
+                              </>
+                            ) : licenseRecord.status === "declined" ? (
+                              "Declined · Acceptance required for full access"
+                            ) : (
+                              "Pending confirmation"
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openGamuraLicenseModal("license")}
+                          className="px-3.5 py-2 rounded-xl bg-[#F5F5F7] hover:bg-zinc-200 text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer"
+                        >
+                          View License &amp; Terms
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await syncLicenseToCloud(user?.uid, "declined");
+                            resetGamuraLicensePrompt();
+                            showToast(
+                              "⚖️",
+                              "License Prompt",
+                              "Review and confirm GAMURA license terms.",
+                              "info",
+                            );
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-xs font-semibold text-[#424245] transition-colors cursor-pointer"
+                        >
+                          Re-open Prompt
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

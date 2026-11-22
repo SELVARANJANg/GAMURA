@@ -1,8 +1,11 @@
 import {
+  deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   serverTimestamp,
   setDoc,
+  updateDoc,
   type Timestamp,
 } from "firebase/firestore";
 import { db } from "../firebase";
@@ -81,12 +84,28 @@ export interface CardWalletLinkState {
   updatedAtMs: number;
 }
 
+export interface SyncPulseState {
+  phase: "idle" | "syncing" | "synced" | "error";
+  sourceApp: "gcard" | "gwallet";
+  label: string;
+  ts: number;
+}
+
+export interface CardWalletPairState {
+  pairCode: string;
+  initiatorApp: "gcard" | "gwallet";
+  peerConnected: boolean;
+  createdAtMs: number;
+}
+
 export const GCARD_SYNCED_PASS_ID = "gcard_synced_pass";
 export const GCARD_STORAGE_KEY = "gamura_gcard_v2";
 export const GWALLET_STORAGE_KEY = "gamura_gwallet_v2";
 export const CARD_WALLET_LINK_KEY = "gamura_card_wallet_link_v1";
+export const CARD_WALLET_PAIR_KEY = "gamura_card_wallet_pair_v1";
 export const BROADCAST_CHANNEL_NAME = "gamura_card_wallet_sync_v1";
 export const CARD_WALLET_SYNC_EVENT = "gamura-card-wallet-synced";
+export const SYNC_PULSE_EVENT = "gamura-card-wallet-sync-pulse";
 
 export const GCARD_FONTS: [string, string, number][] = [
   ["Clean", "Inter", 600],
@@ -489,12 +508,188 @@ function upsertLinkedPassInWallet(
   };
 }
 
+let activeSyncPulse: SyncPulseState = {
+  phase: "idle",
+  sourceApp: "gcard",
+  label: "Ready",
+  ts: 0,
+};
+let syncSettleTimer: number | null = null;
+
+function dispatchLocalPulse(pulse: SyncPulseState) {
+  activeSyncPulse = pulse;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent<SyncPulseState>(SYNC_PULSE_EVENT, { detail: pulse }),
+    );
+  }
+}
+
+export function getLatestSyncPulse(): SyncPulseState {
+  return activeSyncPulse;
+}
+
+export function emitSyncPulse(
+  sourceApp: "gcard" | "gwallet",
+  label: string,
+  options?: { broadcast?: boolean; immediateSettled?: boolean },
+) {
+  const now = Date.now();
+  if (options?.immediateSettled) {
+    if (syncSettleTimer) {
+      window.clearTimeout(syncSettleTimer);
+      syncSettleTimer = null;
+    }
+    dispatchLocalPulse({
+      phase: "synced",
+      sourceApp,
+      label,
+      ts: now,
+    });
+    return;
+  }
+
+  dispatchLocalPulse({
+    phase: "syncing",
+    sourceApp,
+    label,
+    ts: now,
+  });
+
+  if (options?.broadcast !== false && typeof window !== "undefined") {
+    try {
+      if ("BroadcastChannel" in window) {
+        const ch = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+        ch.postMessage({ type: "pulse", sourceApp, label, ts: now });
+        ch.close();
+      }
+    } catch {
+      // ignore BroadcastChannel failures
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    if (syncSettleTimer) window.clearTimeout(syncSettleTimer);
+    syncSettleTimer = window.setTimeout(() => {
+      dispatchLocalPulse({
+        phase: "synced",
+        sourceApp,
+        label: "Synced · Live",
+        ts: Date.now(),
+      });
+      syncSettleTimer = null;
+    }, 1100);
+  }
+}
+
+export function subscribeSyncPulse(
+  onPulse: (pulse: SyncPulseState) => void,
+): () => void {
+  if (typeof window === "undefined") return () => {};
+  const handler = (e: Event) => {
+    const custom = e as CustomEvent<SyncPulseState>;
+    if (custom.detail) onPulse(custom.detail);
+  };
+  let bc: BroadcastChannel | null = null;
+  try {
+    if ("BroadcastChannel" in window) {
+      bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
+      bc.onmessage = (msg) => {
+        const d = msg.data as {
+          type?: string;
+          sourceApp?: "gcard" | "gwallet";
+          label?: string;
+        };
+        if (d?.type === "pulse" && d.sourceApp) {
+          emitSyncPulse(d.sourceApp, d.label || "Syncing...", {
+            broadcast: false,
+          });
+        }
+      };
+    }
+  } catch {
+    // ignore
+  }
+  window.addEventListener(SYNC_PULSE_EVENT, handler);
+  return () => {
+    bc?.close();
+    window.removeEventListener(SYNC_PULSE_EVENT, handler);
+  };
+}
+
+export function readCardWalletPairState(): CardWalletPairState | null {
+  if (typeof window === "undefined") return null;
+  const raw = safeParseJson<Partial<CardWalletPairState> | null>(
+    localStorage.getItem(CARD_WALLET_PAIR_KEY),
+    null,
+  );
+  if (!raw || typeof raw.pairCode !== "string" || !/^[A-Z0-9]{6,10}$/.test(raw.pairCode)) {
+    return null;
+  }
+  return {
+    pairCode: raw.pairCode,
+    initiatorApp: raw.initiatorApp === "gwallet" ? "gwallet" : "gcard",
+    peerConnected: Boolean(raw.peerConnected),
+    createdAtMs: Number(raw.createdAtMs) || Date.now(),
+  };
+}
+
+export function writeCardWalletPairState(state: CardWalletPairState | null) {
+  if (typeof window === "undefined") return;
+  if (!state) {
+    localStorage.removeItem(CARD_WALLET_PAIR_KEY);
+  } else {
+    localStorage.setItem(CARD_WALLET_PAIR_KEY, JSON.stringify(state));
+  }
+  window.dispatchEvent(
+    new CustomEvent(CARD_WALLET_SYNC_EVENT, { detail: { pairUpdated: true } }),
+  );
+}
+
+export function generatePairCode(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "GW";
+  for (let i = 0; i < 6; i++) {
+    code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return code;
+}
+
+export function buildPairingQrUrl(
+  targetApp: "gcard" | "gwallet",
+  pairCode: string,
+): string {
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "https://gamura.app";
+  const fromApp = targetApp === "gwallet" ? "gcard" : "gwallet";
+  return `${origin}/${targetApp}?pair=${encodeURIComponent(pairCode)}&from=${fromApp}`;
+}
+
+export function parsePairCodeFromInput(rawInput: string): string | null {
+  const trimmed = rawInput.trim();
+  if (!trimmed) return null;
+  if (/^[A-Za-z0-9]{6,10}$/.test(trimmed)) {
+    return trimmed.toUpperCase();
+  }
+  try {
+    const url = new URL(trimmed);
+    const param = url.searchParams.get("pair");
+    if (param && /^[A-Za-z0-9]{6,10}$/.test(param.trim())) {
+      return param.trim().toUpperCase();
+    }
+  } catch {
+    const match = trimmed.match(/pair=([A-Za-z0-9]{6,10})/i);
+    if (match?.[1]) return match[1].toUpperCase();
+  }
+  return null;
+}
+
 function broadcastSyncPacket(sourceApp: "gcard" | "gwallet") {
   if (typeof window === "undefined") return;
   try {
     if ("BroadcastChannel" in window) {
       const ch = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
-      ch.postMessage({ sourceApp, ts: Date.now() });
+      ch.postMessage({ type: "sync", sourceApp, ts: Date.now() });
       ch.close();
     }
   } catch {
@@ -536,6 +731,16 @@ function stripOversizedAssetsForCloud(gcard: GcardStorePayload): string {
   });
 }
 
+function serializeWalletForCloud(gwallet: GwalletStorePayload): string {
+  return JSON.stringify({
+    ...gwallet,
+    cards: gwallet.cards.slice(0, 40).map((c) => ({
+      ...c,
+      tx: (c.tx || []).slice(0, 30),
+    })),
+  }).slice(0, 249000);
+}
+
 export async function pushCardWalletVaultToCloud(
   uid: string,
   sourceApp: "gcard" | "gwallet",
@@ -547,13 +752,11 @@ export async function pushCardWalletVaultToCloud(
   const link = readCardWalletLink();
 
   const cardJson = stripOversizedAssetsForCloud(gcard).slice(0, 599000);
-  const walletJson = JSON.stringify({
-    ...gwallet,
-    cards: gwallet.cards.slice(0, 40).map((c) => ({
-      ...c,
-      tx: (c.tx || []).slice(0, 30),
-    })),
-  }).slice(0, 249000);
+  const walletJson = serializeWalletForCloud(gwallet);
+
+  if (link.connected) {
+    emitSyncPulse(sourceApp, "Syncing to Gamura Cloud...");
+  }
 
   try {
     await setDoc(ref, {
@@ -568,6 +771,376 @@ export async function pushCardWalletVaultToCloud(
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
+}
+
+export async function syncToActivePairRoom(
+  sourceApp: "gcard" | "gwallet",
+): Promise<void> {
+  const pairState = readCardWalletPairState();
+  const link = readCardWalletLink();
+  if (!pairState || !link.connected) return;
+
+  const path = `card_wallet_pairings/${pairState.pairCode}`;
+  const ref = doc(db, "card_wallet_pairings", pairState.pairCode);
+  const gcard = readGcardStore();
+  const gwallet = readGwalletStore();
+
+  emitSyncPulse(
+    sourceApp,
+    sourceApp === "gcard" ? "Transferring Gcard -> Gwallet" : "Transferring Gwallet -> Gcard",
+  );
+
+  try {
+    await updateDoc(ref, {
+      connected: true,
+      peerConnected: pairState.peerConnected,
+      initiatorApp: pairState.initiatorApp,
+      cardJson: stripOversizedAssetsForCloud(gcard).slice(0, 599000),
+      walletJson: serializeWalletForCloud(gwallet),
+      updatedByApp: sourceApp,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (err) {
+    // If doc was deleted or absent, ensure room exists via setDoc if valid, else report
+    try {
+      await setDoc(ref, {
+        pairCode: pairState.pairCode,
+        connected: true,
+        peerConnected: pairState.peerConnected,
+        initiatorApp: pairState.initiatorApp,
+        cardJson: stripOversizedAssetsForCloud(gcard).slice(0, 599000),
+        walletJson: serializeWalletForCloud(gwallet),
+        updatedByApp: sourceApp,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (innerErr) {
+      handleFirestoreError(innerErr ?? err, OperationType.WRITE, path);
+    }
+  }
+}
+
+export async function startQrPairingSession(
+  sourceApp: "gcard" | "gwallet",
+  options?: { forceNew?: boolean },
+): Promise<{ pairCode: string; qrUrl: string }> {
+  const existing = readCardWalletPairState();
+  const pairCode =
+    !options?.forceNew && existing?.pairCode
+      ? existing.pairCode
+      : generatePairCode();
+
+  // Ensure connection is active locally
+  const now = Date.now();
+  const currentLink = readCardWalletLink();
+  if (!currentLink.connected) {
+    const nextWallet = upsertLinkedPassInWallet(
+      readGwalletStore(),
+      readGcardStore().card,
+    );
+    if (typeof window !== "undefined") {
+      localStorage.setItem(GWALLET_STORAGE_KEY, JSON.stringify(nextWallet));
+      localStorage.setItem(
+        CARD_WALLET_LINK_KEY,
+        JSON.stringify({
+          connected: true,
+          connectedAtMs: now,
+          updatedByApp: sourceApp,
+          updatedAtMs: now,
+        } satisfies CardWalletLinkState),
+      );
+    }
+  }
+
+  const nextPair: CardWalletPairState = {
+    pairCode,
+    initiatorApp: sourceApp,
+    peerConnected: options?.forceNew ? false : Boolean(existing?.peerConnected),
+    createdAtMs: now,
+  };
+  writeCardWalletPairState(nextPair);
+  broadcastSyncPacket(sourceApp);
+  emitSyncPulse(sourceApp, "QR Pairing channel ready");
+
+  const targetApp = sourceApp === "gcard" ? "gwallet" : "gcard";
+  const qrUrl = buildPairingQrUrl(targetApp, pairCode);
+  const path = `card_wallet_pairings/${pairCode}`;
+  const ref = doc(db, "card_wallet_pairings", pairCode);
+
+  const gcard = readGcardStore();
+  const gwallet = readGwalletStore();
+
+  try {
+    await setDoc(ref, {
+      pairCode,
+      connected: true,
+      peerConnected: nextPair.peerConnected,
+      initiatorApp: sourceApp,
+      cardJson: stripOversizedAssetsForCloud(gcard).slice(0, 599000),
+      walletJson: serializeWalletForCloud(gwallet),
+      updatedByApp: sourceApp,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+
+  return { pairCode, qrUrl };
+}
+
+export async function joinQrPairingSession(
+  rawCodeOrUrl: string,
+  joiningApp: "gcard" | "gwallet",
+): Promise<{ ok: boolean; pairCode?: string; error?: string }> {
+  const pairCode = parsePairCodeFromInput(rawCodeOrUrl);
+  if (!pairCode) {
+    return { ok: false, error: "Invalid QR pairing code or link" };
+  }
+
+  const path = `card_wallet_pairings/${pairCode}`;
+  const ref = doc(db, "card_wallet_pairings", pairCode);
+
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      return { ok: false, error: "Pairing code expired or disconnected" };
+    }
+    const data = snap.data();
+    const remoteCard = safeParseJson<GcardStorePayload | null>(
+      typeof data.cardJson === "string" ? data.cardJson : null,
+      null,
+    );
+    const remoteWallet = safeParseJson<GwalletStorePayload | null>(
+      typeof data.walletJson === "string" ? data.walletJson : null,
+      null,
+    );
+
+    const localCard = readGcardStore();
+    const localWallet = readGwalletStore();
+
+    // Merge remote state based on which side initiated
+    const mergedCard: GcardStorePayload =
+      data.initiatorApp === "gcard" && remoteCard
+        ? {
+            ...remoteCard,
+            card: {
+              ...GCARD_DEFAULT,
+              ...remoteCard.card,
+              photo: remoteCard.card?.photo ?? localCard.card.photo,
+            },
+          }
+        : localCard;
+
+    let mergedWallet: GwalletStorePayload =
+      data.initiatorApp === "gwallet" && remoteWallet
+        ? remoteWallet
+        : localWallet;
+
+    mergedWallet = upsertLinkedPassInWallet(mergedWallet, mergedCard.card);
+
+    const now = Date.now();
+    const nextLink: CardWalletLinkState = {
+      connected: true,
+      connectedAtMs: now,
+      updatedByApp: joiningApp,
+      updatedAtMs: now,
+    };
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(GCARD_STORAGE_KEY, JSON.stringify(mergedCard));
+      localStorage.setItem(GWALLET_STORAGE_KEY, JSON.stringify(mergedWallet));
+      localStorage.setItem(CARD_WALLET_LINK_KEY, JSON.stringify(nextLink));
+    }
+
+    writeCardWalletPairState({
+      pairCode,
+      initiatorApp: data.initiatorApp === "gwallet" ? "gwallet" : "gcard",
+      peerConnected: true,
+      createdAtMs: now,
+    });
+
+    await updateDoc(ref, {
+      connected: true,
+      peerConnected: true,
+      initiatorApp: data.initiatorApp === "gwallet" ? "gwallet" : "gcard",
+      cardJson: stripOversizedAssetsForCloud(mergedCard).slice(0, 599000),
+      walletJson: serializeWalletForCloud(mergedWallet),
+      updatedByApp: joiningApp,
+      updatedAt: serverTimestamp(),
+    });
+
+    emitSyncPulse(joiningApp, "Paired via QR code");
+    broadcastSyncPacket(joiningApp);
+    return { ok: true, pairCode };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, path);
+    return { ok: false, error: "Unable to complete QR pairing" };
+  }
+}
+
+export function subscribeQrPairingSession(
+  pairCode: string,
+  currentApp: "gcard" | "gwallet",
+  onSync: (payload: {
+    gcard: GcardStorePayload;
+    gwallet: GwalletStorePayload;
+    link: CardWalletLinkState;
+    peerConnected: boolean;
+  }) => void,
+  onRemoteRevoked: () => void,
+): () => void {
+  const cleanCode = pairCode.trim().toUpperCase();
+  if (!/^[A-Z0-9]{6,10}$/.test(cleanCode)) return () => {};
+
+  const path = `card_wallet_pairings/${cleanCode}`;
+  const ref = doc(db, "card_wallet_pairings", cleanCode);
+  let sawSnapshot = false;
+
+  return onSnapshot(
+    ref,
+    (snap) => {
+      if (!snap.exists()) {
+        if (sawSnapshot) {
+          // Peer clicked Disconnect and deleted the pairing doc
+          writeCardWalletPairState(null);
+          const revokedLink: CardWalletLinkState = {
+            connected: false,
+            connectedAtMs: 0,
+            updatedByApp: currentApp === "gcard" ? "gwallet" : "gcard",
+            updatedAtMs: Date.now(),
+          };
+          if (typeof window !== "undefined") {
+            localStorage.setItem(
+              CARD_WALLET_LINK_KEY,
+              JSON.stringify(revokedLink),
+            );
+          }
+          broadcastSyncPacket(currentApp);
+          onRemoteRevoked();
+        }
+        return;
+      }
+
+      sawSnapshot = true;
+      const data = snap.data();
+
+      if (data.connected === false) {
+        writeCardWalletPairState(null);
+        const revokedLink: CardWalletLinkState = {
+          connected: false,
+          connectedAtMs: 0,
+          updatedByApp: data.updatedByApp === "gwallet" ? "gwallet" : "gcard",
+          updatedAtMs: Date.now(),
+        };
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            CARD_WALLET_LINK_KEY,
+            JSON.stringify(revokedLink),
+          );
+        }
+        onRemoteRevoked();
+        return;
+      }
+
+      const peerConnected = Boolean(data.peerConnected);
+      const existingPair = readCardWalletPairState();
+      if (
+        !existingPair ||
+        existingPair.pairCode !== cleanCode ||
+        existingPair.peerConnected !== peerConnected
+      ) {
+        writeCardWalletPairState({
+          pairCode: cleanCode,
+          initiatorApp: data.initiatorApp === "gwallet" ? "gwallet" : "gcard",
+          peerConnected,
+          createdAtMs: existingPair?.createdAtMs || Date.now(),
+        });
+      }
+
+      // Skip re-applying our own echo write unless peerConnected just transitioned
+      const updatedBy = data.updatedByApp === "gwallet" ? "gwallet" : "gcard";
+      if (snap.metadata.hasPendingWrites) {
+        return;
+      }
+
+      const remoteCard = safeParseJson<GcardStorePayload | null>(
+        typeof data.cardJson === "string" ? data.cardJson : null,
+        null,
+      );
+      const remoteWallet = safeParseJson<GwalletStorePayload | null>(
+        typeof data.walletJson === "string" ? data.walletJson : null,
+        null,
+      );
+
+      const localCard = readGcardStore();
+      const localWallet = readGwalletStore();
+
+      if (remoteCard && updatedBy === "gcard" && currentApp === "gwallet") {
+        const mergedCard: GcardStorePayload = {
+          ...remoteCard,
+          card: {
+            ...GCARD_DEFAULT,
+            ...remoteCard.card,
+            photo: remoteCard.card?.photo ?? localCard.card.photo,
+          },
+        };
+        const syncedWallet = upsertLinkedPassInWallet(
+          remoteWallet || localWallet,
+          mergedCard.card,
+        );
+        if (typeof window !== "undefined") {
+          localStorage.setItem(GCARD_STORAGE_KEY, JSON.stringify(mergedCard));
+          localStorage.setItem(GWALLET_STORAGE_KEY, JSON.stringify(syncedWallet));
+        }
+      } else if (remoteWallet && updatedBy === "gwallet" && currentApp === "gcard") {
+        if (typeof window !== "undefined") {
+          if (remoteCard) {
+            localStorage.setItem(
+              GCARD_STORAGE_KEY,
+              JSON.stringify({
+                ...remoteCard,
+                card: {
+                  ...GCARD_DEFAULT,
+                  ...remoteCard.card,
+                  photo: remoteCard.card?.photo ?? localCard.card.photo,
+                },
+              }),
+            );
+          }
+          localStorage.setItem(GWALLET_STORAGE_KEY, JSON.stringify(remoteWallet));
+        }
+      }
+
+      const nextLink: CardWalletLinkState = {
+        connected: true,
+        connectedAtMs: Date.now(),
+        updatedByApp: updatedBy,
+        updatedAtMs: tsToMs(data.updatedAt),
+      };
+      if (typeof window !== "undefined") {
+        localStorage.setItem(CARD_WALLET_LINK_KEY, JSON.stringify(nextLink));
+      }
+
+      if (updatedBy !== currentApp) {
+        emitSyncPulse(
+          updatedBy,
+          updatedBy === "gcard"
+            ? "Receiving update from Gcard"
+            : "Receiving update from Gwallet",
+          { broadcast: false },
+        );
+      }
+
+      onSync({
+        gcard: readGcardStore(),
+        gwallet: readGwalletStore(),
+        link: nextLink,
+        peerConnected,
+      });
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.GET, path);
+    },
+  );
 }
 
 export function saveGcardState(
@@ -607,11 +1180,15 @@ export function saveGcardState(
     if (typeof window !== "undefined") {
       localStorage.setItem(CARD_WALLET_LINK_KEY, JSON.stringify(nextLink));
     }
+    emitSyncPulse("gcard", "Syncing Gcard -> Gwallet");
   }
 
   broadcastSyncPacket("gcard");
   if (uid) {
     void pushCardWalletVaultToCloud(uid, "gcard");
+  }
+  if (link.connected && readCardWalletPairState()) {
+    void syncToActivePairRoom("gcard");
   }
   return { link: readCardWalletLink(), wallet };
 }
@@ -666,11 +1243,15 @@ export function saveGwalletState(
         updatedAtMs: Date.now(),
       }),
     );
+    emitSyncPulse("gwallet", "Syncing Gwallet -> Gcard");
   }
 
   broadcastSyncPacket("gwallet");
   if (options?.uid) {
     void pushCardWalletVaultToCloud(options.uid, "gwallet");
+  }
+  if (link.connected && readCardWalletPairState()) {
+    void syncToActivePairRoom("gwallet");
   }
   return { link: readCardWalletLink(), gcard };
 }
@@ -699,9 +1280,13 @@ export function connectCardAndWallet(
     localStorage.setItem(GCARD_STORAGE_KEY, JSON.stringify(gcard));
   }
 
+  emitSyncPulse(sourceApp, "Establishing live sync...");
   broadcastSyncPacket(sourceApp);
   if (uid) {
     void pushCardWalletVaultToCloud(uid, sourceApp);
+  }
+  if (readCardWalletPairState()) {
+    void syncToActivePairRoom(sourceApp);
   }
   return { link: nextLink, gcard, wallet: nextWallet };
 }
@@ -711,6 +1296,8 @@ export function disconnectCardAndWallet(
   uid?: string | null,
 ): CardWalletLinkState {
   const now = Date.now();
+  const activePair = readCardWalletPairState();
+
   const nextLink: CardWalletLinkState = {
     connected: false,
     connectedAtMs: 0,
@@ -720,6 +1307,23 @@ export function disconnectCardAndWallet(
   if (typeof window !== "undefined") {
     localStorage.setItem(CARD_WALLET_LINK_KEY, JSON.stringify(nextLink));
   }
+  writeCardWalletPairState(null);
+
+  if (activePair?.pairCode) {
+    const pairPath = `card_wallet_pairings/${activePair.pairCode}`;
+    void deleteDoc(doc(db, "card_wallet_pairings", activePair.pairCode)).catch(
+      (err) => {
+        handleFirestoreError(err, OperationType.DELETE, pairPath);
+      },
+    );
+  }
+
+  dispatchLocalPulse({
+    phase: "idle",
+    sourceApp,
+    label: "Disconnected",
+    ts: now,
+  });
   broadcastSyncPacket(sourceApp);
   if (uid) {
     void pushCardWalletVaultToCloud(uid, sourceApp);
@@ -748,7 +1352,12 @@ export function subscribeLocalCardWalletSync(
   try {
     if ("BroadcastChannel" in window) {
       bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
-      bc.onmessage = () => emit();
+      bc.onmessage = (msg) => {
+        const d = msg.data as { type?: string };
+        if (!d?.type || d.type === "sync") {
+          emit();
+        }
+      };
     }
   } catch {
     // ignore
@@ -759,7 +1368,8 @@ export function subscribeLocalCardWalletSync(
       e.key === null ||
       e.key === GCARD_STORAGE_KEY ||
       e.key === GWALLET_STORAGE_KEY ||
-      e.key === CARD_WALLET_LINK_KEY
+      e.key === CARD_WALLET_LINK_KEY ||
+      e.key === CARD_WALLET_PAIR_KEY
     ) {
       emit();
     }
@@ -823,10 +1433,11 @@ export function subscribeCloudCardWalletVault(
         typeof data.walletJson === "string" ? data.walletJson : null,
         null,
       );
+      const updatedByApp = data.updatedByApp === "gwallet" ? "gwallet" : "gcard";
       const cloudLink: CardWalletLinkState = {
         connected: Boolean(data.connected),
         connectedAtMs: Number(data.connectedAtMs) || 0,
-        updatedByApp: data.updatedByApp === "gwallet" ? "gwallet" : "gcard",
+        updatedByApp,
         updatedAtMs: tsToMs(data.updatedAt),
       };
 
@@ -850,6 +1461,16 @@ export function subscribeCloudCardWalletVault(
       }
       if (typeof window !== "undefined") {
         localStorage.setItem(CARD_WALLET_LINK_KEY, JSON.stringify(cloudLink));
+      }
+
+      if (cloudLink.connected && updatedByApp !== currentApp) {
+        emitSyncPulse(
+          updatedByApp,
+          updatedByApp === "gcard"
+            ? "Synced from Gcard Cloud"
+            : "Synced from Gwallet Cloud",
+          { broadcast: false },
+        );
       }
 
       onSync({

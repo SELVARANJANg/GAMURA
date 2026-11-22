@@ -416,5 +416,68 @@ service cloud.firestore {
         && isValidId(userId)
         && (request.auth.uid == userId || isAdmin());
     }
+
+    // Gamura Card <-> Gwallet Cross-Device QR Pairing Channel (Unguessable capability token, listing disallowed)
+    function isValidPairCode(code) {
+      return code is string && code.size() >= 6 && code.size() <= 10 && code.matches('^[A-Z0-9]{6,10}$');
+    }
+
+    function isValidCardWalletPairing(data, pairCode) {
+      return data.keys().hasAll(['pairCode', 'connected', 'peerConnected', 'initiatorApp', 'cardJson', 'walletJson', 'updatedByApp', 'updatedAt'])
+        && data.keys().hasOnly(['pairCode', 'connected', 'peerConnected', 'initiatorApp', 'cardJson', 'walletJson', 'updatedByApp', 'updatedAt'])
+        && data.pairCode is string && data.pairCode == pairCode
+        && data.connected is bool
+        && data.peerConnected is bool
+        && data.initiatorApp in ['gcard', 'gwallet']
+        && data.cardJson is string && data.cardJson.size() <= 600000
+        && data.walletJson is string && data.walletJson.size() <= 250000
+        && data.updatedByApp in ['gcard', 'gwallet']
+        && (data.updatedAt is timestamp);
+    }
+
+    match /card_wallet_pairings/{pairCode} {
+      allow get: if isValidPairCode(pairCode);
+      allow list: if false;
+      allow create: if isValidPairCode(pairCode)
+        && isValidCardWalletPairing(incoming(), pairCode)
+        && incoming().updatedAt == request.time;
+      allow update: if isValidPairCode(pairCode)
+        && isValidCardWalletPairing(incoming(), pairCode)
+        && incoming().pairCode == existing().pairCode
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['connected', 'peerConnected', 'initiatorApp', 'cardJson', 'walletJson', 'updatedByApp', 'updatedAt']);
+      allow delete: if isValidPairCode(pairCode);
+    }
+
+    // Gamura Software License, Terms of Service & Privacy Consent (Strict owner-only access)
+    function isValidUserLicense(data, userId) {
+      return data.keys().hasAll(['uid', 'status', 'version', 'platform', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'status', 'version', 'platform', 'updatedAt'])
+        && data.uid is string && data.uid == userId && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.status in ['agreed', 'declined']
+        && data.version is string && data.version.size() >= 1 && data.version.size() <= 20
+        && data.platform is string && data.platform.size() >= 1 && data.platform.size() <= 24
+        && (data.updatedAt is timestamp);
+    }
+
+    match /user_licenses/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if false;
+      allow create: if isSignedIn()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserLicense(incoming(), userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(userId)
+        && (request.auth.uid == userId || isAdmin())
+        && isValidUserLicense(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'version', 'platform', 'updatedAt']);
+      allow delete: if isSignedIn()
+        && isValidId(userId)
+        && (request.auth.uid == userId || isAdmin());
+    }
   }
 }

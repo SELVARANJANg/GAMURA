@@ -85,6 +85,7 @@ import {
   Flame,
   Music,
   Compass,
+  Scale,
 } from "lucide-react";
 import {
   DndContext,
@@ -187,7 +188,9 @@ import {
   PrivacyPolicyView,
   TermsOfServiceView,
   AccountDeletionView,
+  LicenseAgreementView,
 } from "./components/LegalViews";
+import GamuraLicenseGate from "./components/GamuraLicenseGate";
 import AppleBottomDock from "./components/AppleBottomDock";
 import GamuraAuraHub, { AuraEngineControlPanel } from "./components/GamuraAuraHub";
 import GamuraPdfStudio, {
@@ -9017,6 +9020,7 @@ export default function App() {
   | "gwallet"
   | "privacy"
   | "terms"
+  | "license"
   | "delete-account";
 
   const reservedRouteSet = new Set([
@@ -9094,6 +9098,8 @@ export default function App() {
     "contact",
     "terms",
     "privacy",
+    "license",
+    "eula",
     "delete-account",
     "account-deletion",
     "docs",
@@ -9253,6 +9259,7 @@ export default function App() {
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "terms") return { page: "terms", claimed: null, shortSlug: null, prefillHandle: "" };
+    if (lower === "license" || lower === "eula") return { page: "license", claimed: null, shortSlug: null, prefillHandle: "" };
     if (lower === "delete-account" || lower === "account-deletion") {
       return { page: "delete-account", claimed: null, shortSlug: null, prefillHandle: "" };
     }
@@ -10646,6 +10653,7 @@ ${targetContext}`;
     }
   };
 
+  const activePageView = (() => {
   if (createdGamuraIdInfo) {
     return (
       <div
@@ -13525,6 +13533,18 @@ ${targetContext}`;
     );
   }
 
+  if (currentPage === "license") {
+    return (
+      <LicenseAgreementView
+        currentUser={currentUser}
+        onBack={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
   if (currentPage === "delete-account") {
     return (
       <AccountDeletionView
@@ -14180,6 +14200,19 @@ ${targetContext}`;
                       <ExternalLink size={13} className="text-zinc-400" />
                     </a>
                     <a
+                      href="/license"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="group w-full flex items-center justify-between px-4 py-2.5 hover:bg-zinc-50 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Scale size={15} className="text-[#1A73E8]" />
+                        <span className="text-xs font-medium text-zinc-700">Software License (EULA)</span>
+                      </div>
+                      <ExternalLink size={13} className="text-zinc-400" />
+                    </a>
+                    <a
                       href="/delete-account"
                       target="_blank"
                       rel="noopener noreferrer"
@@ -14352,5 +14385,20 @@ ${targetContext}`;
         </div>
       </div>
     </ErrorBoundary>
+  );
+  })();
+
+  return (
+    <>
+      {activePageView}
+      <GamuraLicenseGate
+        currentPage={currentPage}
+        authUser={currentUser}
+        onNavigateLegalPage={(page) => {
+          window.history.pushState({}, "", `/${page}`);
+          setCurrentPage(page);
+        }}
+      />
+    </>
   );
 }

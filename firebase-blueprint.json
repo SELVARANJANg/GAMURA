@@ -230,6 +230,35 @@
         "updatedAt": { "type": "object" }
       },
       "required": ["uid", "connected", "connectedAtMs", "cardJson", "walletJson", "updatedByApp", "updatedAt"]
+    },
+    "CardWalletPairing": {
+      "title": "CardWalletPairing",
+      "description": "Capability-code real-time QR pairing channel between GAMURA CARD and Gwallet across devices",
+      "type": "object",
+      "properties": {
+        "pairCode": { "type": "string", "maxLength": 10, "pattern": "^[A-Z0-9]{6,10}$" },
+        "connected": { "type": "boolean" },
+        "peerConnected": { "type": "boolean" },
+        "initiatorApp": { "type": "string", "enum": ["gcard", "gwallet"] },
+        "cardJson": { "type": "string", "maxLength": 600000 },
+        "walletJson": { "type": "string", "maxLength": 250000 },
+        "updatedByApp": { "type": "string", "enum": ["gcard", "gwallet"] },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["pairCode", "connected", "peerConnected", "initiatorApp", "cardJson", "walletJson", "updatedByApp", "updatedAt"]
+    },
+    "UserLicense": {
+      "title": "UserLicense",
+      "description": "Cross-device cloud-synced Software License, Terms of Service, and Privacy Policy consent record per Gamura user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["agreed", "declined"] },
+        "version": { "type": "string", "maxLength": 20 },
+        "platform": { "type": "string", "maxLength": 24 },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["uid", "status", "version", "platform", "updatedAt"]
     }
   },
   "firestore": {
@@ -304,6 +333,14 @@
     "/card_wallet_vaults/{userId}": {
       "schema": { "$ref": "#/entities/CardWalletVault" },
       "description": "Private real-time synchronized Gamura Card (Gcard) and Gwallet (Gamura Wallet) data per user"
+    },
+    "/card_wallet_pairings/{pairCode}": {
+      "schema": { "$ref": "#/entities/CardWalletPairing" },
+      "description": "Real-time QR device-to-device pairing channels linking GAMURA CARD and Gwallet"
+    },
+    "/user_licenses/{userId}": {
+      "schema": { "$ref": "#/entities/UserLicense" },
+      "description": "Private user software license and legal consent status keyed by Gamura ID UID"
     }
   }
 }

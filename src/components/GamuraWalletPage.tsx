@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   Check,
   Cloud,
+  Copy,
   CreditCard,
   Delete,
   ExternalLink,
@@ -12,6 +13,7 @@ import {
   Lock,
   Moon,
   Plus,
+  QrCode,
   RefreshCw,
   Search,
   Settings,
@@ -43,22 +45,32 @@ import {
   GCARD_SYNCED_PASS_ID,
   GWALLET_PALETTES,
   GWALLET_TYPES,
+  buildPairingQrUrl,
   connectCardAndWallet,
   createSeedWalletCards,
   disconnectCardAndWallet,
+  getLatestSyncPulse,
+  joinQrPairingSession,
   pushCardWalletVaultToCloud,
   readCardWalletLink,
+  readCardWalletPairState,
   readGcardStore,
   readGwalletStore,
   saveGwalletState,
+  startQrPairingSession,
   subscribeCloudCardWalletVault,
   subscribeLocalCardWalletSync,
+  subscribeQrPairingSession,
+  subscribeSyncPulse,
   type CardWalletLinkState,
+  type CardWalletPairState,
   type GcardState,
   type GwalletPass,
   type GwalletPassType,
   type GwalletStorePayload,
+  type SyncPulseState,
 } from "../utils/gamuraCardWalletSync";
+import CardWalletSyncIndicator from "./CardWalletSyncIndicator";
 
 interface GamuraWalletPageProps {
   onBackHome: () => void;
@@ -213,10 +225,19 @@ export default function GamuraWalletPage({
   const [addMoneyAmount, setAddMoneyAmount] = useState<string>("");
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
-  // Settings / Connect / PIN Lock
+  // Settings / Connect / QR Pairing / PIN Lock
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [connectSheetOpen, setConnectSheetOpen] = useState<boolean>(false);
   const [confirmResetWallet, setConfirmResetWallet] = useState<boolean>(false);
+  const [syncPulse, setSyncPulse] = useState<SyncPulseState>(() =>
+    getLatestSyncPulse(),
+  );
+  const [pairState, setPairState] = useState<CardWalletPairState | null>(() =>
+    readCardWalletPairState(),
+  );
+  const [manualPairInput, setManualPairInput] = useState<string>("");
+  const [pairBusy, setPairBusy] = useState<boolean>(false);
+  const [pairError, setPairError] = useState<string | null>(null);
 
   // 4-Digit PIN Overlay
   const [lockVisible, setLockVisible] = useState<boolean>(() =>
@@ -265,8 +286,57 @@ export default function GamuraWalletPage({
       setWallet(gwallet);
       setGcardState(gcard.card);
       setLinkState(link);
+      setPairState(readCardWalletPairState());
     });
   }, []);
+
+  useEffect(() => {
+    return subscribeSyncPulse((pulse) => {
+      setSyncPulse(pulse);
+    });
+  }, []);
+
+  // Auto-join QR pairing session when opened via ?pair=CODE
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const incomingPair = params.get("pair");
+    if (!incomingPair) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    setPairBusy(true);
+    void joinQrPairingSession(incomingPair, "gwallet").then((res) => {
+      setPairBusy(false);
+      if (res.ok && res.pairCode) {
+        setWallet(readGwalletStore());
+        setGcardState(readGcardStore().card);
+        setLinkState(readCardWalletLink());
+        setPairState(readCardWalletPairState());
+        setActivePassId(GCARD_SYNCED_PASS_ID);
+        showToast(`Paired with GAMURA CARD (${res.pairCode})`);
+      } else {
+        showToast(res.error || "QR pairing code expired");
+      }
+    });
+  }, []);
+
+  // Subscribe to active Firestore QR pairing channel
+  useEffect(() => {
+    if (!pairState?.pairCode) return;
+    return subscribeQrPairingSession(
+      pairState.pairCode,
+      "gwallet",
+      ({ gcard, gwallet, link }) => {
+        setWallet(gwallet);
+        setGcardState(gcard.card);
+        setLinkState(link);
+        setPairState(readCardWalletPairState());
+      },
+      () => {
+        setLinkState(readCardWalletLink());
+        setPairState(null);
+        showToast("Sync access disconnected from GAMURA CARD");
+      },
+    );
+  }, [pairState?.pairCode]);
 
   useEffect(() => {
     if (!authUser) return;
@@ -356,6 +426,23 @@ export default function GamuraWalletPage({
     }
   };
 
+  const pairingQrUrl = useMemo(
+    () =>
+      pairState?.pairCode
+        ? buildPairingQrUrl("gcard", pairState.pairCode)
+        : "",
+    [pairState?.pairCode],
+  );
+
+  const copyText = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(label);
+    } catch {
+      showToast("Copy blocked by browser");
+    }
+  };
+
   const handleConnectToggle = (connect: boolean) => {
     if (connect) {
       const { link, gcard, wallet: nextW } = connectCardAndWallet(
@@ -370,7 +457,50 @@ export default function GamuraWalletPage({
     } else {
       const link = disconnectCardAndWallet("gwallet", authUser?.uid);
       setLinkState(link);
+      setPairState(null);
+      setPairError(null);
       showToast("Disconnected live sync from GAMURA CARD");
+    }
+  };
+
+  const handleOpenConnectQr = async (forceNew = false) => {
+    setConnectSheetOpen(true);
+    setPairError(null);
+    if (!forceNew && pairState?.pairCode) return;
+    setPairBusy(true);
+    try {
+      await startQrPairingSession("gwallet", { forceNew });
+      setLinkState(readCardWalletLink());
+      setWallet(readGwalletStore());
+      setGcardState(readGcardStore().card);
+      setPairState(readCardWalletPairState());
+      if (forceNew) {
+        showToast("Generated new QR pairing code");
+      }
+    } finally {
+      setPairBusy(false);
+    }
+  };
+
+  const handleJoinManualPair = async () => {
+    if (!manualPairInput.trim()) {
+      setPairError("Enter a pair code or link from Gcard");
+      return;
+    }
+    setPairBusy(true);
+    setPairError(null);
+    const res = await joinQrPairingSession(manualPairInput, "gwallet");
+    setPairBusy(false);
+    if (res.ok && res.pairCode) {
+      setWallet(readGwalletStore());
+      setGcardState(readGcardStore().card);
+      setLinkState(readCardWalletLink());
+      setPairState(readCardWalletPairState());
+      setActivePassId(GCARD_SYNCED_PASS_ID);
+      setManualPairInput("");
+      showToast(`Paired with GAMURA CARD (${res.pairCode})`);
+    } else {
+      setPairError(res.error || "Unable to pair with that code");
     }
   };
 
@@ -969,9 +1099,21 @@ export default function GamuraWalletPage({
         </nav>
 
         <div className="flex items-center gap-2 shrink-0">
+          {linkState.connected && (
+            <div className="hidden sm:flex items-center px-1">
+              <CardWalletSyncIndicator
+                connected={linkState.connected}
+                pulse={syncPulse}
+                pairState={pairState}
+                dark={dark}
+                variant="compact"
+              />
+            </div>
+          )}
+
           <button
             type="button"
-            onClick={() => setConnectSheetOpen(true)}
+            onClick={() => void handleOpenConnectQr(false)}
             className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition-colors ${
               linkState.connected
                 ? "bg-[#0a8f5a] text-white hover:bg-[#08774b]"
@@ -982,7 +1124,11 @@ export default function GamuraWalletPage({
           >
             <CreditCard size={14} />
             <span>
-              {linkState.connected ? "Gcard Connected" : "Connect Gcard"}
+              {linkState.connected
+                ? syncPulse.phase === "syncing"
+                  ? "Syncing..."
+                  : "Gcard Connected"
+                : "Connect Gcard"}
             </span>
           </button>
 
@@ -1037,55 +1183,97 @@ export default function GamuraWalletPage({
               </div>
             </div>
 
-            {/* Dedicated Connect Gcard Action Bar */}
-            <div className={`rounded-3xl border p-4 shadow-sm flex flex-wrap items-center justify-between gap-3 ${surfaceBg}`}>
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-[#0a8f5a]/15 text-[#0a8f5a] flex items-center justify-center shrink-0">
-                  <Link2 size={18} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-bold truncate">
-                    {linkState.connected
-                      ? `Connected to GAMURA CARD`
-                      : "Connect GAMURA CARD (Gcard)"}
+            {/* Dedicated Connect Gcard Action Bar with Sync Indicator & Disconnect */}
+            <div className={`rounded-3xl border p-4 sm:p-5 shadow-sm space-y-3.5 ${surfaceBg}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-[#0a8f5a]/15 text-[#0a8f5a] flex items-center justify-center shrink-0">
+                    <Link2 size={18} />
                   </div>
-                  <div className={`text-xs truncate ${mutedText}`}>
-                    {linkState.connected
-                      ? `${gcardState.name} synced in real time`
-                      : "Sync your digital business card right into Gwallet"}
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold truncate">
+                      {linkState.connected
+                        ? "Connected to GAMURA CARD"
+                        : "Connect GAMURA CARD (Gcard)"}
+                    </div>
+                    <div className={`text-xs truncate ${mutedText}`}>
+                      {linkState.connected
+                        ? `${gcardState.name} synced in real time`
+                        : "Sync your digital business card right into Gwallet"}
+                    </div>
                   </div>
                 </div>
+
+                {linkState.connected ? (
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleManualSync}
+                      className={`min-h-[36px] px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${subtleBg}`}
+                    >
+                      <RefreshCw
+                        size={12}
+                        className={
+                          syncPulse.phase === "syncing" ? "animate-spin" : ""
+                        }
+                      />
+                      <span>Sync</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenConnectQr(false)}
+                      className={`min-h-[36px] px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${subtleBg}`}
+                    >
+                      <QrCode size={12} />
+                      <span>QR Pair</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate("/gcard")}
+                      className="min-h-[36px] px-3.5 rounded-full bg-[#0a8f5a] hover:bg-[#08774b] text-white text-xs font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <span>Open Gcard</span>
+                      <ArrowUpRight size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleConnectToggle(false)}
+                      className="min-h-[36px] px-3 rounded-full bg-red-600/12 text-red-600 hover:bg-red-600 hover:text-white text-xs font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Link2Off size={12} />
+                      <span>Disconnect</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleConnectToggle(true)}
+                      className="min-h-[38px] px-4 rounded-full bg-[#0a8f5a] hover:bg-[#08774b] text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <Link2 size={13} />
+                      <span>Connect Now</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenConnectQr(false)}
+                      className={`min-h-[38px] px-3.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shrink-0 ${subtleBg}`}
+                    >
+                      <QrCode size={13} />
+                      <span>QR Pair</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {linkState.connected ? (
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleManualSync}
-                    className={`min-h-[36px] px-3 rounded-full text-xs font-semibold inline-flex items-center gap-1 cursor-pointer ${subtleBg}`}
-                  >
-                    <RefreshCw size={12} />
-                    <span>Sync</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleNavigate("/gcard")}
-                    className="min-h-[36px] px-3.5 rounded-full bg-[#0a8f5a] text-white text-xs font-semibold inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Open Gcard</span>
-                    <ArrowUpRight size={12} />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleConnectToggle(true)}
-                  className="min-h-[38px] px-4 rounded-full bg-[#0a8f5a] hover:bg-[#08774b] text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shrink-0"
-                >
-                  <Link2 size={13} />
-                  <span>Connect Now</span>
-                </button>
-              )}
+              {/* Animated Live Syncing... Transfer Indicator */}
+              <CardWalletSyncIndicator
+                connected={linkState.connected}
+                pulse={syncPulse}
+                pairState={pairState}
+                dark={dark}
+                variant="full"
+              />
             </div>
 
             {/* Filter Chips + Search */}
@@ -1372,7 +1560,7 @@ export default function GamuraWalletPage({
         </div>
       )}
 
-      {/* Connect Gcard Modal Sheet */}
+      {/* Connect Gcard Modal Sheet with QR Pairing & Live Sync */}
       {connectSheetOpen && (
         <div
           onClick={() => setConnectSheetOpen(false)}
@@ -1380,7 +1568,7 @@ export default function GamuraWalletPage({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-5 border shadow-2xl ${surfaceBg}`}
+            className={`w-full max-w-md max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-4 border shadow-2xl ${surfaceBg}`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1390,7 +1578,7 @@ export default function GamuraWalletPage({
                 <div>
                   <h2 className="text-base font-bold">Connect to Gcard</h2>
                   <p className={`text-xs ${mutedText}`}>
-                    Real-time GAMURA CARD sync
+                    Real-time GAMURA CARD &amp; QR pairing
                   </p>
                 </div>
               </div>
@@ -1412,13 +1600,175 @@ export default function GamuraWalletPage({
             >
               <div className="flex items-center justify-between text-xs opacity-85 font-semibold">
                 <span>🪪 {gcardState.name}</span>
-                <span>{linkState.connected ? "LIVE CONNECTED" : "PREVIEW"}</span>
+                <span>
+                  {linkState.connected
+                    ? syncPulse.phase === "syncing"
+                      ? "SYNCING..."
+                      : "LIVE CONNECTED"
+                    : "PREVIEW"}
+                </span>
               </div>
               <div className="mt-3 text-xs opacity-90 truncate">
                 {gcardState.head}
               </div>
               <div className="mt-1 text-[11px] opacity-75 truncate">
                 {gcardState.link}
+              </div>
+            </div>
+
+            {/* Animated Syncing Indicator */}
+            <CardWalletSyncIndicator
+              connected={linkState.connected}
+              pulse={syncPulse}
+              pairState={pairState}
+              dark={dark}
+              variant="full"
+            />
+
+            {/* QR Code Generator for Cross-Device Pairing */}
+            <div
+              className={`rounded-2xl border p-4 space-y-3 ${
+                dark
+                  ? "bg-zinc-900/70 border-zinc-800"
+                  : "bg-[#F5F5F7] border-zinc-200/80"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold">
+                  <QrCode size={14} className="text-[#0a8f5a]" />
+                  <span>Scan on Gcard Device</span>
+                </div>
+                <span
+                  className={`text-[11px] font-semibold ${
+                    pairState?.peerConnected ? "text-[#0a8f5a]" : mutedText
+                  }`}
+                >
+                  {pairState?.peerConnected
+                    ? "Peer Paired ✓"
+                    : "Waiting for scan"}
+                </span>
+              </div>
+
+              {pairingQrUrl ? (
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  <div className="bg-white p-2.5 rounded-2xl border border-zinc-200 shadow-xs shrink-0">
+                    <QRCodeSVG
+                      value={pairingQrUrl}
+                      size={132}
+                      level="M"
+                      fgColor="#111111"
+                      bgColor="#FFFFFF"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-2 text-center sm:text-left">
+                    <div>
+                      <div className={`text-[11px] uppercase tracking-wider font-semibold ${mutedText}`}>
+                        Pair Code
+                      </div>
+                      <div className="text-lg font-mono font-bold tracking-widest">
+                        {pairState?.pairCode}
+                      </div>
+                    </div>
+                    <p className={`text-[11px] leading-snug ${mutedText}`}>
+                      Scan this QR on another device to open GAMURA CARD paired live with Gwallet.
+                    </p>
+                    <div className="flex items-center justify-center sm:justify-start gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          pairState?.pairCode &&
+                          copyText(pairState.pairCode, "Pair code copied")
+                        }
+                        className={`min-h-[32px] px-3 rounded-full text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer border ${
+                          dark
+                            ? "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"
+                            : "border-zinc-200 bg-white hover:bg-zinc-100"
+                        }`}
+                      >
+                        <Copy size={11} />
+                        <span>Code</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyText(pairingQrUrl, "Pairing link copied")
+                        }
+                        className={`min-h-[32px] px-3 rounded-full text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer border ${
+                          dark
+                            ? "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"
+                            : "border-zinc-200 bg-white hover:bg-zinc-100"
+                        }`}
+                      >
+                        <Link2 size={11} />
+                        <span>Copy Link</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pairBusy}
+                        onClick={() => void handleOpenConnectQr(true)}
+                        className={`min-h-[32px] px-3 rounded-full text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer border ${
+                          dark
+                            ? "border-zinc-700 bg-zinc-800 hover:bg-zinc-700"
+                            : "border-zinc-200 bg-white hover:bg-zinc-100"
+                        }`}
+                      >
+                        <RefreshCw
+                          size={11}
+                          className={pairBusy ? "animate-spin" : ""}
+                        />
+                        <span>New QR</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="py-4 text-center">
+                  <button
+                    type="button"
+                    disabled={pairBusy}
+                    onClick={() => void handleOpenConnectQr(true)}
+                    className="min-h-[38px] px-4 rounded-full bg-[#0a8f5a] text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <QrCode size={14} />
+                    <span>{pairBusy ? "Generating..." : "Generate Pairing QR"}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Manual Pair Code / Link Join */}
+              <div className="pt-2 border-t border-zinc-200/70 dark:border-zinc-800 space-y-1.5">
+                <div className={`text-[11px] font-medium ${mutedText}`}>
+                  Or enter a Gcard pair code / link
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={manualPairInput}
+                    onChange={(e) => {
+                      setManualPairInput(e.target.value);
+                      setPairError(null);
+                    }}
+                    placeholder="e.g. GW8K4P2M"
+                    className={`flex-1 min-w-0 rounded-xl px-3 py-2 text-xs font-mono border outline-none ${
+                      dark
+                        ? "bg-zinc-950 border-zinc-700"
+                        : "bg-white border-zinc-200"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    disabled={pairBusy}
+                    onClick={() => void handleJoinManualPair()}
+                    className="min-h-[34px] px-4 rounded-xl bg-zinc-900 dark:bg-white dark:text-black text-white text-xs font-semibold cursor-pointer shrink-0"
+                  >
+                    {pairBusy ? "Pairing..." : "Pair"}
+                  </button>
+                </div>
+                {pairError && (
+                  <p className="text-[11px] text-red-500 font-medium">
+                    {pairError}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1442,13 +1792,18 @@ export default function GamuraWalletPage({
                       onClick={handleManualSync}
                       className={`min-h-[42px] rounded-full text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer ${subtleBg}`}
                     >
-                      <RefreshCw size={14} />
+                      <RefreshCw
+                        size={14}
+                        className={
+                          syncPulse.phase === "syncing" ? "animate-spin" : ""
+                        }
+                      />
                       <span>Sync Now</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleConnectToggle(false)}
-                      className="min-h-[42px] rounded-full bg-red-600/12 text-red-600 text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="min-h-[42px] rounded-full bg-red-600/12 text-red-600 hover:bg-red-600 hover:text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
                     >
                       <Link2Off size={14} />
                       <span>Disconnect</span>
