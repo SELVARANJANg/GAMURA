@@ -736,7 +736,8 @@ export default function GamuraStoreLaunch({
   const renderAppRow = (app: StoreAppItem, rank?: number) => {
     const isInstalled = installedIdSet.has(app.id);
     const isInstalling = installingId === app.id;
-    const isDirectLaunchApp = app.id === "gamura-camera";
+    const isDirectLaunchApp =
+      app.id === "gamura-camera" || app.id === "gamura-for-business";
     const stats = getLiveStats(app);
     const handleRowActivate = () => {
       if (isDirectLaunchApp) {
@@ -867,7 +868,7 @@ export default function GamuraStoreLaunch({
 
   const renderAppTile = (app: StoreAppItem) => {
     const stats = getLiveStats(app);
-    return app.id === "gamura-camera" ? (
+    return app.id === "gamura-camera" || app.id === "gamura-for-business" ? (
       <a
         key={app.id}
         href={app.url}
@@ -1276,7 +1277,7 @@ export default function GamuraStoreLaunch({
                 {/* Featured Carousel */}
                 <div className="flex gap-3.5 overflow-x-auto no-scrollbar pb-1 snap-x snap-mandatory">
                   {allApps.map((app) =>
-                    app.id === "gamura-camera" ? (
+                    app.id === "gamura-camera" || app.id === "gamura-for-business" ? (
                       <a
                         key={app.id}
                         href={app.url}

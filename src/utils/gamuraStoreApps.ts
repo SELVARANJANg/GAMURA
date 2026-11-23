@@ -30,6 +30,7 @@ export type StoreIconKind =
   | "gfresh"
   | "gcard"
   | "gwallet"
+  | "gb"
   | "letter";
 
 export interface StoreAppItem {
@@ -741,6 +742,24 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     chart: "No. 1 Finance",
     dl: "Featured",
     size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-for-business",
+    name: "GAMURA FOR BUSINESS (GB)",
+    cat: "Business",
+    tag: "21 interactive business courses, video lessons, badges & certificates",
+    desc: "GAMURA FOR BUSINESS (GB) is your interactive academy with 21 structured courses (84 lessons) spanning Business Fundamentals, Startups, Finance, Marketing, Sales, Leadership, Strategy, Operations, AI for Business & Personal Branding. Embed YouTube video lessons, complete practice tasks, unlock 6 badges, and export high-resolution PNG certificates.",
+    url: "/gamura-for-business",
+    c1: "#D97757",
+    c2: "#8F4228",
+    iconKind: "gb",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Business",
+    dl: "Featured",
+    size: "Web · 2 MB",
     isBuiltin: true,
   },
 ];

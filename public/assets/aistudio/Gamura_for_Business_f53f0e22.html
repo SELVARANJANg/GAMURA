@@ -1,0 +1,260 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Gamura for Business</title>
+<style>
+:root{--bg:#F5F4EE;--card:#fff;--ink:#141413;--mut:#6b6a63;--line:#e6e3d8;--ac:#D97757;--chip:#ece9de;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1b19;--card:#262522;--ink:#f3f1ea;--mut:#a5a299;--line:#3a3935;--chip:#33322e}}
+:root[data-theme="dark"]{--bg:#1c1b19;--card:#262522;--ink:#f3f1ea;--mut:#a5a299;--line:#3a3935;--chip:#33322e}
+*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,"Segoe UI",Roboto,sans-serif;overflow-x:hidden}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;font-weight:500;letter-spacing:-.01em;margin:0}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5}
+.brand{font-weight:800;letter-spacing:.04em;font-size:18px;display:flex;align-items:center;gap:8px}.brand span{color:var(--ac)}
+main{max-width:1040px;margin:0 auto;padding:22px 18px 80px}
+.hero{text-align:center;padding:14px 0 6px}.hero h1{font-size:clamp(32px,8vw,52px)}.hero p{color:var(--mut);margin:8px auto 0;max-width:520px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;text-align:center}.stat b{display:block;font:500 28px Georgia,serif}.stat span{font-size:13px;color:var(--mut)}
+.search{display:block;width:100%;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);font:inherit}
+.bar2{display:flex;justify-content:center;margin:16px 0 10px}
+.tabs{display:inline-flex;background:var(--chip);border-radius:999px;padding:4px;gap:2px;max-width:100%;overflow-x:auto}
+.tabs button{border:0;background:none;color:var(--mut);font:inherit;font-weight:600;padding:8px 14px;border-radius:999px;cursor:pointer;white-space:nowrap}.tabs button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 0 14px}.chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 14px;font:inherit;font-size:14px;cursor:pointer;white-space:nowrap}.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-top:6px solid var(--c);border-radius:18px;padding:16px;cursor:pointer;display:flex;flex-direction:column;gap:6px;text-align:left;color:inherit;font:inherit;min-height:220px}
+.card h3{font-size:21px;margin-top:4px}.card p{margin:0;color:var(--mut);font-size:14.5px}.meta{font-size:13px;color:var(--mut)}
+.ic{width:46px;height:46px;border-radius:12px;background:color-mix(in srgb,var(--c) 18%,transparent);display:grid;place-items:center;font-size:22px}
+.bar{height:6px;background:var(--chip);border-radius:9px;overflow:hidden;margin-top:auto}.bar i{display:block;height:100%;background:var(--c,var(--ac))}
+:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:10px 16px;border-radius:12px;font:inherit;font-weight:600;cursor:pointer}.btn.p{background:var(--ac);border-color:var(--ac);color:#fff}
+.back{background:none;border:0;color:var(--mut);font:inherit;cursor:pointer;padding:0 0 10px}
+.cols{display:grid;gap:18px;grid-template-columns:1fr}@media(min-width:860px){.cols{grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr);align-items:start}}
+.player{aspect-ratio:16/9;background:#161513;border-radius:16px;overflow:hidden;display:grid;place-items:center;color:#d8d5ca;text-align:center;padding:16px}.player iframe{width:100%;height:100%;border:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.row input{flex:1;min-width:170px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px}.panel h2{font-size:26px;margin:4px 0 8px}.panel p{margin:0 0 12px}
+.les{display:flex;align-items:center;gap:12px;padding:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;cursor:pointer;width:100%;color:inherit;font:inherit;text-align:left;margin-bottom:8px}.les.on{border-color:var(--ac);box-shadow:0 0 0 1px var(--ac)}.les span:nth-child(2){flex:1}
+.dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:13px;flex:none}.dot.d{background:var(--ac);border-color:var(--ac);color:#fff}
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}.badge{text-align:center;padding:18px 10px;background:var(--card);border:1px solid var(--line);border-radius:18px}.badge .b{font-size:42px;filter:grayscale(1);opacity:.3}.badge.on .b{filter:none;opacity:1}.badge b{display:block;font:500 18px Georgia,serif}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:14px;z-index:20}.modal.on{display:flex}.modal>div{background:var(--card);border-radius:18px;padding:14px;max-width:800px;width:100%;max-height:94vh;overflow:auto}.modal img{width:100%;display:block;border-radius:10px;border:1px solid var(--line)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:14px;display:none;z-index:30}
+.empty{padding:36px 10px;text-align:center;color:var(--mut)}
+.auth{max-width:400px;margin:24px auto;text-align:center}.auth h1{font-size:34px;margin:14px 0 6px}.auth .sub{color:var(--mut);margin:0 0 22px}
+.gbtn,.pbtn{width:100%;height:50px;border-radius:14px;font:inherit;font-weight:600;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
+.gbtn{background:var(--card);color:var(--ink);border:1px solid var(--line)}.pbtn{background:var(--ink);color:var(--bg);border:0;margin-top:6px}
+.or{display:flex;align-items:center;gap:12px;color:var(--mut);font-size:13px;margin:18px 0}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
+.fld{width:100%;height:50px;padding:0 14px;margin-bottom:10px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);font:inherit;font-size:16px}
+.err{color:#c0392b;font-size:14px;min-height:20px;margin:2px 0 6px;text-align:left}.lnk{background:none;border:0;color:var(--ac);font:inherit;font-weight:600;cursor:pointer;padding:0}.note{font-size:12.5px;color:var(--mut);margin-top:18px}
+</style></head><body>
+<header><div class="brand"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke-width="4" stroke-linecap="round"><path d="M13 3A10 10 0 0 0 3 13" stroke="#D93025"/><path d="M3 13A10 10 0 0 0 13 23" stroke="#1E8E3E"/><path d="M13 23A10 10 0 0 0 23 13H14" stroke="#F2B600"/><path d="M13 3A10 10 0 0 1 22 8" stroke="#1A5FB4"/></svg>GAMURA <span>\</span> BUSINESS</div><div style="display:flex;gap:8px"><button class="btn" id="pf" hidden aria-label="Account"></button><button class="btn" id="th" aria-label="Toggle theme">◐</button></div></header>
+<main id="m"></main>
+<div class="modal" id="md"><div id="mb"></div></div><div class="toast" id="ts"></div>
+<script>
+const COL=['#D97757','#6A9B7F','#8A80C4','#5B9BD5','#C9A227','#D4627A','#4FA3A5'];
+const D=[
+["Business Fundamentals","Foundations","🏛️","How businesses create, deliver and capture value.",[
+"What a business is|A business solves a problem for customers in exchange for money. Every company does three jobs: create value, deliver it, and capture part of it as revenue.",
+"Business models|A model explains who you serve, what you offer and how you earn: subscription, commission, retail margin or advertising. Choose one clear model before you try to scale.",
+"Revenue, cost and profit|Profit is revenue minus costs. Separate fixed costs such as rent from variable costs such as materials, and calculate your break-even point.",
+"Your one-page plan|Write the customer, problem, offer, price, channel and 90-day goal on one page. Then test it with five real customers before building more."]],
+["Entrepreneurship","Startups","🚀","Turn an idea into a business people pay for.",[
+"Finding a real problem|Strong startups begin with a painful, frequent problem. Interview ten people who have it and listen for the words they use to describe it.",
+"Validating your idea|Before building, test demand: a landing page, a pre-order or a manual service. Ten paying customers teach more than a hundred compliments.",
+"Building the MVP|A minimum viable product has only the features needed to solve the core problem. Ship in weeks, not months, and learn from real use.",
+"Launch and iterate|Launch to a small group, measure what they do, and improve weekly. Growth follows a product that people keep using."]],
+["Startup Funding","Finance","💰","Bootstrapping, angels, VCs and pitching.",[
+"Bootstrapping|Funding yourself keeps full ownership and forces discipline. Start with customer revenue, low fixed costs and a clear monthly cash target.",
+"Angels and venture capital|Angels invest early with personal money; VCs invest funds for large returns. Raise only when extra capital clearly speeds up proven growth.",
+"Valuation and equity|Equity is a share of ownership. Giving 20% for a seed round means your valuation is five times the cheque. Protect founder shares with vesting.",
+"Pitching investors|A good pitch covers problem, solution, market, traction, team and ask in about ten slides. Lead with your best proof, such as revenue or users."]],
+["Digital Marketing","Marketing","📣","SEO, social, email and paid growth.",[
+"Know your audience|Define who you serve, where they spend time and what they search for. One precise audience beats a broad one.",
+"SEO and content|Search engines reward helpful pages that match a query. Choose keywords with clear intent, answer them fully and earn links over time.",
+"Social and email|Social builds attention; email builds a relationship you own. Post consistently, collect addresses and send one useful message each week.",
+"Ads and analytics|Test small paid campaigns and track cost per customer against lifetime value. Stop what loses money and scale what pays back."]],
+["Sales Mastery","Sales","🤝","Prospecting, pitching and closing deals.",[
+"The sales process|Selling is a sequence: find leads, qualify them, present, handle objections and close. Track every deal through each stage.",
+"Prospecting|Build a list of people who match your ideal customer and reach out with a short, specific message about their problem, not your product.",
+"Discovery and pitch|Ask questions first. Learn goals, budget and decision makers, then explain how your offer solves their stated problem.",
+"Objections and closing|Treat objections as requests for information. Confirm the concern, answer it, and ask directly for the next step or the order."]],
+["Finance Basics","Finance","📊","Cash flow, margins, budgets and ratios.",[
+"Cash vs profit|A profitable business can still run out of cash if customers pay late. Watch cash flow weekly and keep a buffer for three months of costs.",
+"Margins and pricing|Gross margin is price minus direct cost, divided by price. Set prices from value and margin, not by copying competitors.",
+"Budgeting|A budget plans income and spending by month. Compare actual numbers with the plan and investigate any large gap.",
+"Key ratios|Track gross margin, net margin, current ratio and return on investment. A few ratios, reviewed regularly, reveal problems early."]],
+["Accounting Essentials","Finance","🧾","Books, statements and tax awareness.",[
+"The accounting equation|Assets equal liabilities plus equity. Every transaction changes at least two accounts, which keeps the books balanced.",
+"Bookkeeping habits|Record every sale and expense, keep receipts and reconcile your bank account monthly. Clean books make tax time simple.",
+"Financial statements|The income statement shows profit over a period, the balance sheet shows position on a date, and the cash flow statement shows money movement.",
+"Tax awareness|Know your local tax registration, filing dates and deductible expenses. Set aside a share of income for tax and ask an accountant when unsure."]],
+["Leadership","People","🧭","Lead teams with clarity and trust.",[
+"Leader vs manager|Managers organise work; leaders set direction and inspire people. Strong teams need both clear systems and a clear purpose.",
+"Vision and goals|State where the team is going and why it matters. Turn the vision into measurable goals reviewed every quarter.",
+"Feedback and coaching|Give specific, timely feedback on behaviour and results. Ask questions that help people solve problems themselves.",
+"Building trust|Trust grows when you keep promises, admit mistakes and credit others. Consistency matters more than charisma."]],
+["Project Management","Operations","🗂️","Plan, track and deliver on time.",[
+"Scope and goals|Define what is in and out of the project, the deliverables and the success measure. Unclear scope is the top cause of delay.",
+"Planning and timelines|Break work into tasks, estimate time, find dependencies and set milestones. Add a buffer for the unexpected.",
+"Agile and Kanban|Agile delivers in short cycles with regular review; Kanban visualises work in To Do, Doing and Done columns with limits on work in progress.",
+"Risks and delivery|List risks early, assign owners and review weekly. Report progress honestly and close with a short lessons-learned meeting."]],
+["Business Strategy","Strategy","♟️","Positioning, moats and competitive analysis.",[
+"What strategy is|Strategy is choosing what you will do and, just as important, what you will not do, to win in a defined market.",
+"Competitive analysis|List your competitors, their customers, prices and weaknesses. Look for needs that nobody serves well.",
+"SWOT and positioning|Map strengths, weaknesses, opportunities and threats. Position your brand around one clear promise that customers remember.",
+"Building a moat|A moat protects profit: brand, network effects, switching costs, cost advantage or special expertise. Invest in one that fits you."]],
+["Negotiation","People","⚖️","Win-win deals and hard conversations.",[
+"Prepare first|Know your goal, your walk-away point and your best alternative. The side with better alternatives has more power.",
+"Interests, not positions|Ask why the other side wants something. Underlying interests often allow solutions that satisfy both parties.",
+"Tactics and anchoring|The first number often anchors the talk. Make reasoned offers, trade concessions rather than give them, and stay calm under pressure.",
+"Closing the deal|Summarise terms aloud, confirm in writing and set next steps. A fair deal that both sides honour beats a hard win."]],
+["Business Communication","People","✉️","Emails, meetings and presentations.",[
+"Clear writing|Lead with the point, use short sentences and state the action you need. Cut every word that does no work.",
+"Professional email|Use a specific subject line, greet politely, keep to one topic and end with a clear request and date.",
+"Running meetings|Share an agenda, invite only needed people, keep time and finish with owners and deadlines for each decision.",
+"Presenting|Tell a story: situation, problem, solution, result. Use few words per slide, practise aloud and welcome questions."]],
+["E-commerce","Marketing","🛒","Launch and scale an online store.",[
+"Choosing products|Pick products with steady demand, healthy margin and manageable shipping. Check competitors and customer reviews first.",
+"Setting up the store|Use a trusted platform, clear photos, honest descriptions, simple checkout and visible policies for returns and delivery.",
+"Traffic and conversion|Bring visitors through search, social and email, then improve the conversion rate with faster pages and trust signals.",
+"Fulfilment and service|Ship reliably, track orders and answer messages quickly. Happy customers return and refer others."]],
+["Product Management","Strategy","🧩","Roadmaps, users and shipping the right thing.",[
+"The PM role|A product manager decides what to build and why, balancing user needs, business goals and technical limits.",
+"User research|Talk to users regularly. Look for repeated pain points and watch what they do rather than only what they say.",
+"Prioritising|Score ideas by impact and effort, or use RICE: reach, impact, confidence and effort. Say no to most requests.",
+"Roadmap and metrics|A roadmap shows outcomes by quarter, not fixed dates. Measure adoption, retention and satisfaction after each release."]],
+["Data for Business","Analytics","📈","Dashboards, KPIs and decisions from data.",[
+"Why data matters|Decisions based on evidence beat guesses. Start with a question, then collect only the data that helps answer it.",
+"Choosing KPIs|A KPI links to a goal: revenue, conversion rate, churn or customer acquisition cost. Fewer, clearer KPIs drive better focus.",
+"Spreadsheets and dashboards|Clean data, use pivot tables and build one dashboard that shows trends over time with clear charts.",
+"Making decisions|Check sample size and bias, run small experiments and record what you learned so the team improves each cycle."]],
+["AI for Business","Analytics","🤖","Use AI tools to save time and grow.",[
+"What AI can do|AI drafts text, summarises documents, analyses data and answers questions. It speeds up routine work but needs human review.",
+"Good prompting|Give context, a clear task, the format you want and examples. Refine the result with follow-up instructions.",
+"Use cases|Apply AI to customer support replies, marketing drafts, research, meeting notes and spreadsheet analysis. Start with one repeated task.",
+"Safety and ethics|Never paste private customer data into tools you do not trust. Check facts, disclose AI use where needed and keep humans responsible."]],
+["Customer Success","Sales","💬","Retention, support and loyalty.",[
+"Why retention wins|Keeping a customer costs far less than finding a new one. Small gains in retention grow profit strongly.",
+"Onboarding|Help new customers reach their first success quickly with a short guide, a welcome message and a check-in within a week.",
+"Support that solves|Reply fast, own the problem and follow up until it is fixed. Record common issues and fix the cause.",
+"Feedback and loyalty|Ask for feedback with simple surveys such as NPS, act on it and reward loyal customers with referrals and recognition."]],
+["Operations & Logistics","Operations","🚚","Supply chains, inventory and delivery.",[
+"Operations basics|Operations turn inputs into products or services efficiently. Map each step, find the slowest one and improve it.",
+"Supply chain|Choose reliable suppliers, keep backups and agree on quality, price and delivery terms in writing.",
+"Inventory|Too much stock ties up cash; too little loses sales. Use reorder points and review fast and slow sellers monthly.",
+"Delivery and quality|Pick carriers by speed, cost and tracking. Measure on-time delivery and defect rates, and fix root causes."]],
+["HR & Team Building","People","👥","Hiring, culture and performance.",[
+"Hiring well|Write a clear role, use structured interviews with the same questions and check references. Hire for skills and values.",
+"Onboarding and culture|A good first month explains goals, tools and expectations. Culture is what you reward and tolerate every day.",
+"Performance reviews|Set clear goals, review progress often and discuss growth, not only mistakes. Document decisions fairly.",
+"Retention and teamwork|People stay for growth, respect and fair pay. Encourage collaboration, recognise results and handle conflict early."]],
+["Business Law Basics","Foundations","📜","Contracts, IP and compliance basics.",[
+"Business structures|Sole proprietorship, partnership and company forms differ in liability, tax and paperwork. Choose with professional advice.",
+"Contracts|A valid contract needs offer, acceptance, consideration and intent. Put terms in writing: scope, price, dates and how to end it.",
+"Intellectual property|Trademarks protect names and logos, copyright protects creative work and patents protect inventions. Register what matters early.",
+"Compliance and privacy|Follow licences, tax, labour and data-protection rules in your country. This course is educational, not legal advice."]],
+["Personal Branding","Marketing","🌟","Build a reputation that opens doors.",[
+"Your brand|Your brand is what people say about you when you are not there. Decide the three qualities you want to be known for.",
+"Online presence|Keep a clear profile photo, headline and portfolio. Show real projects and results on LinkedIn and your own site.",
+"Content and networking|Share what you learn, comment thoughtfully and reach out to people with a specific, polite message.",
+"Reputation|Deliver on time, be honest and ask for recommendations. Consistency over years builds opportunity."]]
+];
+const C=D.map((c,i)=>({id:i,t:c[0],cat:c[1],ic:c[2],d:c[3],c:COL[i%7],L:c[4].map(x=>{const p=x.split("|");return{t:p[0],b:p[1]}})}));
+const CATS=["All",...new Set(C.map(c=>c.cat))];
+const BD=[["🌱","First Step","Complete 1 lesson",s=>s.l>=1],["🎓","Finisher","Finish 1 course",s=>s.c>=1],["🔥","On a Roll","Finish 3 courses",s=>s.c>=3],["📘","Scholar","Finish 5 courses",s=>s.c>=5],["🏆","Master","Finish 10 courses",s=>s.c>=10],["👑","Gamura Legend","Finish all 21",s=>s.c>=21]];
+const mem={},lg=k=>{if(k in mem)return mem[k];try{return JSON.parse(localStorage.getItem(k)||"null")}catch(e){return null}},ls=(k,v)=>{mem[k]=v;try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+/* To enable real Google sign-in, paste your Firebase web config here and deploy on your own domain (e.g. Vercel). */
+const FIREBASE_CONFIG=null;
+let U=lg("gbz_sess"),S={done:{},vid:{},name:"",dates:{}},mode="in",aerr="";
+const loadS=()=>{S={done:{},vid:{},name:"",dates:{}};if(U){Object.assign(S,lg("gbz_p_"+U.email)||{});if(!S.name)S.name=U.name}};
+const save=()=>{if(U)ls("gbz_p_"+U.email,S)};loadS();
+const sha=async t=>[...new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t)))].map(b=>b.toString(16).padStart(2,"0")).join("");
+const GSVG='<svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>';
+const LOGO='<svg width="64" height="64" viewBox="0 0 26 26" fill="none" stroke-width="3.6" stroke-linecap="round"><path d="M13 3A10 10 0 0 0 3 13" stroke="#D93025"/><path d="M3 13A10 10 0 0 0 13 23" stroke="#1E8E3E"/><path d="M13 23A10 10 0 0 0 23 13H14" stroke="#F2B600"/><path d="M13 3A10 10 0 0 1 22 8" stroke="#1A5FB4"/></svg>';
+function authView(){const r=mode=="up";return `<div class="auth">${LOGO}<h1>${r?"Create your Gamura ID":"Sign in to Gamura"}</h1><p class="sub">${r?"Join Gamura for Business to track progress and earn certificates.":"Welcome back. Pick up your courses where you left off."}</p>
+<button class="gbtn" type="button" onclick="google()">${GSVG} Continue with Google</button><div class="or">or</div>
+<form onsubmit="return auth(event)" novalidate>${r?'<input class="fld" id="an" placeholder="Full name" autocomplete="name">':""}<input class="fld" id="ae" type="email" placeholder="Email" autocomplete="email"><input class="fld" id="ap" type="password" placeholder="Password${r?" (8+ characters)":""}" autocomplete="${r?"new-password":"current-password"}">${r?'<input class="fld" id="ac" type="password" placeholder="Confirm password" autocomplete="new-password">':""}
+<div class="err" id="ar">${aerr}</div><button class="pbtn" type="submit">${r?"Create account":"Sign in"}</button></form>
+<p style="margin:18px 0 0">${r?"Already have an account?":"New to Gamura?"} <button class="lnk" onclick="mode='${r?"in":"up"}';aerr='';render()">${r?"Sign in":"Create account"}</button></p>
+<p class="note">Accounts and progress are stored on this device. Passwords are salted and hashed, never stored as plain text.</p></div>`}
+function signIn(u){U=u;ls("gbz_sess",U);loadS();$("md").classList.remove("on");open=null;tab="Courses";render();toast("Signed in as "+U.name)}
+async function auth(e){e.preventDefault();const v=i=>($(i)?$(i).value.trim():""),em=v("ae").toLowerCase(),pw=$("ap").value,r=mode=="up",us=lg("gbz_users")||{};let m="";
+if(r&&v("an").length<2)m="Enter your full name.";else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))m="Enter a valid email address.";else if(r&&pw.length<8)m="Password must be at least 8 characters.";else if(r&&pw!==$("ac").value)m="Passwords do not match.";
+else if(r&&us[em])m="An account with this email already exists.";
+else if(!r){const a=us[em];if(!a||await sha(a.salt+pw)!==a.hash)m="Incorrect email or password."}
+if(m){aerr=m;$("ar").textContent=m;return false}
+if(r){const salt=crypto.getRandomValues(new Uint32Array(2)).join("-");us[em]={name:v("an"),salt,hash:await sha(salt+pw)};ls("gbz_users",us);signIn({name:v("an"),email:em,provider:"email"})}else signIn({name:us[em].name,email:em,provider:"email"});return false}
+async function google(){if(FIREBASE_CONFIG){try{const B="https://cdn.jsdelivr.net/npm/firebase@10.12.2/",a=await import(B+"app/+esm"),b=await import(B+"auth/+esm"),r=await b.signInWithPopup(b.getAuth(a.initializeApp(FIREBASE_CONFIG)),new b.GoogleAuthProvider());return signIn({name:r.user.displayName||"Learner",email:r.user.email.toLowerCase(),provider:"google"})}catch(e){return toast("Google sign-in failed")}}
+$("mb").innerHTML=`<div style="text-align:center;padding:10px">${GSVG}<h2 style="font-size:24px;margin:8px 0">Choose a Google account</h2><p class="meta" style="margin:0 0 14px">Demo mode: real Google sign-in turns on when your Firebase config is added.</p><input class="fld" id="gn" placeholder="Your name"><input class="fld" id="ge" type="email" placeholder="you@gmail.com"><div class="err" id="gr"></div><button class="pbtn" id="gc">Continue</button></div>`;$("md").classList.add("on");
+$("gc").onclick=()=>{const n=$("gn").value.trim(),m=$("ge").value.trim().toLowerCase();if(n.length<2||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m))return $("gr").textContent="Enter your name and a valid email.";signIn({name:n,email:m,provider:"google"})}}
+function acct(){$("mb").innerHTML=`<div style="text-align:center;padding:10px"><div class="ic" style="margin:0 auto;--c:#D97757;width:64px;height:64px;font:500 28px Georgia,serif">${esc(U.name[0].toUpperCase())}</div><h2 style="font-size:24px;margin:10px 0 2px">${esc(U.name)}</h2><p class="meta" style="margin:0 0 4px">${esc(U.email)} · ${U.provider=="google"?"Google":"Email"}</p><p class="meta">${stats().c} courses · ${stats().l} lessons complete</p><button class="pbtn" id="so">Sign out</button><button class="btn" style="width:100%;margin-top:8px" onclick="$('md').classList.remove('on')">Close</button></div>`;$("md").classList.add("on");$("so").onclick=()=>{U=null;ls("gbz_sess",null);loadS();$("md").classList.remove("on");mode="in";render()}}
+const X=["Value proposition|Describe a local shop's customer, problem and offer in three sentences.","Minimum viable product|Sketch the smallest version of your idea and list the one feature it must have.","Runway|Calculate how many months your cash lasts at current monthly spending.","Conversion rate|Pick a page you own and write one change that could raise sign-ups.","Qualified lead|Write three questions that tell you if a prospect can really buy.","Gross margin|Pick a product, list its direct costs and compute its gross margin.","Double-entry bookkeeping|Record five imaginary transactions as debit and credit pairs.","Servant leadership|Ask a teammate what blocks them this week and remove one thing.","Critical path|List a project's tasks and mark the chain that sets its end date.","Competitive advantage|Name one thing you do better than rivals and how you could prove it.","BATNA|Write your best alternative to a deal you are negotiating.","Active voice|Rewrite three sentences from an old email in active voice.","Average order value|Suggest one bundle that would raise average order value.","Product-market fit|Ask five users how disappointed they would be if your product vanished.","Cohort analysis|Group customers by sign-up month and compare their retention.","Prompt|Write a prompt with role, task, context and format for a weekly report.","Net Promoter Score|Ask ten customers how likely they are to recommend you, from 0 to 10.","Lead time|Time one process from order to delivery and find its slowest step.","Onboarding|Draft a 5-step first-week plan for a new hire.","Intellectual property|List the names, logos and content your business should protect.","Personal brand|Write a 20-word statement of who you help and how."];
+
+let tab="Courses",q="",cat="All",open=null,les=0;
+const $=id=>document.getElementById(id);
+const prog=c=>C[c].L.filter((_,l)=>S.done[c+":"+l]).length;
+const stats=()=>({l:Object.keys(S.done).filter(k=>S.done[k]).length,c:C.filter(x=>prog(x.id)==4).length});
+const toast=t=>{const e=$("ts");e.textContent=t;e.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display="none",2400)};
+const ytId=u=>{const m=(u||"").match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/);return m?m[1]:null};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function card(c){const p=prog(c.id);return `<button class="card" style="--c:${c.c}" onclick="go(${c.id})"><div class="ic">${c.ic}</div><h3>${c.t}</h3><p>${c.d}</p><div class="meta">${c.cat} · 4 lessons · ~20 min${p==4?" · Completed ✓":p?" · "+p+"/4 done":""}</div><div class="bar"><i style="width:${p*25}%"></i></div></button>`}
+function grid(){const el=$("g");if(!el)return;let f=C;
+if(tab=="Courses")f=C.filter(c=>(cat=="All"||c.cat==cat)&&(c.t+c.cat+c.d).toLowerCase().includes(q.toLowerCase()));
+if(tab=="My learning")f=C.filter(c=>prog(c.id)>0&&prog(c.id)<4);
+if(tab=="Certificates")f=C.filter(c=>prog(c.id)==4);
+const em={"Courses":`No courses match. Try another word or category.`,"My learning":"Nothing in progress. Start a course from the Courses tab.","Certificates":"Finish all 4 lessons of a course to earn your first certificate."};
+el.innerHTML=f.length?(tab=="Certificates"?f.map(c=>`<div class="card" style="--c:${c.c};cursor:default"><div class="ic">${c.ic}</div><h3>${c.t}</h3><div class="meta">Completed ${S.dates[c.id]||""}</div><div style="margin-top:auto;display:flex;gap:8px"><button class="btn p" onclick="cert(${c.id})">View certificate</button></div></div>`).join(""):f.map(card).join("")):`<div class="empty" style="grid-column:1/-1">${em[tab]}</div>`}
+function render(){if($("pf")){$("pf").hidden=!U;if(U)$("pf").textContent=U.name.trim()[0].toUpperCase()}
+if(!U){$("m").innerHTML=authView();return}
+const s=stats();let h="";
+if(open!==null){const c=C[open],L=c.L[les],id=ytId(S.vid[open+":"+les]),p=prog(open),dn=!!S.done[open+":"+les];
+h=`<button class="back" onclick="go(null)">‹ All courses</button><div class="cols"><div>
+<div class="player">${id?`<iframe src="https://www.youtube.com/embed/${id}" title="${esc(L.t)}" allow="encrypted-media;picture-in-picture;fullscreen" allowfullscreen></iframe>`:`<div><div style="font-size:40px">▶</div><p style="margin:6px 0 0">Add a YouTube link for this lesson below.<br>It plays inside Gamura.</p></div>`}</div>
+<div class="row"><input id="yu" placeholder="Paste YouTube link" value="${esc(S.vid[open+":"+les]||"")}"><button class="btn" onclick="setV()">Play video</button><button class="btn" onclick="window.open('https://www.youtube.com/results?search_query='+encodeURIComponent('${c.t} ${L.t}'),'_blank')">Find on YouTube</button></div>
+<div class="panel"><div class="meta">Lesson ${les+1} of 4 · ${c.t}</div><h2>${L.t}</h2><p>${L.b}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ${dn?"":"p"}" onclick="tg(${les})">${dn?"Mark as not done":"Mark lesson complete"}</button>${les<3?`<button class="btn" onclick="les=${les+1};render()">Next lesson</button>`:""}</div></div><div class="panel" style="margin-top:12px"><div class="meta">Key term</div><p><b>${X[open].split("|")[0]}</b></p><div class="meta">Practice task</div><p style="margin:0">${X[open].split("|")[1]}</p></div></div>
+<div><h3 style="font-size:24px;margin-bottom:4px">${c.ic} ${c.t}</h3><div class="meta">${p}/4 lessons complete</div><div class="bar" style="--c:${c.c};margin:10px 0 14px"><i style="width:${p*25}%"></i></div>
+${c.L.map((l,i)=>`<div class="les ${i==les?"on":""}" onclick="les=${i};render()" role="button" tabindex="0"><span class="dot ${S.done[open+":"+i]?"d":""}">${S.done[open+":"+i]?"✓":i+1}</span><span>${l.t}</span></div>`).join("")}
+${p==4?`<button class="btn p" style="width:100%" onclick="cert(${open})">Get your certificate</button>`:`<div class="meta">Complete all 4 lessons to unlock your certificate.</div>`}</div></div>`}
+else{const nx=C.find(c=>prog(c.id)>0&&prog(c.id)<4);
+h=`<div class="hero"><h1>Let's get to work, ${esc(U.name.split(" ")[0])}.</h1><p>21 business courses with video lessons, badges and certificates you can share.</p></div>
+<div class="stats"><div class="stat"><b>${s.c}</b><span>Courses done</span></div><div class="stat"><b>${s.l}</b><span>Lessons done</span></div><div class="stat"><b>${BD.filter(b=>b[3](s)).length}</b><span>Badges</span></div></div>
+${nx?`<button class="btn" style="width:100%;margin-bottom:14px;text-align:left" onclick="go(${nx.id})">Continue: ${nx.t} (${prog(nx.id)}/4)</button>`:""}
+<div class="bar2"><div class="tabs">${["Courses","My learning","Badges","Certificates"].map(t=>`<button class="${t==tab?"on":""}" onclick="tab='${t}';render()">${t}</button>`).join("")}</div></div>`;
+if(tab=="Courses")h+=`<input class="search" id="sq" placeholder="Search courses" value="${esc(q)}" oninput="q=this.value;grid()" style="margin-bottom:12px"><div class="chips">${CATS.map(k=>`<button class="chip ${k==cat?"on":""}" onclick="cat='${k}';render()">${k}</button>`).join("")}</div>`;
+if(tab=="Badges")h+=`<div class="badges">${BD.map(b=>`<div class="badge ${b[3](s)?"on":""}"><div class="b">${b[0]}</div><b>${b[1]}</b><div class="meta">${b[2]}</div></div>`).join("")}</div>`;else h+=`<div class="grid" id="g"></div>`}
+$("m").innerHTML=h;grid()}
+function go(i){open=i;les=0;render();scrollTo(0,0)}
+function tg(i){const k=open+":"+i,was=prog(open)==4;S.done[k]=!S.done[k];if(!was&&prog(open)==4){S.dates[open]=new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"});toast("Course complete! Certificate unlocked 🎉")}save();render()}
+function setV(){const u=$("yu").value;if(!ytId(u))return toast("Paste a valid YouTube link");S.vid[open+":"+les]=u;save();render()}
+function hash(s){let h=7;for(const ch of s)h=(h*31+ch.charCodeAt(0))>>>0;return h.toString(36).toUpperCase().padStart(6,"0").slice(0,6)}
+function draw(i){const c=C[i],W=1600,H=1130,k=document.createElement("canvas");k.width=W;k.height=H;const x=k.getContext("2d"),nm=(S.name||"Your Name").trim();
+x.fillStyle="#fff";x.fillRect(0,0,W,H);
+x.strokeStyle="#111";x.lineWidth=8;x.strokeRect(50,50,W-100,H-100);x.lineWidth=2;x.strokeRect(74,74,W-148,H-148);
+[[74,74,1,1],[W-74,74,-1,1],[74,H-74,1,-1],[W-74,H-74,-1,-1]].forEach(a=>{x.lineWidth=6;x.beginPath();x.moveTo(a[0],a[1]+a[3]*70);x.lineTo(a[0],a[1]);x.lineTo(a[0]+a[2]*70,a[1]);x.stroke()});
+const T=(t,y,f,col,sp)=>{x.font=f;x.fillStyle=col;x.textAlign="center";x.letterSpacing=(sp||0)+"px";x.fillText(t,W/2+(sp||0)/2,y)};
+const cx=W/2,cy=185,r=52;x.lineWidth=18;x.lineCap="round";
+[["#D93025",Math.PI,1.55*Math.PI],["#1A5FB4",1.55*Math.PI,1.9*Math.PI],["#F2B600",0,.5*Math.PI],["#1E8E3E",.5*Math.PI,Math.PI]].forEach(a=>{x.strokeStyle=a[0];x.beginPath();x.arc(cx,cy,r,a[1],a[2]);x.stroke()});
+x.strokeStyle="#F2B600";x.beginPath();x.moveTo(cx+r,cy);x.lineTo(cx+8,cy);x.stroke();
+T("GAMURA",290,"700 38px Georgia,serif","#111",10);T("FOR BUSINESS  ·  GAMURA ACADEMY",326,"500 18px sans-serif","#777",5);
+T("CERTIFICATE OF COMPLETION",430,"700 58px Georgia,serif","#111",6);
+x.strokeStyle="#111";x.lineWidth=2;x.beginPath();x.moveTo(cx-260,462);x.lineTo(cx+260,462);x.stroke();
+T("THIS CERTIFICATE IS PROUDLY PRESENTED TO",530,"500 22px sans-serif","#444",5);
+let fs=96;x.font=`italic ${fs}px Georgia,serif`;while(x.measureText(nm).width>1000&&fs>40){fs-=4;x.font=`italic ${fs}px Georgia,serif`}
+T(nm,640,`italic ${fs}px Georgia,serif`,"#111",0);x.strokeStyle="#999";x.lineWidth=1.5;x.beginPath();x.moveTo(cx-460,668);x.lineTo(cx+460,668);x.stroke();
+T("for successfully completing all lessons of the course",730,"26px Georgia,serif","#333",0);
+let f2=54;x.font=`700 ${f2}px Georgia,serif`;while(x.measureText(c.t).width>1100&&f2>30){f2-=2;x.font=`700 ${f2}px Georgia,serif`}
+T(c.t,805,`700 ${f2}px Georgia,serif`,"#111",0);T("4 lessons  ·  "+c.cat+"  ·  gamura.vercel.app",850,"20px sans-serif","#777",1);
+x.strokeStyle="#111";x.lineWidth=1.5;x.beginPath();x.moveTo(200,990);x.lineTo(520,990);x.moveTo(W-520,990);x.lineTo(W-200,990);x.stroke();
+T("Selvaranjan G.",970,"italic 40px Georgia,serif","#1d3a73",0);T("Founder & CEO, Gamura",1025,"20px sans-serif","#444",1);
+T(S.dates[i]||new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}),970,"30px Georgia,serif","#111",0);
+x.textAlign="center";x.letterSpacing="1px";x.font="20px sans-serif";x.fillStyle="#444";x.fillText("Date of completion",W-360,1025);
+x.fillText("Certificate ID: GB-"+hash(nm+c.t)+"-"+String(i+1).padStart(2,"0"),cx,1075);
+x.letterSpacing="0px";const sx=cx,sy=930;x.fillText("",0,0);
+x.save();x.translate(sx,sy);x.fillStyle="#1d3a73";x.beginPath();for(let a=0;a<48;a++){const R=a%2?70:80,t=a*Math.PI/24;x.lineTo(R*Math.cos(t),R*Math.sin(t))}x.closePath();x.fill();
+x.fillStyle="#fff";x.beginPath();x.arc(0,0,62,0,7);x.fill();x.strokeStyle="#1d3a73";x.lineWidth=3;x.beginPath();x.arc(0,0,56,0,7);x.stroke();
+x.fillStyle="#1d3a73";x.textAlign="center";x.font="700 17px sans-serif";x.letterSpacing="2px";x.fillText("GAMURA",0,-10);x.font="700 15px sans-serif";x.fillText("CERTIFIED",0,14);x.font="22px sans-serif";x.letterSpacing="0px";x.fillText("★",0,40);x.restore();
+return k}
+function cert(i){$("mb").innerHTML=`<div class="row" style="margin-top:0"><input id="nmi" placeholder="Type your full name for the certificate" value="${esc(S.name)}"></div><img id="ci" alt="Certificate"><div class="row"><button class="btn p" id="dl">Download PNG</button><button class="btn" id="sh">Share</button><button class="btn" id="cl">Close</button></div><div class="meta">If the download doesn't start, press and hold the image to save it.</div>`;$("md").classList.add("on");
+let k;const up=()=>{k=draw(i);$("ci").src=k.toDataURL("image/png")};up();
+$("nmi").oninput=e=>{S.name=e.target.value;save();up()};$("cl").onclick=()=>$("md").classList.remove("on");
+const msg="I completed "+C[i].t+" on Gamura for Business!";
+$("dl").onclick=()=>{if(!S.name.trim()){toast("Enter your name first");return $("nmi").focus()}try{const a=document.createElement("a");a.href=k.toDataURL("image/png");a.download="Gamura-Certificate-"+C[i].t.replace(/\W+/g,"-")+".png";document.body.appendChild(a);a.click();a.remove()}catch(e){}toast("Saving certificate…")};
+$("sh").onclick=()=>{if(!S.name.trim()){toast("Enter your name first");return $("nmi").focus()}k.toBlob(async b=>{try{const f=new File([b],"gamura-certificate.png",{type:"image/png"});if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f],title:"Gamura certificate",text:msg});else if(navigator.share)await navigator.share({title:"Gamura for Business",text:msg,url:"https://gamura.vercel.app"});else{await navigator.clipboard.writeText(msg+" https://gamura.vercel.app");toast("Share text copied")}}catch(e){}})}}
+$("pf").onclick=acct;
+$("md").onclick=e=>{if(e.target.id=="md")$("md").classList.remove("on")};
+$("th").onclick=()=>{const r=document.documentElement,d=r.dataset.theme=="dark"||(!r.dataset.theme&&matchMedia("(prefers-color-scheme:dark)").matches);r.dataset.theme=d?"light":"dark"};
+render();
+</script></body></html>

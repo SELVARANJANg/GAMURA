@@ -27,6 +27,7 @@ interface LaunchLivePreviewModalProps {
 }
 
 const FEATURED_PREVIEW_IDS = [
+  "gamura-for-business",
   "gamura-gcard",
   "gamura-gwallet",
   "gamura-ppt-cred",
@@ -51,9 +52,13 @@ export default function LaunchLivePreviewModal({
   onClose,
 }: LaunchLivePreviewModalProps) {
   const [deviceMode, setDeviceMode] = useState<"mobile" | "desktop">(() =>
-    ["gamura-ppt-cred", "gamura-cover-gened", "gamura-pb1", "gamura-pb2"].includes(
-      app.id,
-    )
+    [
+      "gamura-for-business",
+      "gamura-ppt-cred",
+      "gamura-cover-gened",
+      "gamura-pb1",
+      "gamura-pb2",
+    ].includes(app.id)
       ? "desktop"
       : "mobile",
   );
@@ -88,9 +93,13 @@ export default function LaunchLivePreviewModal({
     setIframeKey((k) => k + 1);
     setPreviewSurface(next.url.startsWith("/") ? "live" : "showcase");
     if (
-      ["gamura-ppt-cred", "gamura-cover-gened", "gamura-pb1", "gamura-pb2"].includes(
-        next.id,
-      )
+      [
+        "gamura-for-business",
+        "gamura-ppt-cred",
+        "gamura-cover-gened",
+        "gamura-pb1",
+        "gamura-pb2",
+      ].includes(next.id)
     ) {
       setDeviceMode("desktop");
     }

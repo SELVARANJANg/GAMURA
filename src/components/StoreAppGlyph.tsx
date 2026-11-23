@@ -225,6 +225,24 @@ export default function StoreAppGlyph({
             className="text-white"
           />
         );
+      case "gb":
+        return (
+          <div className="w-[74%] h-[74%] rounded-[24%] bg-[#F5F4EE] flex items-center justify-center shadow-xs">
+            <svg
+              width={Math.round(iconPx * 0.86)}
+              height={Math.round(iconPx * 0.86)}
+              viewBox="0 0 26 26"
+              fill="none"
+              strokeWidth="4"
+              strokeLinecap="round"
+            >
+              <path d="M13 3A10 10 0 0 0 3 13" stroke="#D93025" />
+              <path d="M3 13A10 10 0 0 0 13 23" stroke="#1E8E3E" />
+              <path d="M13 23A10 10 0 0 0 23 13H14" stroke="#F2B600" />
+              <path d="M13 3A10 10 0 0 1 22 8" stroke="#1A5FB4" />
+            </svg>
+          </div>
+        );
       case "messenger":
         return (
           <svg
