@@ -31,6 +31,7 @@ export type StoreIconKind =
   | "gcard"
   | "gwallet"
   | "gb"
+  | "redesign"
   | "letter";
 
 export interface StoreAppItem {
@@ -79,6 +80,10 @@ export const GAMURA_BUYSELL_LOGO_URL =
   "/assets/aistudio/1795024263692_cd59eb3c.png";
 export const GAMURA_BUYSELL_LOGO_FALLBACK =
   "https://lh3.googleusercontent.com/d/1mVAD61FkOS6C6rUiOLTLnDEgfeLI9qaR=w512";
+export const GAMURA_REDESIGN_LOGO_URL =
+  "/assets/aistudio/1795456868131_0736331e.png";
+export const GAMURA_REDESIGN_LOGO_FALLBACK =
+  "https://lh3.googleusercontent.com/d/1jE1hxAugpuUSwjVHnQFoiimyOLLseAso=w512";
 
 const driveLogo = (id: string) => ({
   logoUrl: `https://lh3.googleusercontent.com/d/${id}=w512`,
@@ -758,6 +763,28 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     version: "1.0",
     age: "3+",
     chart: "No. 1 Business",
+    dl: "Featured",
+    size: "Web · 2 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-redesign",
+    name: "GAMURA REDESIGN",
+    cat: "Creative",
+    tag: "Visual redesign studio & modern UI transformation hub",
+    desc: "GAMURA REDESIGN brings modern UI/UX transformations, creative brand makeovers, and expressive visual redesign concepts together in a sleek web studio.",
+    url: "https://gamuraredesign.vercel.app/",
+    c1: "#0096C7",
+    c2: "#023E8A",
+    iconKind: "redesign",
+    logoUrl: GAMURA_REDESIGN_LOGO_URL,
+    logoFallbackUrl: GAMURA_REDESIGN_LOGO_FALLBACK,
+    logoBg: "#FFFFFF",
+    logoFit: "contain",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Redesign",
     dl: "Featured",
     size: "Web · 2 MB",
     isBuiltin: true,

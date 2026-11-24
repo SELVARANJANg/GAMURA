@@ -231,6 +231,7 @@ import {
   UNIVERSE_APPS_KEY,
   getUniverseInstalledApps,
 } from "./utils/gamuraStoreApps";
+import { exportUserFirestoreBackup } from "./utils/gamuraDataExport";
 
 const GAMURA_G_LOGO =
   "https://lh3.googleusercontent.com/d/1QJprWSIgOa32ADyWHBikyBibzN80Vetv";
@@ -6287,6 +6288,43 @@ const UniverseDashboard = ({
     }, 4000);
   };
 
+  const [isExportingBackup, setIsExportingBackup] = useState(false);
+
+  const handleExportFirestoreBackup = async () => {
+    if (!isAuthUser) {
+      showToast(
+        "🔒",
+        "Sign In Required",
+        "Connect your Gamura ID to export your Firestore backup.",
+        "warning",
+      );
+      return;
+    }
+    setIsExportingBackup(true);
+    try {
+      const result = await exportUserFirestoreBackup({
+        username: userInfo?.username || null,
+        displayName,
+        email: user?.email || null,
+      });
+      showToast(
+        "💾",
+        "Firestore Backup Exported",
+        `Downloaded ${result.summary.totalChats} chats, ${result.summary.activities} activities & ${result.summary.projects} projects.`,
+        "success",
+      );
+    } catch (err: any) {
+      showToast(
+        "❌",
+        "Backup Export Failed",
+        err?.message || "Could not export Firestore data backup.",
+        "error",
+      );
+    } finally {
+      setIsExportingBackup(false);
+    }
+  };
+
   const exportTelemetryData = () => {
     try {
       const csvRows = [];
@@ -8159,6 +8197,20 @@ const UniverseDashboard = ({
                   </button>
                   <button
                     type="button"
+                    onClick={handleExportFirestoreBackup}
+                    disabled={isExportingBackup}
+                    title="Export chats, activities, and projects from Firestore as JSON"
+                    className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-[11px] font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-60"
+                  >
+                    {isExportingBackup ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Download size={12} />
+                    )}
+                    <span>{isExportingBackup ? "Exporting..." : "Backup JSON"}</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setActiveTab("Settings")}
                     className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-[11px] font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
                   >
@@ -8613,6 +8665,19 @@ const UniverseDashboard = ({
                     label: "Edit Profile",
                     icon: <Settings size={14} />,
                     action: () => setEditProfileOpen(true),
+                  },
+                  {
+                    label: isExportingBackup
+                      ? "Exporting Firestore Backup..."
+                      : "Export Firestore Backup (JSON)",
+                    icon: isExportingBackup ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Download size={14} />
+                    ),
+                    action: () => {
+                      void handleExportFirestoreBackup();
+                    },
                   },
                   {
                     label: "Connect Other ID",
@@ -9491,6 +9556,43 @@ export default function App() {
   // Multi-Chat State
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [isExportingAppBackup, setIsExportingAppBackup] = useState(false);
+
+  const handleExportAppFirestoreBackup = async () => {
+    if (!currentUser || !auth.currentUser || currentUser.uid === "guest_explorer_uid") {
+      showToast(
+        "🔒",
+        "Sign In Required",
+        "Sign in with your Gamura ID to export your Firestore backup.",
+        "warning",
+      );
+      return;
+    }
+    setIsExportingAppBackup(true);
+    try {
+      const result = await exportUserFirestoreBackup({
+        username: currentUserInfo?.username || null,
+        displayName:
+          currentUserInfo?.nickname || currentUser?.displayName || null,
+        email: currentUser?.email || null,
+      });
+      showToast(
+        "💾",
+        "Firestore Backup Downloaded",
+        `Exported ${result.summary.totalChats} chats, ${result.summary.activities} activities & ${result.summary.projects} projects.`,
+        "success",
+      );
+    } catch (err: any) {
+      showToast(
+        "❌",
+        "Backup Export Failed",
+        err?.message || "Could not export Firestore data backup.",
+        "error",
+      );
+    } finally {
+      setIsExportingAppBackup(false);
+    }
+  };
 
   const addActivity = async (title: string, ic: string = "⚡") => {
     if (!currentUser || !auth.currentUser || currentUser.uid === "guest_explorer_uid") return; // Guard against unauthenticated writes
@@ -11368,13 +11470,31 @@ ${targetContext}`;
         </button>
 
         <div className="max-w-2xl mx-auto w-full mt-12 space-y-8">
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              CHAT HISTORY
-            </h2>
-            <p className="text-sm text-zinc-500">
-              Your previous prompt generations
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                CHAT HISTORY
+              </h2>
+              <p className="text-sm text-zinc-500">
+                Your previous prompt generations
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleExportAppFirestoreBackup}
+              disabled={isExportingAppBackup}
+              title="Download your chats, activities, and projects from Firestore as JSON"
+              className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 text-xs font-semibold inline-flex items-center gap-2 transition-all active:scale-[0.98] cursor-pointer disabled:opacity-60 shrink-0"
+            >
+              {isExportingAppBackup ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Download size={14} />
+              )}
+              <span>
+                {isExportingAppBackup ? "Exporting Backup..." : "Export Backup (JSON)"}
+              </span>
+            </button>
           </div>
 
           <div className="space-y-3">
@@ -12027,6 +12147,24 @@ ${targetContext}`;
                     >
                       <span>Open Universe Dashboard</span>
                       <ArrowRight size={14} />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleExportAppFirestoreBackup}
+                      disabled={isExportingAppBackup}
+                      className="w-full flex items-center justify-between gap-3 bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] rounded-xl py-3 px-4 font-semibold text-xs transition-all active:scale-[0.99] cursor-pointer min-h-[44px] disabled:opacity-60"
+                    >
+                      <span>
+                        {isExportingAppBackup
+                          ? "Exporting Firestore Backup..."
+                          : "Export Firestore Backup (JSON)"}
+                      </span>
+                      {isExportingAppBackup ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Download size={14} />
+                      )}
                     </button>
 
                     <button

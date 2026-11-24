@@ -23,6 +23,7 @@ import {
   Leaf,
   CreditCard,
   Wallet,
+  Paintbrush,
 } from "lucide-react";
 import type { StoreAppItem } from "../utils/gamuraStoreApps";
 
@@ -242,6 +243,14 @@ export default function StoreAppGlyph({
               <path d="M13 3A10 10 0 0 1 22 8" stroke="#1A5FB4" />
             </svg>
           </div>
+        );
+      case "redesign":
+        return (
+          <Paintbrush
+            size={iconPx}
+            strokeWidth={2.2}
+            className="text-white"
+          />
         );
       case "messenger":
         return (

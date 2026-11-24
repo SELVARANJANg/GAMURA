@@ -51,6 +51,10 @@ import {
   resetGamuraLicensePrompt,
   syncLicenseToCloud,
 } from "../utils/gamuraLicense";
+import {
+  exportUserFirestoreBackup,
+  type FirestoreBackupResult,
+} from "../utils/gamuraDataExport";
 
 export { DEFAULT_ALLOW_ACCESS, type AllowAccessPermissions };
 
@@ -235,6 +239,8 @@ export default function UniverseSettingsView({
 }: UniverseSettingsViewProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("account");
   const [savingProfile, setSavingProfile] = useState(false);
+  const [isExportingBackup, setIsExportingBackup] = useState(false);
+  const [lastBackupInfo, setLastBackupInfo] = useState<FirestoreBackupResult | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [licenseRecord, setLicenseRecord] = useState(() => readLicenseRecord());
 
@@ -496,6 +502,43 @@ export default function UniverseSettingsView({
     showToast("📥", "Settings Exported", "Downloaded workspace configuration JSON.", "success");
   };
 
+  const handleExportFirestoreBackup = async () => {
+    if (!isAuthUser) {
+      showToast(
+        "🔒",
+        "Sign In Required",
+        "Sign in with your Gamura ID to export chats, activities, and projects.",
+        "warning",
+      );
+      return;
+    }
+    playSubtleClick();
+    setIsExportingBackup(true);
+    try {
+      const result = await exportUserFirestoreBackup({
+        username: userInfo?.username || null,
+        displayName: userInfo?.nickname || user?.displayName || null,
+        email: user?.email || null,
+      });
+      setLastBackupInfo(result);
+      showToast(
+        "💾",
+        "Firestore Backup Downloaded",
+        `Exported ${result.summary.totalChats} chats, ${result.summary.activities} activities, and ${result.summary.projects} projects.`,
+        "success",
+      );
+    } catch (err: any) {
+      showToast(
+        "❌",
+        "Backup Export Failed",
+        err?.message || "Could not export Firestore data backup.",
+        "error",
+      );
+    } finally {
+      setIsExportingBackup(false);
+    }
+  };
+
   const handleClearCaches = () => {
     try {
       const keysToClear = [
@@ -634,12 +677,25 @@ export default function UniverseSettingsView({
           </button>
           <button
             type="button"
-            onClick={handleExportWorkspaceJson}
+            onClick={handleExportFirestoreBackup}
+            disabled={isExportingBackup}
             style={{ backgroundColor: accent }}
-            className="px-3.5 py-2 rounded-xl text-white text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 py-2 rounded-xl text-white text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer inline-flex items-center gap-1.5 shadow-xs disabled:opacity-60"
+          >
+            {isExportingBackup ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Database size={13} />
+            )}
+            <span>{isExportingBackup ? "Backing up..." : "Backup Data (JSON)"}</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleExportWorkspaceJson}
+            className="px-3.5 py-2 rounded-xl bg-[#F5F5F7] hover:bg-zinc-200/80 text-xs font-semibold text-[#1D1D1F] transition-colors cursor-pointer inline-flex items-center gap-1.5"
           >
             <Download size={13} />
-            <span>Export</span>
+            <span>Export Config</span>
           </button>
         </div>
       </div>
@@ -946,6 +1002,31 @@ export default function UniverseSettingsView({
                         </div>
                       </div>
                     )}
+
+                    <div className="p-4 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#F5F5F7]/50">
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-[#1D1D1F]">
+                          Firestore Data Backup (JSON)
+                        </div>
+                        <div className="text-[11px] text-[#6E6E73]">
+                          Download all of your chats, activities, and shared projects as a portable backup file.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleExportFirestoreBackup}
+                        disabled={isExportingBackup}
+                        style={{ backgroundColor: accent }}
+                        className="px-4 py-2 rounded-xl text-white text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer shrink-0 inline-flex items-center justify-center gap-1.5 disabled:opacity-60 shadow-xs"
+                      >
+                        {isExportingBackup ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Download size={13} />
+                        )}
+                        <span>{isExportingBackup ? "Exporting..." : "Export Backup (JSON)"}</span>
+                      </button>
+                    </div>
 
                     <div className="p-2 grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                       <button
@@ -1584,6 +1665,43 @@ export default function UniverseSettingsView({
               {/* 8. DATA & RESET */}
               {activeSection === "storage" && (
                 <div className="bg-white border border-zinc-200/80 rounded-3xl overflow-hidden divide-y divide-zinc-100 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                  <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#F5F5F7]/60">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-[#1D1D1F]">
+                          Export Firestore Data Backup (JSON)
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold">
+                          Chats · Activities · Projects
+                        </span>
+                      </div>
+                      <div className="text-xs text-[#6E6E73]">
+                        Queries your live Firestore chats, neural conversations, activity logs, and shared projects and downloads a single JSON backup file.
+                      </div>
+                      {lastBackupInfo && (
+                        <div className="text-[11px] font-medium text-emerald-700 pt-0.5">
+                          Last backup: {lastBackupInfo.filename} ({lastBackupInfo.summary.totalChats} chats · {lastBackupInfo.summary.activities} activities · {lastBackupInfo.summary.projects} projects)
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExportFirestoreBackup}
+                      disabled={isExportingBackup}
+                      style={{ backgroundColor: accent }}
+                      className="px-4 py-2.5 rounded-xl text-white text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer shrink-0 inline-flex items-center justify-center gap-1.5 disabled:opacity-60 shadow-xs"
+                    >
+                      {isExportingBackup ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Download size={13} />
+                      )}
+                      <span>
+                        {isExportingBackup ? "Exporting Backup..." : "Export Backup JSON"}
+                      </span>
+                    </button>
+                  </div>
+
                   <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
                     <div>
                       <div className="text-xs font-bold text-[#1D1D1F]">

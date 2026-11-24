@@ -736,30 +736,22 @@ export default function GamuraStoreLaunch({
   const renderAppRow = (app: StoreAppItem, rank?: number) => {
     const isInstalled = installedIdSet.has(app.id);
     const isInstalling = installingId === app.id;
+    const isExternalDirectLaunch = app.id === "gamura-redesign";
     const isDirectLaunchApp =
-      app.id === "gamura-camera" || app.id === "gamura-for-business";
+      app.id === "gamura-camera" ||
+      app.id === "gamura-for-business" ||
+      isExternalDirectLaunch;
     const stats = getLiveStats(app);
     const handleRowActivate = () => {
-      if (isDirectLaunchApp) {
+      if (app.id === "gamura-camera" || app.id === "gamura-for-business") {
         window.location.assign(app.url);
-      } else {
+      } else if (!isExternalDirectLaunch) {
         setSelectedApp(app);
       }
     };
-    return (
-      <div
-        key={app.id}
-        onClick={handleRowActivate}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            handleRowActivate();
-          }
-        }}
-        className="w-full flex items-center gap-3.5 py-3.5 px-2.5 sm:px-3 rounded-2xl hover:bg-[#F5F5F7] transition-colors text-left cursor-pointer"
-      >
+
+    const rowMainContent = (
+      <>
         {rank !== undefined && (
           <span className="w-5 text-xs font-bold text-[#6E6E73] tabular-nums shrink-0 text-center">
             {rank}
@@ -793,82 +785,124 @@ export default function GamuraStoreLaunch({
             )}
           </div>
         </div>
+      </>
+    );
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setLivePreviewApp(app);
-            }}
-            aria-label={`Live preview ${app.name}`}
-            title={`Try ${app.name} Live Preview before installing`}
-            className="hidden md:inline-flex min-h-[32px] px-2.5 py-1 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] text-[11px] font-semibold items-center gap-1 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+    const rowActionButtons = (
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setLivePreviewApp(app);
+          }}
+          aria-label={`Live preview ${app.name}`}
+          title={`Try ${app.name} Live Preview before installing`}
+          className="hidden md:inline-flex min-h-[32px] px-2.5 py-1 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] text-[11px] font-semibold items-center gap-1 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+        >
+          <Eye size={13} className="text-[#059669]" />
+          <span>Preview</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={(e) => openQrForApp(app, e)}
+          aria-label={`Generate QR code for ${app.name}`}
+          title={`Share ${app.name} QR Code`}
+          className="hidden sm:inline-flex w-8 h-8 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] items-center justify-center transition-colors cursor-pointer shrink-0"
+        >
+          <QrCode size={15} />
+        </button>
+
+        {isInstalling ? (
+          <div className="px-4 py-1.5 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums shrink-0">
+            {installPct}%
+          </div>
+        ) : isInstalled ? (
+          <a
+            href={app.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="px-5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide shrink-0 whitespace-nowrap transition-colors"
           >
-            <Eye size={13} className="text-[#059669]" />
-            <span>Preview</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={(e) => openQrForApp(app, e)}
-            aria-label={`Generate QR code for ${app.name}`}
-            title={`Share ${app.name} QR Code`}
-            className="hidden sm:inline-flex w-8 h-8 rounded-full bg-[#F5F5F7] hover:bg-zinc-200/80 text-[#1D1D1F] items-center justify-center transition-colors cursor-pointer shrink-0"
-          >
-            <QrCode size={15} />
-          </button>
-
-          {isInstalling ? (
-            <div className="px-4 py-1.5 rounded-full bg-[#E2F5ED] text-[#059669] text-xs font-bold tabular-nums shrink-0">
-              {installPct}%
-            </div>
-          ) : isInstalled ? (
+            OPEN
+          </a>
+        ) : isDirectLaunchApp ? (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={(e) => handleGetClick(app, e)}
+              className="px-4 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide whitespace-nowrap cursor-pointer transition-colors"
+            >
+              GET
+            </button>
             <a
               href={app.url}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="px-5 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide shrink-0 whitespace-nowrap transition-colors"
+              className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide whitespace-nowrap transition-colors"
             >
               OPEN
             </a>
-          ) : isDirectLaunchApp ? (
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={(e) => handleGetClick(app, e)}
-                className="px-4 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide whitespace-nowrap cursor-pointer transition-colors"
-              >
-                GET
-              </button>
-              <a
-                href={app.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="px-4 py-1.5 rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold tracking-wide whitespace-nowrap transition-colors"
-              >
-                OPEN
-              </a>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={(e) => handleGetClick(app, e)}
-              className="px-5 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide shrink-0 whitespace-nowrap cursor-pointer transition-colors"
-            >
-              GET
-            </button>
-          )}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => handleGetClick(app, e)}
+            className="px-5 py-1.5 rounded-full bg-[#E2F5ED] hover:bg-[#CEEFE0] text-[#059669] text-xs font-bold tracking-wide shrink-0 whitespace-nowrap cursor-pointer transition-colors"
+          >
+            GET
+          </button>
+        )}
+      </div>
+    );
+
+    if (isExternalDirectLaunch) {
+      return (
+        <div
+          key={app.id}
+          className="w-full flex items-center gap-3.5 py-3.5 px-2.5 sm:px-3 rounded-2xl hover:bg-[#F5F5F7] transition-colors text-left"
+        >
+          <a
+            href={app.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3.5 flex-1 min-w-0 cursor-pointer"
+          >
+            {rowMainContent}
+          </a>
+          {rowActionButtons}
         </div>
+      );
+    }
+
+    return (
+      <div
+        key={app.id}
+        onClick={handleRowActivate}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleRowActivate();
+          }
+        }}
+        className="w-full flex items-center gap-3.5 py-3.5 px-2.5 sm:px-3 rounded-2xl hover:bg-[#F5F5F7] transition-colors text-left cursor-pointer"
+      >
+        {rowMainContent}
+        {rowActionButtons}
       </div>
     );
   };
 
   const renderAppTile = (app: StoreAppItem) => {
     const stats = getLiveStats(app);
-    return app.id === "gamura-camera" || app.id === "gamura-for-business" ? (
+    return app.id === "gamura-camera" ||
+      app.id === "gamura-for-business" ||
+      app.id === "gamura-redesign" ? (
       <a
         key={app.id}
         href={app.url}
@@ -1277,7 +1311,9 @@ export default function GamuraStoreLaunch({
                 {/* Featured Carousel */}
                 <div className="flex gap-3.5 overflow-x-auto no-scrollbar pb-1 snap-x snap-mandatory">
                   {allApps.map((app) =>
-                    app.id === "gamura-camera" || app.id === "gamura-for-business" ? (
+                    app.id === "gamura-camera" ||
+                    app.id === "gamura-for-business" ||
+                    app.id === "gamura-redesign" ? (
                       <a
                         key={app.id}
                         href={app.url}
@@ -1405,6 +1441,7 @@ export default function GamuraStoreLaunch({
                   </div>
                   <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
                     {[
+                      "gamura-redesign",
                       "gamura-gcard",
                       "gamura-gwallet",
                       "gamura-ppt-cred",
@@ -1694,30 +1731,58 @@ export default function GamuraStoreLaunch({
                         key={app.id}
                         className="flex flex-wrap items-center justify-between gap-3 py-3.5"
                       >
-                        <button
-                          type="button"
-                          onClick={() => setSelectedApp(app)}
-                          className="flex items-center gap-3.5 text-left min-w-0 flex-1 cursor-pointer"
-                        >
-                          <StoreAppGlyph
-                            app={app}
-                            sizeClass="w-14 h-14 text-2xl"
-                            iconPx={26}
-                          />
-                          <div className="min-w-0">
-                            <div className="text-sm font-bold text-[#1D1D1F] truncate">
-                              {app.name}
+                        {app.id === "gamura-redesign" ? (
+                          <a
+                            href={app.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-3.5 text-left min-w-0 flex-1 cursor-pointer"
+                          >
+                            <StoreAppGlyph
+                              app={app}
+                              sizeClass="w-14 h-14 text-2xl"
+                              iconPx={26}
+                            />
+                            <div className="min-w-0">
+                              <div className="text-sm font-bold text-[#1D1D1F] truncate">
+                                {app.name}
+                              </div>
+                              <div className="text-xs text-[#6E6E73] truncate">
+                                {[
+                                  isInUniverse(app.id) ? "In Universe Apps" : "",
+                                  isInMobile(app.id) ? "In Mobile App" : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </div>
                             </div>
-                            <div className="text-xs text-[#6E6E73] truncate">
-                              {[
-                                isInUniverse(app.id) ? "In Universe Apps" : "",
-                                isInMobile(app.id) ? "In Mobile App" : "",
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedApp(app)}
+                            className="flex items-center gap-3.5 text-left min-w-0 flex-1 cursor-pointer"
+                          >
+                            <StoreAppGlyph
+                              app={app}
+                              sizeClass="w-14 h-14 text-2xl"
+                              iconPx={26}
+                            />
+                            <div className="min-w-0">
+                              <div className="text-sm font-bold text-[#1D1D1F] truncate">
+                                {app.name}
+                              </div>
+                              <div className="text-xs text-[#6E6E73] truncate">
+                                {[
+                                  isInUniverse(app.id) ? "In Universe Apps" : "",
+                                  isInMobile(app.id) ? "In Mobile App" : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </div>
                             </div>
-                          </div>
-                        </button>
+                          </button>
+                        )}
 
                         <div className="flex items-center gap-2 shrink-0">
                           <a
