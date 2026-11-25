@@ -4,8 +4,8 @@
   "description": "GAMURA — The Ultimate Gaming & AI Universe. Intelligence Redefined.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#03050A",
-  "theme_color": "#03050A",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
   "icons": [
     {
       "src": "/favicon-192x192.png",
@@ -17,7 +17,13 @@
       "src": "/favicon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/apple-touch-icon.png",

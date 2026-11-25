@@ -1,4 +1,4 @@
-const CACHE = "gamura-v1"; // BUMP this on every release
+const CACHE = "gamura-v2"; // BUMP this on every release
 const OFFLINE = "/offline.html";
 
 self.addEventListener("install", (e) => {
