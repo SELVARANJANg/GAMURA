@@ -286,6 +286,14 @@ export default function StoreAppGlyph({
             <circle cx="21" cy="25" r="1.4" fill="currentColor" />
           </svg>
         );
+      case "virus":
+        return (
+          <ShieldCheck
+            size={iconPx}
+            strokeWidth={2.2}
+            className="text-white"
+          />
+        );
       case "messenger":
         return (
           <svg

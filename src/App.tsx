@@ -228,6 +228,7 @@ import GamuraWalletPage from "./components/GamuraWalletPage";
 import GamuraForBusinessPage from "./components/GamuraForBusinessPage";
 import GamuraGreetingsPage from "./components/GamuraGreetingsPage";
 import GamuraOperatorPage from "./components/GamuraOperatorPage";
+import GamuraVirusPage from "./components/GamuraVirusPage";
 import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
@@ -9089,6 +9090,7 @@ export default function App() {
   | "gamura-for-business"
   | "gamura-greetings"
   | "gamura-operator"
+  | "gamura-virus"
   | "privacy"
   | "terms"
   | "license"
@@ -9168,6 +9170,11 @@ export default function App() {
     "operator",
     "remote",
     "gamura-remote",
+    "gamura-virus",
+    "avast",
+    "gamura-avast",
+    "clearscan",
+    "virus-scanner",
     "cgpic",
     "cg-pic",
     "claim",
@@ -9360,6 +9367,15 @@ export default function App() {
       lower === "gamura-remote"
     ) {
       return { page: "gamura-operator", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "gamura-virus" ||
+      lower === "avast" ||
+      lower === "gamura-avast" ||
+      lower === "clearscan" ||
+      lower === "virus-scanner"
+    ) {
+      return { page: "gamura-virus", claimed: null, shortSlug: null, prefillHandle: "" };
     }
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13997,6 +14013,21 @@ ${targetContext}`;
   if (currentPage === "gamura-operator") {
     return (
       <GamuraOperatorPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+        onBackStore={() => {
+          window.history.pushState({}, "", "/launch");
+          setCurrentPage("launch");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "gamura-virus") {
+    return (
+      <GamuraVirusPage
         onBackHome={() => {
           window.history.pushState({}, "", "/");
           setCurrentPage("home");

@@ -27,6 +27,7 @@ interface LaunchLivePreviewModalProps {
 }
 
 const FEATURED_PREVIEW_IDS = [
+  "gamura-virus",
   "gamura-operator",
   "gamura-greetings",
   "gamura-redesign",
@@ -56,6 +57,7 @@ export default function LaunchLivePreviewModal({
 }: LaunchLivePreviewModalProps) {
   const [deviceMode, setDeviceMode] = useState<"mobile" | "desktop">(() =>
     [
+      "gamura-virus",
       "gamura-operator",
       "gamura-greetings",
       "gamura-redesign",
@@ -100,6 +102,7 @@ export default function LaunchLivePreviewModal({
     setPreviewSurface(next.url.startsWith("/") ? "live" : "showcase");
     if (
       [
+        "gamura-virus",
         "gamura-operator",
         "gamura-greetings",
         "gamura-redesign",

