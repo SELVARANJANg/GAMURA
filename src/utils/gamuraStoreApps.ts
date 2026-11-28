@@ -32,6 +32,7 @@ export type StoreIconKind =
   | "gwallet"
   | "gb"
   | "redesign"
+  | "greetings"
   | "letter";
 
 export interface StoreAppItem {
@@ -785,6 +786,24 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     version: "1.0",
     age: "3+",
     chart: "No. 1 Redesign",
+    dl: "Featured",
+    size: "Web · 2 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-greetings",
+    name: "GAMURA GREETINGS",
+    cat: "Creative",
+    tag: "Birthday, greeting, GAMURA ID & QR vCard studio",
+    desc: "Create custom birthday & occasion greeting cards, gift vouchers, GAMURA identity ID cards, and digital business vCards with scannable QR codes, photo uploads, 8 metallic finishes, Front/Back view, My Cards library, QR scanner, and crisp PNG export.",
+    url: "/gamura-greetings",
+    c1: "#2f5bea",
+    c2: "#e4372f",
+    iconKind: "greetings",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Cards",
     dl: "Featured",
     size: "Web · 2 MB",
     isBuiltin: true,

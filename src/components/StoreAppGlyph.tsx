@@ -24,6 +24,7 @@ import {
   CreditCard,
   Wallet,
   Paintbrush,
+  Gift,
 } from "lucide-react";
 import type { StoreAppItem } from "../utils/gamuraStoreApps";
 
@@ -249,6 +250,14 @@ export default function StoreAppGlyph({
           <Paintbrush
             size={iconPx}
             strokeWidth={2.2}
+            className="text-white"
+          />
+        );
+      case "greetings":
+        return (
+          <Gift
+            size={iconPx}
+            strokeWidth={2.1}
             className="text-white"
           />
         );

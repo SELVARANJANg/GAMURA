@@ -27,6 +27,7 @@ interface LaunchLivePreviewModalProps {
 }
 
 const FEATURED_PREVIEW_IDS = [
+  "gamura-greetings",
   "gamura-redesign",
   "gamura-for-business",
   "gamura-gcard",
@@ -54,6 +55,7 @@ export default function LaunchLivePreviewModal({
 }: LaunchLivePreviewModalProps) {
   const [deviceMode, setDeviceMode] = useState<"mobile" | "desktop">(() =>
     [
+      "gamura-greetings",
       "gamura-redesign",
       "gamura-for-business",
       "gamura-ppt-cred",
@@ -96,6 +98,7 @@ export default function LaunchLivePreviewModal({
     setPreviewSurface(next.url.startsWith("/") ? "live" : "showcase");
     if (
       [
+        "gamura-greetings",
         "gamura-redesign",
         "gamura-for-business",
         "gamura-ppt-cred",

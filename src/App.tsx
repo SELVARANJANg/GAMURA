@@ -226,6 +226,7 @@ import GamuraFreshPage from "./components/GamuraFreshPage";
 import GamuraCardPage from "./components/GamuraCardPage";
 import GamuraWalletPage from "./components/GamuraWalletPage";
 import GamuraForBusinessPage from "./components/GamuraForBusinessPage";
+import GamuraGreetingsPage from "./components/GamuraGreetingsPage";
 import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
@@ -9085,6 +9086,7 @@ export default function App() {
   | "gcard"
   | "gwallet"
   | "gamura-for-business"
+  | "gamura-greetings"
   | "privacy"
   | "terms"
   | "license"
@@ -9157,6 +9159,9 @@ export default function App() {
     "gb",
     "gamura-business",
     "business",
+    "gamura-greetings",
+    "greetings",
+    "g-greetings",
     "cgpic",
     "cg-pic",
     "claim",
@@ -9334,6 +9339,13 @@ export default function App() {
       lower === "business"
     ) {
       return { page: "gamura-for-business", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "gamura-greetings" ||
+      lower === "greetings" ||
+      lower === "g-greetings"
+    ) {
+      return { page: "gamura-greetings", claimed: null, shortSlug: null, prefillHandle: "" };
     }
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13948,6 +13960,21 @@ ${targetContext}`;
         onBackHome={() => {
           window.history.pushState({}, "", "/");
           setCurrentPage("home");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "gamura-greetings") {
+    return (
+      <GamuraGreetingsPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+        onBackStore={() => {
+          window.history.pushState({}, "", "/launch");
+          setCurrentPage("launch");
         }}
       />
     );

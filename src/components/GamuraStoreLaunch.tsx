@@ -146,6 +146,7 @@ export default function GamuraStoreLaunch({
   const [draftRating, setDraftRating] = useState<number>(5);
   const [draftComment, setDraftComment] = useState<string>("");
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [cardHoverStars, setCardHoverStars] = useState<Record<string, number>>({});
 
   // Quality Filtering & Sorting State
   const [minRatingFilter, setMinRatingFilter] = useState<
@@ -416,6 +417,34 @@ export default function GamuraStoreLaunch({
       showToast("Could not remove review");
     } finally {
       setIsSubmittingReview(false);
+    }
+  };
+
+  const handleQuickRate = async (app: StoreAppItem, stars: number) => {
+    const clamped = Math.max(1, Math.min(5, Math.round(stars)));
+    rateStoreApp(app, clamped);
+    setLocalRatingsMap(readStoreJson<Record<string, number>>(APP_RATINGS_KEY, {}));
+
+    if (!authUser) {
+      showToast(`Rated ${app.name} ${clamped}★ ✓`);
+      return;
+    }
+
+    try {
+      const existingReview = storeReviews.find(
+        (r) => r.appId === app.id && r.userId === authUser.uid,
+      );
+      await saveAppReviewToCloud({
+        appId: app.id,
+        userId: authUser.uid,
+        authorName: gamuraHandle || authUser.displayName || "Gamura Member",
+        authorPhoto: authUser.photoURL,
+        rating: clamped,
+        comment: existingReview?.comment || "",
+      });
+      showToast(`Rated ${app.name} ${clamped}★ ✓`);
+    } catch {
+      showToast(`Rated ${app.name} ${clamped}★ locally ✓`);
     }
   };
 
@@ -740,10 +769,20 @@ export default function GamuraStoreLaunch({
     const isDirectLaunchApp =
       app.id === "gamura-camera" ||
       app.id === "gamura-for-business" ||
+      app.id === "gamura-greetings" ||
       isExternalDirectLaunch;
     const stats = getLiveStats(app);
+    const currentUserStars =
+      stats.userReview?.rating || localRatingsMap[app.id] || 0;
+    const hoveredStars = cardHoverStars[app.id] || 0;
+    const displayStars = hoveredStars || currentUserStars;
+
     const handleRowActivate = () => {
-      if (app.id === "gamura-camera" || app.id === "gamura-for-business") {
+      if (
+        app.id === "gamura-camera" ||
+        app.id === "gamura-for-business" ||
+        app.id === "gamura-greetings"
+      ) {
         window.location.assign(app.url);
       } else if (!isExternalDirectLaunch) {
         setSelectedApp(app);
@@ -863,17 +902,73 @@ export default function GamuraStoreLaunch({
       return (
         <div
           key={app.id}
-          className="w-full flex items-center gap-3.5 py-3.5 px-2.5 sm:px-3 rounded-2xl hover:bg-[#F5F5F7] transition-colors text-left"
+          className="w-full py-3.5 px-2.5 sm:px-3 rounded-2xl hover:bg-[#F5F5F7] transition-colors text-left space-y-2"
         >
-          <a
-            href={app.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3.5 flex-1 min-w-0 cursor-pointer"
+          <div className="flex items-center gap-3.5">
+            <a
+              href={app.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3.5 flex-1 min-w-0 cursor-pointer"
+            >
+              {rowMainContent}
+            </a>
+            {rowActionButtons}
+          </div>
+
+          <div
+            onMouseLeave={() =>
+              setCardHoverStars((prev) => ({ ...prev, [app.id]: 0 }))
+            }
+            className="flex flex-wrap items-center justify-between gap-2 pl-[68px] pr-1 pt-0.5"
           >
-            {rowMainContent}
-          </a>
-          {rowActionButtons}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-medium text-[#6E6E73]">
+                {currentUserStars > 0 ? "Your rating:" : "Rate app:"}
+              </span>
+              <div
+                className="inline-flex items-center gap-0.5"
+                role="group"
+                aria-label={`Rate ${app.name}`}
+              >
+                {[1, 2, 3, 4, 5].map((star) => {
+                  const filled = star <= displayStars;
+                  return (
+                    <button
+                      key={star}
+                      type="button"
+                      onMouseEnter={() =>
+                        setCardHoverStars((prev) => ({ ...prev, [app.id]: star }))
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleQuickRate(app, star);
+                      }}
+                      aria-label={`Rate ${app.name} ${star} out of 5 stars`}
+                      className="p-1 rounded-md hover:scale-110 transition-transform cursor-pointer focus-visible:outline-2 focus-visible:outline-[#059669]"
+                    >
+                      <Star
+                        size={14}
+                        className={
+                          filled
+                            ? "text-amber-500 fill-amber-500"
+                            : "text-zinc-300 hover:text-amber-400"
+                        }
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+              {currentUserStars > 0 && (
+                <span className="text-[11px] font-semibold text-[#059669] tabular-nums">
+                  {currentUserStars}/5
+                </span>
+              )}
+            </div>
+            <span className="text-[11px] text-[#6E6E73] tabular-nums">
+              {stats.average.toFixed(1)} avg · {stats.totalVotes} ratings
+            </span>
+          </div>
         </div>
       );
     }
@@ -900,9 +995,83 @@ export default function GamuraStoreLaunch({
 
   const renderAppTile = (app: StoreAppItem) => {
     const stats = getLiveStats(app);
+    if (app.id === "gamura-redesign") {
+      const currentUserStars =
+        stats.userReview?.rating || localRatingsMap[app.id] || 0;
+      const hoveredStars = cardHoverStars[app.id] || 0;
+      const displayStars = hoveredStars || currentUserStars;
+      return (
+        <div
+          key={app.id}
+          className="w-[126px] sm:w-[134px] shrink-0 text-left space-y-1.5"
+        >
+          <a
+            href={app.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block group cursor-pointer space-y-2"
+          >
+            <div className="group-hover:scale-[1.03] transition-transform">
+              <StoreAppGlyph
+                app={app}
+                sizeClass="w-[116px] h-[116px] sm:w-[126px] sm:h-[126px] text-4xl"
+                iconPx={46}
+              />
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-[#1D1D1F] truncate">
+                {app.name}
+              </div>
+              <div className="text-[11px] text-[#6E6E73] tabular-nums">
+                {stats.average.toFixed(1)} ★ · {app.dl}
+              </div>
+            </div>
+          </a>
+          <div
+            onMouseLeave={() =>
+              setCardHoverStars((prev) => ({ ...prev, [app.id]: 0 }))
+            }
+            className="flex items-center gap-0.5 pt-0.5"
+            role="group"
+            aria-label={`Rate ${app.name}`}
+          >
+            {[1, 2, 3, 4, 5].map((star) => {
+              const filled = star <= displayStars;
+              return (
+                <button
+                  key={star}
+                  type="button"
+                  onMouseEnter={() =>
+                    setCardHoverStars((prev) => ({ ...prev, [app.id]: star }))
+                  }
+                  onClick={() => void handleQuickRate(app, star)}
+                  aria-label={`Rate ${app.name} ${star} out of 5 stars`}
+                  className="p-0.5 rounded hover:scale-110 transition-transform cursor-pointer"
+                >
+                  <Star
+                    size={12}
+                    className={
+                      filled
+                        ? "text-amber-500 fill-amber-500"
+                        : "text-zinc-300 hover:text-amber-400"
+                    }
+                  />
+                </button>
+              );
+            })}
+            {currentUserStars > 0 && (
+              <span className="ml-1 text-[10px] font-semibold text-[#059669] tabular-nums">
+                {currentUserStars}★
+              </span>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return app.id === "gamura-camera" ||
       app.id === "gamura-for-business" ||
-      app.id === "gamura-redesign" ? (
+      app.id === "gamura-greetings" ? (
       <a
         key={app.id}
         href={app.url}
@@ -1310,10 +1479,105 @@ export default function GamuraStoreLaunch({
 
                 {/* Featured Carousel */}
                 <div className="flex gap-3.5 overflow-x-auto no-scrollbar pb-1 snap-x snap-mandatory">
-                  {allApps.map((app) =>
-                    app.id === "gamura-camera" ||
-                    app.id === "gamura-for-business" ||
-                    app.id === "gamura-redesign" ? (
+                  {allApps.map((app) => {
+                    if (app.id === "gamura-redesign") {
+                      const stats = getLiveStats(app);
+                      const currentUserStars =
+                        stats.userReview?.rating || localRatingsMap[app.id] || 0;
+                      const hoveredStars = cardHoverStars[`carousel_${app.id}`] || 0;
+                      const displayStars = hoveredStars || currentUserStars;
+                      return (
+                        <div
+                          key={app.id}
+                          style={{
+                            background: `linear-gradient(135deg, ${app.c1}, ${app.c2})`,
+                          }}
+                          className="min-w-[260px] sm:min-w-[300px] flex-1 snap-center rounded-[22px] p-5 min-h-[172px] text-white text-left relative overflow-hidden flex flex-col justify-between shadow-sm hover:scale-[1.01] transition-transform"
+                        >
+                          <span className="absolute -right-2 -top-4 text-[120px] font-black opacity-15 pointer-events-none select-none leading-none">
+                            {app.name.charAt(0)}
+                          </span>
+                          <a
+                            href={app.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="relative z-10 block cursor-pointer"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <StoreAppGlyph
+                                app={app}
+                                sizeClass="w-12 h-12 text-lg"
+                                iconPx={22}
+                              />
+                              <span className="px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-xs text-[10px] font-bold tracking-wider uppercase">
+                                {app.cat}
+                              </span>
+                            </div>
+                            <div className="mt-3">
+                              <div className="text-lg sm:text-xl font-bold tracking-tight line-clamp-1">
+                                {app.name}
+                              </div>
+                              <div className="text-xs opacity-90 line-clamp-1 mt-0.5">
+                                {app.tag}
+                              </div>
+                            </div>
+                          </a>
+
+                          <div
+                            onMouseLeave={() =>
+                              setCardHoverStars((prev) => ({
+                                ...prev,
+                                [`carousel_${app.id}`]: 0,
+                              }))
+                            }
+                            className="relative z-10 mt-3 pt-2.5 border-t border-white/20 flex items-center justify-between gap-2"
+                          >
+                            <div
+                              className="inline-flex items-center gap-0.5"
+                              role="group"
+                              aria-label={`Rate ${app.name}`}
+                            >
+                              {[1, 2, 3, 4, 5].map((star) => {
+                                const filled = star <= displayStars;
+                                return (
+                                  <button
+                                    key={star}
+                                    type="button"
+                                    onMouseEnter={() =>
+                                      setCardHoverStars((prev) => ({
+                                        ...prev,
+                                        [`carousel_${app.id}`]: star,
+                                      }))
+                                    }
+                                    onClick={() => void handleQuickRate(app, star)}
+                                    aria-label={`Rate ${app.name} ${star} out of 5 stars`}
+                                    className="p-1 rounded hover:scale-110 transition-transform cursor-pointer"
+                                  >
+                                    <Star
+                                      size={14}
+                                      className={
+                                        filled
+                                          ? "text-amber-300 fill-amber-300"
+                                          : "text-white/55 hover:text-amber-200"
+                                      }
+                                    />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <span className="text-[11px] font-semibold text-white/90 tabular-nums whitespace-nowrap">
+                              {currentUserStars > 0
+                                ? `Rated ${currentUserStars}/5 · ${stats.average.toFixed(1)}★`
+                                : `Rate · ${stats.average.toFixed(1)}★`}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return app.id === "gamura-camera" ||
+                      app.id === "gamura-for-business" ||
+                      app.id === "gamura-greetings" ? (
                       <a
                         key={app.id}
                         href={app.url}
@@ -1378,8 +1642,8 @@ export default function GamuraStoreLaunch({
                           </div>
                         </div>
                       </button>
-                    ),
-                  )}
+                    );
+                  })}
                 </div>
 
                 {/* Games on Launch (GAINOSOR, GIGOR, Gamura Galaxy) */}
@@ -1441,6 +1705,7 @@ export default function GamuraStoreLaunch({
                   </div>
                   <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
                     {[
+                      "gamura-greetings",
                       "gamura-redesign",
                       "gamura-gcard",
                       "gamura-gwallet",
