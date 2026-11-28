@@ -261,6 +261,31 @@ export default function StoreAppGlyph({
             className="text-white"
           />
         );
+      case "operator":
+        return (
+          <svg
+            width={iconPx}
+            height={iconPx}
+            viewBox="0 0 36 36"
+            fill="none"
+            className="text-white"
+          >
+            <rect
+              x="10.5"
+              y="4.5"
+              width="15"
+              height="27"
+              rx="5"
+              stroke="currentColor"
+              strokeWidth="2.4"
+            />
+            <circle cx="18" cy="12" r="3.2" fill="currentColor" />
+            <circle cx="15" cy="20" r="1.4" fill="currentColor" />
+            <circle cx="21" cy="20" r="1.4" fill="currentColor" />
+            <circle cx="15" cy="25" r="1.4" fill="currentColor" />
+            <circle cx="21" cy="25" r="1.4" fill="currentColor" />
+          </svg>
+        );
       case "messenger":
         return (
           <svg

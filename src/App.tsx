@@ -227,6 +227,7 @@ import GamuraCardPage from "./components/GamuraCardPage";
 import GamuraWalletPage from "./components/GamuraWalletPage";
 import GamuraForBusinessPage from "./components/GamuraForBusinessPage";
 import GamuraGreetingsPage from "./components/GamuraGreetingsPage";
+import GamuraOperatorPage from "./components/GamuraOperatorPage";
 import {
   UNIVERSE_APPS_EVENT,
   UNIVERSE_APPS_KEY,
@@ -9087,6 +9088,7 @@ export default function App() {
   | "gwallet"
   | "gamura-for-business"
   | "gamura-greetings"
+  | "gamura-operator"
   | "privacy"
   | "terms"
   | "license"
@@ -9162,6 +9164,10 @@ export default function App() {
     "gamura-greetings",
     "greetings",
     "g-greetings",
+    "gamura-operator",
+    "operator",
+    "remote",
+    "gamura-remote",
     "cgpic",
     "cg-pic",
     "claim",
@@ -9346,6 +9352,14 @@ export default function App() {
       lower === "g-greetings"
     ) {
       return { page: "gamura-greetings", claimed: null, shortSlug: null, prefillHandle: "" };
+    }
+    if (
+      lower === "gamura-operator" ||
+      lower === "operator" ||
+      lower === "remote" ||
+      lower === "gamura-remote"
+    ) {
+      return { page: "gamura-operator", claimed: null, shortSlug: null, prefillHandle: "" };
     }
     if (lower === "claim") return { page: "claim", claimed: null, shortSlug: null, prefillHandle: handleParam };
     if (lower === "privacy") return { page: "privacy", claimed: null, shortSlug: null, prefillHandle: "" };
@@ -13968,6 +13982,21 @@ ${targetContext}`;
   if (currentPage === "gamura-greetings") {
     return (
       <GamuraGreetingsPage
+        onBackHome={() => {
+          window.history.pushState({}, "", "/");
+          setCurrentPage("home");
+        }}
+        onBackStore={() => {
+          window.history.pushState({}, "", "/launch");
+          setCurrentPage("launch");
+        }}
+      />
+    );
+  }
+
+  if (currentPage === "gamura-operator") {
+    return (
+      <GamuraOperatorPage
         onBackHome={() => {
           window.history.pushState({}, "", "/");
           setCurrentPage("home");

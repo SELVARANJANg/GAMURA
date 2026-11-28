@@ -33,6 +33,7 @@ export type StoreIconKind =
   | "gb"
   | "redesign"
   | "greetings"
+  | "operator"
   | "letter";
 
 export interface StoreAppItem {
@@ -85,6 +86,8 @@ export const GAMURA_REDESIGN_LOGO_URL =
   "/assets/aistudio/1795456868131_0736331e.png";
 export const GAMURA_REDESIGN_LOGO_FALLBACK =
   "https://lh3.googleusercontent.com/d/1jE1hxAugpuUSwjVHnQFoiimyOLLseAso=w512";
+export const GAMURA_OPERATOR_LOGO_URL =
+  "/assets/aistudio/icon_5f4bc6ca.svg";
 
 const driveLogo = (id: string) => ({
   logoUrl: `https://lh3.googleusercontent.com/d/${id}=w512`,
@@ -806,6 +809,27 @@ export const BUILTIN_STORE_APPS: StoreAppItem[] = [
     chart: "No. 1 Cards",
     dl: "Featured",
     size: "Web · 2 MB",
+    isBuiltin: true,
+  },
+  {
+    id: "gamura-operator",
+    name: "GAMURA OPERATOR",
+    cat: "Utilities",
+    tag: "Apple-style universal remote for TV, PC, lights, fans & phones",
+    desc: "Control Roku & Samsung Smart TVs, Windows/Linux/Mac PCs (precision multi-touch trackpad, keyboard, media & power), Home Assistant devices, Tasmota/Shelly/ESP32 HTTP plugs, Bluetooth LE gadgets, and live simulated devices in an Apple-style Control Center.",
+    url: "/gamura-operator",
+    c1: "#1D1D1F",
+    c2: "#5E5CE6",
+    iconKind: "operator",
+    logoUrl: GAMURA_OPERATOR_LOGO_URL,
+    logoBg: "#0b0b12",
+    logoFit: "cover",
+    rating: 4.9,
+    version: "1.0",
+    age: "3+",
+    chart: "No. 1 Remote",
+    dl: "Featured",
+    size: "Web · 1 MB",
     isBuiltin: true,
   },
 ];

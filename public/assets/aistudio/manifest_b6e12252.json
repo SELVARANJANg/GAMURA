@@ -1,0 +1,13 @@
+{
+  "name": "GAMURA Remote",
+  "short_name": "GAMURA",
+  "description": "Universal remote for TV, PC, lights, fans and phones",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0b12",
+  "theme_color": "#0b0b12",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

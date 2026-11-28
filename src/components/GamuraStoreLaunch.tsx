@@ -770,6 +770,7 @@ export default function GamuraStoreLaunch({
       app.id === "gamura-camera" ||
       app.id === "gamura-for-business" ||
       app.id === "gamura-greetings" ||
+      app.id === "gamura-operator" ||
       isExternalDirectLaunch;
     const stats = getLiveStats(app);
     const currentUserStars =
@@ -781,7 +782,8 @@ export default function GamuraStoreLaunch({
       if (
         app.id === "gamura-camera" ||
         app.id === "gamura-for-business" ||
-        app.id === "gamura-greetings"
+        app.id === "gamura-greetings" ||
+        app.id === "gamura-operator"
       ) {
         window.location.assign(app.url);
       } else if (!isExternalDirectLaunch) {
@@ -1071,7 +1073,8 @@ export default function GamuraStoreLaunch({
 
     return app.id === "gamura-camera" ||
       app.id === "gamura-for-business" ||
-      app.id === "gamura-greetings" ? (
+      app.id === "gamura-greetings" ||
+      app.id === "gamura-operator" ? (
       <a
         key={app.id}
         href={app.url}
@@ -1577,7 +1580,8 @@ export default function GamuraStoreLaunch({
 
                     return app.id === "gamura-camera" ||
                       app.id === "gamura-for-business" ||
-                      app.id === "gamura-greetings" ? (
+                      app.id === "gamura-greetings" ||
+                      app.id === "gamura-operator" ? (
                       <a
                         key={app.id}
                         href={app.url}
@@ -1705,6 +1709,7 @@ export default function GamuraStoreLaunch({
                   </div>
                   <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
                     {[
+                      "gamura-operator",
                       "gamura-greetings",
                       "gamura-redesign",
                       "gamura-gcard",

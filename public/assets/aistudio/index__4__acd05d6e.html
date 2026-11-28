@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b12">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<title>GAMURA Remote</title>
+<style>
+:root{--bg:#0b0b12;--card:#161622;--card2:#1e1e2e;--line:#2a2a3d;--txt:#f1f1f7;--mut:#8a8aa3;--acc:#7c5cff;--ok:#2ecc71;--bad:#ff5c6c}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+html,body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:rgba(11,11,18,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0;flex:1;letter-spacing:.5px}
+header h1 b{color:var(--acc)}
+main{max-width:480px;margin:0 auto;padding:16px 16px calc(40px + env(safe-area-inset-bottom))}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;min-height:48px;user-select:none;-webkit-user-select:none}
+button:active{background:var(--acc);border-color:var(--acc);transform:scale(.97)}
+button.pri{background:var(--acc);border-color:var(--acc);font-weight:600}
+button.bad{background:#3a1a22;border-color:#6b2a37}
+button.on{background:var(--acc);border-color:var(--acc)}
+.icon{width:44px;min-height:44px;padding:0;font-size:20px}
+input,select,textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;outline:none}
+input:focus,select:focus{border-color:var(--acc)}
+input[type=range]{padding:0;accent-color:var(--acc);height:36px;background:none;border:0}
+input[type=color]{height:48px;padding:4px}
+label{display:block;color:var(--mut);font-size:12px;margin:12px 0 4px}
+.grid{display:grid;gap:10px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.card .ico{font-size:26px;width:44px;height:44px;border-radius:12px;background:var(--card2);display:grid;place-items:center}
+.card .meta{flex:1;min-width:0}.card .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .meta small,.mut{color:var(--mut)}
+.tag{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--card2);color:var(--mut)}
+.empty{text-align:center;color:var(--mut);padding:36px 8px}
+.dpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:230px;margin:14px auto}
+.dpad button{height:68px;font-size:22px}
+.dpad .ok{background:var(--acc);border-color:var(--acc);font-weight:700}
+.sec{margin-top:18px}
+.status{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:10px 12px;color:var(--mut);font-size:13px;margin:12px 0}
+.pad{height:270px;background:var(--card);border:1px solid var(--line);border-radius:18px;touch-action:none;display:grid;place-items:center;color:var(--mut);user-select:none;-webkit-user-select:none}
+.bulb{width:110px;height:110px;border-radius:50%;margin:10px auto;border:2px solid var(--line);transition:.2s}
+.row{display:flex;gap:10px;align-items:center}
+.row>*{flex:1}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,30px);background:#000;border:1px solid var(--line);padding:10px 16px;border-radius:99px;opacity:0;pointer-events:none;transition:.25s;max-width:90vw;z-index:9}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+.note{font-size:12px;color:var(--mut);margin-top:8px}
+</style>
+</head>
+<body>
+<header><button class="icon" id="back" style="display:none" aria-label="Back">&#8592;</button><h1>GAMURA <b>Remote</b></h1><button class="icon" id="add" aria-label="Add device">+</button></header>
+<main id="app"></main>
+<div id="toast"></div>
+<script>
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TYPES={tv:['📺','TV'],pc:['💻','PC / Laptop'],light:['💡','Light'],fan:['🌀','Fan'],phone:['📱','Phone']};
+const LINKS={
+ demo:{n:'Demo (simulated)',t:['tv','pc','light','fan','phone'],f:[]},
+ roku:{n:'WiFi · Roku TV',t:['tv'],f:[['ip','TV IP address','192.168.1.20']]},
+ samsung:{n:'WiFi · Samsung Smart TV',t:['tv'],f:[['ip','TV IP address','192.168.1.21']]},
+ ha:{n:'WiFi · Home Assistant (any TV, light, fan, phone)',t:['tv','light','fan','phone'],f:[['base','Home Assistant URL','http://homeassistant.local:8123'],['token','Long-lived access token','eyJ...'],['entity','Entity ID','media_player.living_room_tv']]},
+ http:{n:'WiFi · Smart plug / ESP32 (HTTP)',t:['light','fan','tv','phone'],f:[['base','Device URL','http://192.168.1.50'],['preset','Firmware','tasmota|shelly|esp32']]},
+ bluetooth:{n:'Bluetooth LE (GATT)',t:['light','fan','tv','phone'],f:[['service','Service UUID (e.g. 0xffe5)','0xffe5'],['char','Characteristic UUID','0xffe9'],['on','ON bytes (hex)','7e0704ff00010100ef'],['off','OFF bytes (hex)','7e07040000000100ef'],['bright','Brightness bytes, {v}=0-100 as hex','7e0501{v}ffff00ef'],['rgb','Color bytes, {r}{g}{b} hex','7e070503{r}{g}{b}10ef']]},
+ pc:{n:'WiFi / Hotspot / USB tether · PC Companion',t:['pc'],f:[['host','Companion address','192.168.1.10:8765'],['token','Pairing token','shown in PC terminal']]}
+};
+const store={get(){try{return JSON.parse(localStorage.getItem('gr.devices'))||[]}catch{return[]}},set(v){try{localStorage.setItem('gr.devices',JSON.stringify(v))}catch{}}};
+let devices=store.get(),cur=null,view='home';
+const save=()=>store.set(devices);
+let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2200)}
+const buzz=()=>{try{navigator.vibrate&&navigator.vibrate(12)}catch{}};
+
+/* ---------- adapters ---------- */
+const ROKU={power:'Power',up:'Up',down:'Down',left:'Left',right:'Right',ok:'Select',back:'Back',home:'Home',menu:'Info',volup:'VolumeUp',voldown:'VolumeDown',mute:'VolumeMute',chup:'ChannelUp',chdown:'ChannelDown',play:'Play',pause:'Play',next:'Fwd',prev:'Rev',source:'InputHDMI1'};
+const SAMSUNG={power:'KEY_POWER',up:'KEY_UP',down:'KEY_DOWN',left:'KEY_LEFT',right:'KEY_RIGHT',ok:'KEY_ENTER',back:'KEY_RETURN',home:'KEY_HOME',menu:'KEY_MENU',volup:'KEY_VOLUP',voldown:'KEY_VOLDOWN',mute:'KEY_MUTE',chup:'KEY_CHUP',chdown:'KEY_CHDOWN',play:'KEY_PLAY',pause:'KEY_PAUSE',next:'KEY_FF',prev:'KEY_REWIND',source:'KEY_SOURCE'};
+const socks={};
+function openWS(key,url,onOpen,ready){
+  const old=socks[key];if(old&&old.ws.readyState<=1&&old.ws.url===url)return old.p;
+  let ws;try{ws=new WebSocket(url)}catch(e){return Promise.reject(e)}
+  const p=new Promise((res,rej)=>{
+    const to=setTimeout(()=>{rej(new Error('timeout'));try{ws.close()}catch{}},8000);
+    ws.onopen=()=>{onOpen&&onOpen(ws);if(!ready){clearTimeout(to);res(ws)}};
+    ws.onmessage=ev=>{if(ready){const r=ready(ev,ws);if(r){clearTimeout(to);res(ws)}}};
+    ws.onerror=()=>{clearTimeout(to);rej(new Error('connection failed'))};
+    ws.onclose=()=>{delete socks[key]};
+  });
+  socks[key]={ws,p};return p;
+}
+const demo=(d,a,v)=>{
+  const s=d.state=d.state||{power:false,vol:20,muted:false,bright:80,color:'#ffd9a0',speed:1,osc:false};
+  switch(a){
+    case'power':case'toggle':s.power=!s.power;break;case'on':s.power=true;break;case'off':s.power=false;break;
+    case'volup':s.vol=Math.min(100,s.vol+2);break;case'voldown':s.vol=Math.max(0,s.vol-2);break;case'mute':s.muted=!s.muted;break;
+    case'brightness':s.bright=+v;break;case'color':s.color=v;s.power=true;break;
+    case'speed':s.speed=+v;s.power=true;break;case'osc':s.osc=!s.osc;break;
+  }
+  s.last=a+(v!==undefined?' '+v:'');save();paint(d);
+};
+const adapters={
+  demo:async(d,a,v)=>demo(d,a,v),
+  async roku(d,a){const k=ROKU[a];if(!k)throw new Error('Not supported');await fetch(`http://${d.ip}:8060/keypress/${k}`,{method:'POST',mode:'no-cors'})},
+  async samsung(d,a){
+    const k=SAMSUNG[a];if(!k)throw new Error('Not supported');
+    const url=`wss://${d.ip}:8002/api/v2/channels/samsung.remote.control?name=${btoa('GAMURA Remote')}${d.token?'&token='+d.token:''}`;
+    const ws=await openWS('s'+d.id,url,null,ev=>{try{const m=JSON.parse(ev.data);if(m.event==='ms.channel.connect'){if(m.data&&m.data.token){d.token=m.data.token;save()}return true}}catch{}});
+    ws.send(JSON.stringify({method:'ms.remote.control',params:{Cmd:'Click',DataOfCmd:k,Option:'false',TypeOfRemote:'SendRemoteKey'}}));
+  },
+  async ha(d,a,v){
+    const dom=d.entity.split('.')[0];
+    const M={power:'toggle',on:'turn_on',off:'turn_off',toggle:'toggle',volup:'volume_up',voldown:'volume_down',play:'media_play_pause',pause:'media_play_pause',next:'media_next_track',prev:'media_previous_track'};
+    let svc=M[a],data={entity_id:d.entity};
+    if(a==='mute'){svc='volume_mute';data.is_volume_muted=true}
+    else if(a==='brightness'){svc='turn_on';data.brightness_pct=+v}
+    else if(a==='color'){svc='turn_on';data.rgb_color=[1,3,5].map(i=>parseInt(v.slice(i,i+2),16))}
+    else if(a==='speed'){svc='set_percentage';data.percentage=Math.round(v*100/3)}
+    else if(a==='osc'){svc='oscillate';data.oscillating=true}
+    if(!svc)throw new Error('Not supported');
+    const r=await fetch(`${d.base.replace(/\/$/,'')}/api/services/${dom}/${svc}`,{method:'POST',headers:{Authorization:'Bearer '+d.token,'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(!r.ok)throw new Error('Home Assistant '+r.status);
+  },
+  async http(d,a,v){
+    const b=d.base.replace(/\/$/,'');let u;
+    if(d.preset==='tasmota'){const P={power:'Power%20Toggle',toggle:'Power%20Toggle',on:'Power%20On',off:'Power%20Off'};
+      u=a==='brightness'?'Dimmer%20'+v:a==='color'?'Color%20'+v.slice(1):a==='speed'?'FanSpeed%20'+v:P[a];u=u&&`${b}/cm?cmnd=${u}`}
+    else if(d.preset==='shelly'){const P={power:'toggle',toggle:'toggle',on:'on',off:'off'};u=P[a]&&`${b}/relay/0?turn=${P[a]}`;if(a==='brightness')u=`${b}/light/0?turn=on&brightness=${v}`}
+    else u=`${b}/${a}${v!==undefined?'?v='+encodeURIComponent(v):''}`;
+    if(!u)throw new Error('Not supported');
+    await fetch(u,{mode:'no-cors'});
+  },
+  async bluetooth(d,a,v){
+    const c=await btChar(d);
+    const hex=s=>new Uint8Array(s.replace(/\s/g,'').match(/../g).map(x=>parseInt(x,16)));
+    let p;
+    if(a==='on')p=d.on;else if(a==='off')p=d.off;
+    else if(a==='power'||a==='toggle'){d._bt=!d._bt;p=d._bt?d.on:d.off}
+    else if(a==='brightness'&&d.bright)p=d.bright.replace('{v}',(+v).toString(16).padStart(2,'0'));
+    else if(a==='color'&&d.rgb)p=d.rgb.replace('{r}',v.slice(1,3)).replace('{g}',v.slice(3,5)).replace('{b}',v.slice(5,7));
+    if(!p)throw new Error('Not supported');
+    await (c.writeValueWithoutResponse?c.writeValueWithoutResponse(hex(p)):c.writeValue(hex(p)));
+  },
+  async pc(d,a,v){
+    const url=`ws://${d.host}`;
+    const ws=await openWS('p'+d.id,url,w=>w.send(JSON.stringify({t:'auth',token:d.token})));
+    ws.send(JSON.stringify(typeof a==='object'?a:{t:a,v}));
+  }
+};
+const bt={};
+const uuid=s=>/^0x/i.test(s)?parseInt(s,16):s.toLowerCase();
+async function btChar(d){
+  if(bt[d.id]&&bt[d.id].dev.gatt.connected)return bt[d.id].c;
+  if(!navigator.bluetooth)throw new Error('Web Bluetooth not supported in this browser (use Chrome on Android/PC)');
+  const dev=bt[d.id]?.dev||await navigator.bluetooth.requestDevice({acceptAllDevices:true,optionalServices:[uuid(d.service)]});
+  const srv=await dev.gatt.connect();const sv=await srv.getPrimaryService(uuid(d.service));const c=await sv.getCharacteristic(uuid(d.char));
+  bt[d.id]={dev,c};return c;
+}
+async function act(a,v){
+  buzz();
+  try{await adapters[cur.link](cur,a,v)}catch(e){toast((e&&e.message)||'Failed');}
+}
+const send=o=>act(o);
+
+/* ---------- views ---------- */
+function paint(d){
+  const s=d.state;if(!s||!$('#status'))return;
+  const st=$('#status');
+  if(d.type==='tv'||d.type==='phone')st.textContent=`Demo · Power ${s.power?'ON':'OFF'} · Volume ${s.muted?'muted':s.vol} · last: ${s.last||'-'}`;
+  if(d.type==='light'){st.textContent=`Demo · ${s.power?'ON':'OFF'} · ${s.bright}% · last: ${s.last||'-'}`;const b=$('#bulb');if(b){b.style.background=s.power?s.color:'#111';b.style.boxShadow=s.power?`0 0 50px ${s.color}`:'none';b.style.opacity=s.power?(.3+s.bright/143):1}}
+  if(d.type==='fan')st.textContent=`Demo · ${s.power?'ON':'OFF'} · speed ${s.speed} · oscillation ${s.osc?'on':'off'}`;
+}
+function home(){
+  view='home';cur=null;$('#back').style.display='none';
+  $('#app').innerHTML=devices.length?devices.map(d=>`<div class="card" data-open="${d.id}" style="margin-bottom:10px"><div class="ico">${TYPES[d.type][0]}</div><div class="meta"><b>${esc(d.name)}</b><small>${esc(LINKS[d.link].n)}</small></div><button class="icon bad" data-del="${d.id}" aria-label="Delete">&#215;</button></div>`).join('')
+   :`<div class="empty"><div style="font-size:48px">🎛️</div><p>No devices yet.<br>Tap <b>+</b> to add a TV, PC, light, fan or phone.</p><button class="pri" id="demoAll">Add demo devices</button></div>`;
+  const da=$('#demoAll');if(da)da.onclick=()=>{['tv','pc','light','fan','phone'].forEach(t=>devices.push({id:uid(),name:'Demo '+TYPES[t][1],type:t,link:'demo'}));save();home()};
+}
+const uid=()=>Math.random().toString(36).slice(2,9);
+function addView(){
+  view='add';$('#back').style.display='';
+  $('#app').innerHTML=`<label>Name</label><input id="f-name" placeholder="Living room TV"><label>Device type</label><select id="f-type">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}">${v[0]} ${v[1]}</option>`).join('')}</select><label>Connection</label><select id="f-link"></select><div id="f-extra"></div><button class="pri" id="f-save" style="width:100%;margin-top:18px">Save device</button><p class="note">Hotspot and cable (USB tethering / Ethernet) are network paths: connect both devices to the same hotspot or tether, then use the WiFi options with the device IP.</p>`;
+  const fill=()=>{const t=$('#f-type').value;$('#f-link').innerHTML=Object.entries(LINKS).filter(([k,l])=>l.t.includes(t)).map(([k,l])=>`<option value="${k}">${l.n}</option>`).join('');extra()};
+  const extra=()=>{const l=LINKS[$('#f-link').value];$('#f-extra').innerHTML=l.f.map(([k,n,p])=>k==='preset'?`<label>${n}</label><select data-k="preset"><option>tasmota</option><option>shelly</option><option>esp32</option></select>`:`<label>${n}</label><input data-k="${k}" placeholder="${esc(p)}" ${k==='token'?'type="password"':''}>`).join('')};
+  $('#f-type').onchange=fill;$('#f-link').onchange=extra;fill();
+  $('#f-save').onclick=()=>{
+    const d={id:uid(),name:$('#f-name').value.trim()||TYPES[$('#f-type').value][1],type:$('#f-type').value,link:$('#f-link').value};
+    document.querySelectorAll('#f-extra [data-k]').forEach(i=>d[i.dataset.k]=i.value.trim());
+    const miss=LINKS[d.link].f.find(([k])=>k!=='preset'&&!['bright','rgb','token'].includes(k)&&!d[k]);
+    if(miss)return toast('Fill: '+miss[1]);
+    devices.push(d);save();home();
+  };
+}
+const B=(a,l,c='',x='')=>`<button class="${c}" data-a="${a}" ${x}>${l}</button>`;
+const RP=(a,l)=>`data-rep`;
+const UI={
+  tv:()=>`<div class="grid g3">${B('power','⏻ Power','bad')}${B('source','Source')}${B('mute','🔇 Mute')}</div>
+  <div class="dpad"><span></span>${B('up','▲')}<span></span>${B('left','◀')}${B('ok','OK','ok')}${B('right','▶')}<span></span>${B('down','▼')}<span></span></div>
+  <div class="grid g3">${B('back','Back')}${B('home','Home')}${B('menu','Menu')}</div>
+  <div class="grid g2 sec"><div class="grid">${B('volup','Vol +','',RP())}${B('voldown','Vol −','',RP())}</div><div class="grid">${B('chup','CH +')}${B('chdown','CH −')}</div></div>
+  <div class="grid g4 sec">${B('prev','⏪')}${B('play','▶')}${B('pause','⏸')}${B('next','⏩')}</div>`,
+  phone:()=>`<div class="grid g3">${B('power','⏻ Power','bad')}${B('mute','🔇 Mute')}${B('find','🔔 Find')}</div><div class="grid g3 sec">${B('prev','⏮')}${B('play','⏯')}${B('next','⏭')}</div><div class="grid g2 sec">${B('volup','Vol +','',RP())}${B('voldown','Vol −','',RP())}</div>`,
+  light:d=>`<div id="bulb" class="bulb"></div><div class="grid g3">${B('on','On','pri')}${B('off','Off')}${B('toggle','Toggle')}</div>
+  <label>Brightness</label><input type="range" min="1" max="100" value="${d.state?.bright??80}" id="br">
+  <label>Color</label><input type="color" id="col" value="${d.state?.color??'#ffd9a0'}">
+  <div class="grid g4 sec">${['#ffd9a0','#ffffff','#ff4d4d','#4d79ff'].map(c=>`<button data-col="${c}" style="background:${c};border-color:${c}"></button>`).join('')}</div>`,
+  fan:()=>`<div class="grid g3">${B('on','On','pri')}${B('off','Off')}${B('osc','Oscillate')}</div><label>Speed</label><div class="grid g3">${[1,2,3].map(n=>`<button data-sp="${n}">${n}</button>`).join('')}</div>`,
+  pc:()=>`<div class="pad" id="pad">Touchpad · tap = click · two fingers = scroll</div>
+  <div class="grid g3 sec"><button data-c="left">Left</button><button data-c="middle">Mid</button><button data-c="right">Right</button></div>
+  <label>Type on PC</label><div class="row"><input id="txt" placeholder="Type text…" style="flex:3"><button class="pri" id="txtgo">Send</button></div>
+  <div class="grid g4 sec">${['esc','tab','enter','backspace','up','down','left','right','delete','home','end','space'].map(k=>`<button data-k="${k}">${{up:'↑',down:'↓',left:'←',right:'→',backspace:'⌫',enter:'⏎',space:'␣'}[k]||k}</button>`).join('')}</div>
+  <div class="grid g4 sec"><button data-combo="ctrl,c">Copy</button><button data-combo="ctrl,v">Paste</button><button data-combo="alt,tab">Alt-Tab</button><button data-combo="win">Win</button></div>
+  <div class="grid g4 sec"><button data-m="prev">⏮</button><button data-m="play">⏯</button><button data-m="next">⏭</button><button data-m="mute">🔇</button><button data-m="vol-" >Vol −</button><button data-m="vol+">Vol +</button></div>
+  <div class="grid g4 sec"><button data-s="lock">Lock</button><button data-s="sleep">Sleep</button><button class="bad" data-s="restart">Restart</button><button class="bad" data-s="shutdown">Off</button></div>`
+};
+function remote(d){
+  view='remote';cur=d;$('#back').style.display='';
+  $('#app').innerHTML=`<div class="row" style="margin-bottom:6px"><div style="flex:3"><b>${TYPES[d.type][0]} ${esc(d.name)}</b><br><span class="tag">${esc(LINKS[d.link].n)}</span></div>${d.link==='bluetooth'?'<button id="btc">Connect</button>':''}</div>${d.link==='demo'?'<div class="status" id="status">Demo mode</div>':''}${UI[d.type](d)}`;
+  paint(d);
+  const root=$('#app');
+  root.querySelectorAll('[data-a]').forEach(b=>{
+    const a=b.dataset.a;b.onclick=()=>act(a);
+    if(b.hasAttribute('data-rep')){let t,i;const stop=()=>{clearTimeout(t);clearInterval(i)};b.onpointerdown=()=>{t=setTimeout(()=>{i=setInterval(()=>act(a),150)},450)};['pointerup','pointerleave','pointercancel'].forEach(e=>b.addEventListener(e,stop))}
+  });
+  const btc=$('#btc');if(btc)btc.onclick=async()=>{try{await btChar(d);toast('Bluetooth connected')}catch(e){toast(e.message)}};
+  if(d.type==='light'){
+    $('#br').onchange=e=>act('brightness',e.target.value);$('#col').onchange=e=>act('color',e.target.value);
+    root.querySelectorAll('[data-col]').forEach(b=>b.onclick=()=>{$('#col').value=b.dataset.col;act('color',b.dataset.col)});
+  }
+  if(d.type==='fan')root.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>act('speed',b.dataset.sp));
+  if(d.type==='pc')pcBind(root);
+}
+function pcBind(root){
+  const pad=$('#pad');let pts=new Map(),last=null,moved=0,t0=0,acc={x:0,y:0},raf=0,maxPts=0;
+  const flush=()=>{raf=0;if(acc.x||acc.y){const dx=Math.round(acc.x),dy=Math.round(acc.y);if(dx||dy){send({t:pts.size>=2?'scroll':'move',dx,dy,dy2:dy});acc.x-=dx;acc.y-=dy}}};
+  pad.onpointerdown=e=>{pad.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===1){moved=0;t0=Date.now();maxPts=1}maxPts=Math.max(maxPts,pts.size)};
+  pad.onpointermove=e=>{const p=pts.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;moved+=Math.abs(dx)+Math.abs(dy);
+    if(pts.size>=2){if(e.isPrimary){acc.y+=-dy*.15}}else{acc.x+=dx*1.6;acc.y+=dy*1.6}if(!raf)raf=requestAnimationFrame(flush)};
+  const up=e=>{if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);if(pts.size===0&&moved<8&&Date.now()-t0<250){send({t:'click',b:maxPts>=2?'right':'left'});buzz()}};
+  pad.onpointerup=up;pad.onpointercancel=up;
+  root.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>send({t:'click',b:b.dataset.c}));
+  root.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>send({t:'key',k:b.dataset.k,mods:[]}));
+  root.querySelectorAll('[data-combo]').forEach(b=>b.onclick=()=>{const a=b.dataset.combo.split(',');send({t:'key',k:a.pop(),mods:a})});
+  root.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>send({t:'media',a:b.dataset.m}));
+  root.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const a=b.dataset.s;if(['restart','shutdown'].includes(a)&&!confirm(a+' the PC?'))return;send({t:'sys',a})});
+  const go=()=>{const i=$('#txt');if(i.value){send({t:'text',v:i.value});i.value=''}};
+  $('#txtgo').onclick=go;$('#txt').onkeydown=e=>{if(e.key==='Enter')go()};
+}
+/* ---------- boot ---------- */
+$('#app').addEventListener('click',e=>{
+  const del=e.target.closest('[data-del]');
+  if(del){e.stopPropagation();if(confirm('Delete this device?')){devices=devices.filter(d=>d.id!==del.dataset.del);save();home()}return}
+  const o=e.target.closest('[data-open]');if(o&&view==='home')remote(devices.find(d=>d.id===o.dataset.open));
+});
+$('#add').onclick=addView;$('#back').onclick=home;
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+home();
+</script>
+</body>
+</html>
